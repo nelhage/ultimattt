@@ -43,25 +43,56 @@ const WIN_PATTERNS: [[usize; 3]; 8] = [
     [6, 4, 2],
 ];
 
-impl Subboard {
-    fn compute_win(&self, who: Player) -> BoardState {
-        if WIN_PATTERNS.iter().any(|&pat| {
-            pat.iter().all(|i| match self.0[*i] {
-                CellState::Played(p) => p == who,
-                _ => false,
-            })
-        }) {
-            return BoardState::Won(who);
-        }
+trait HasOwner {
+    fn player(&self) -> Option<Player>;
+    fn empty(&self) -> bool;
+}
 
-        if self.0.iter().any(|e| match e {
+impl HasOwner for CellState {
+    fn player(&self) -> Option<Player> {
+        match self {
+            CellState::Empty => None,
+            CellState::Played(p) => Some(*p),
+        }
+    }
+
+    fn empty(&self) -> bool {
+        match self {
             CellState::Empty => true,
             _ => false,
-        }) {
-            BoardState::InPlay
-        } else {
-            BoardState::Drawn
         }
+    }
+}
+
+impl HasOwner for BoardState {
+    fn player(&self) -> Option<Player> {
+        match self {
+            BoardState::Won(p) => Some(*p),
+            _ => None,
+        }
+    }
+    fn empty(&self) -> bool {
+        match self {
+            BoardState::InPlay => true,
+            _ => false,
+        }
+    }
+}
+
+fn check_winner<T: HasOwner>(board: &[T; 9], who: Player) -> BoardState {
+    if WIN_PATTERNS.iter().any(|&pat| {
+        pat.iter().all(|i| match board[*i].player() {
+            Some(p) => p == who,
+            _ => false,
+        })
+    }) {
+        return BoardState::Won(who);
+    }
+
+    if board.iter().any(|e| e.empty()) {
+        BoardState::InPlay
+    } else {
+        BoardState::Drawn
     }
 }
 
@@ -71,6 +102,7 @@ pub struct Game {
     next_board: Option<u8>,
     boards: [Subboard; 9],
     game_states: [BoardState; 9],
+    winner: BoardState,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -104,6 +136,7 @@ impl Game {
                 board.clone(),
             ],
             game_states: [BoardState::InPlay; 9],
+            winner: BoardState::InPlay,
         }
     }
 
@@ -123,8 +156,18 @@ impl Game {
         out.boards[m.board as usize].0[m.square as usize] = CellState::Played(out.next_player);
         if let BoardState::InPlay = out.game_states[m.board as usize] {
             out.game_states[m.board as usize] =
-                out.boards[m.board as usize].compute_win(out.next_player);
+                check_winner(&out.boards[m.board as usize].0, out.next_player);
         }
+        if out.boards[m.square as usize]
+            .0
+            .iter()
+            .any(|s| *s == CellState::Empty)
+        {
+            out.next_board = Some(m.board);
+        } else {
+            out.next_board = None;
+        }
+        out.winner = check_winner(&out.game_states, out.next_player);
         out.next_player = out.next_player.other();
         return Ok(out);
     }
