@@ -102,7 +102,7 @@ pub struct Game {
     next_board: Option<u8>,
     boards: [Subboard; 9],
     game_states: [BoardState; 9],
-    winner: BoardState,
+    overall_state: BoardState,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -116,6 +116,7 @@ pub enum MoveError {
     WrongBoard,
     OutOfBounds,
     NotEmpty,
+    GameOver,
 }
 
 impl Game {
@@ -136,11 +137,15 @@ impl Game {
                 board.clone(),
             ],
             game_states: [BoardState::InPlay; 9],
-            winner: BoardState::InPlay,
+            overall_state: BoardState::InPlay,
         }
     }
 
     pub fn make_move(&self, m: Move) -> Result<Game, MoveError> {
+        match self.overall_state {
+            BoardState::InPlay => (),
+            _ => return Err(MoveError::GameOver),
+        }
         if let Some(b) = self.next_board {
             if b != m.board {
                 return Err(MoveError::WrongBoard);
@@ -167,7 +172,7 @@ impl Game {
         } else {
             out.next_board = None;
         }
-        out.winner = check_winner(&out.game_states, out.next_player);
+        out.overall_state = check_winner(&out.game_states, out.next_player);
         out.next_player = out.next_player.other();
         return Ok(out);
     }
