@@ -1,3 +1,5 @@
+mod display;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Player {
     X,
@@ -175,5 +177,17 @@ impl Game {
         out.overall_state = check_winner(&out.game_states, out.next_player);
         out.next_player = out.next_player.other();
         return Ok(out);
+    }
+
+    pub fn game_state(&self) -> BoardState {
+        self.overall_state
+    }
+
+    pub fn at(&self, board: usize, cell: usize) -> CellState {
+        self.boards[board].0[cell]
+    }
+
+    pub fn board_state(&self, board: usize) -> BoardState {
+        self.game_states[board]
     }
 }

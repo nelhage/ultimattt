@@ -6,11 +6,11 @@ fn main() {
         board: 0,
         square: 0,
     }) {
-        Ok(_) => {
-            println!("move ok!");
+        Ok(gg) => {
+            println!("move ok!\n{}", gg);
         }
         Err(e) => {
             println!("bad move: {:?}", e);
         }
-    }
+    };
 }
