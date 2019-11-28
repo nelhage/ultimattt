@@ -191,3 +191,28 @@ impl Game {
         self.game_states[board]
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_move() {
+        let g = Game::new();
+        match g.make_move(Move {
+            board: 1,
+            square: 6,
+        }) {
+            Ok(gg) => {
+                assert_eq!(gg.at(1, 6), CellState::Played(Player::X));
+                assert_eq!(gg.at(0, 0), CellState::Empty);
+                for i in 0..9 {
+                    assert_eq!(gg.board_state(i), BoardState::InPlay);
+                }
+            }
+            Err(e) => {
+                panic!("move failed: {:?}", e);
+            }
+        };
+    }
+}
