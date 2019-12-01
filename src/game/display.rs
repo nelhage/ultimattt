@@ -13,7 +13,13 @@ mod pr {
         }
     }
 
-    pub fn board_state(p: BoardState) -> &'static str {
+    pub fn board_state(g: &Game, b: usize) -> &'static str {
+        if let Some(n) = g.next_board {
+            if n as usize == b {
+                return "+";
+            }
+        }
+        let p = g.board_state(b);
         match p {
             BoardState::InPlay => " ",
             BoardState::Drawn => "#",
@@ -31,10 +37,10 @@ mod pr {
     pub fn overall_row(f: &mut fmt::Formatter, g: &Game, row: usize) -> fmt::Result {
         write!(
             f,
-            "{} | {} | {}\n",
-            board_state(g.board_state(3 * row)),
-            board_state(g.board_state(3 * row + 1)),
-            board_state(g.board_state(3 * row + 2))
+            " {} | {} | {}\n",
+            board_state(g, 3 * row),
+            board_state(g, 3 * row + 1),
+            board_state(g, 3 * row + 2)
         )
     }
 
@@ -64,9 +70,9 @@ mod pr {
 impl fmt::Display for super::Game {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         pr::overall_row(f, self, 0)?;
-        write!(f, "--+---+--\n")?;
+        write!(f, "---+---+---\n")?;
         pr::overall_row(f, self, 1)?;
-        write!(f, "--+---+--\n")?;
+        write!(f, "---+---+---\n")?;
         pr::overall_row(f, self, 2)?;
         write!(f, "\n")?;
 
