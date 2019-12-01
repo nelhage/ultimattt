@@ -113,7 +113,7 @@ pub struct Move {
     pub square: u8,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum MoveError {
     WrongBoard,
     OutOfBounds,
@@ -144,6 +144,9 @@ impl Game {
     }
 
     pub fn make_move(&self, m: Move) -> Result<Game, MoveError> {
+        if m.board >= 9 || m.square >= 9 {
+            return Err(MoveError::OutOfBounds);
+        }
         match self.overall_state {
             BoardState::InPlay => (),
             _ => return Err(MoveError::GameOver),
@@ -152,9 +155,6 @@ impl Game {
             if b != m.board {
                 return Err(MoveError::WrongBoard);
             }
-        }
-        if m.board > 9 || m.square > 9 {
-            return Err(MoveError::OutOfBounds);
         }
         if self.boards[m.board as usize].0[m.square as usize] != CellState::Empty {
             return Err(MoveError::NotEmpty);
@@ -170,7 +170,7 @@ impl Game {
             .iter()
             .any(|s| *s == CellState::Empty)
         {
-            out.next_board = Some(m.board);
+            out.next_board = Some(m.square);
         } else {
             out.next_board = None;
         }
@@ -181,6 +181,14 @@ impl Game {
 
     pub fn game_state(&self) -> BoardState {
         self.overall_state
+    }
+
+    pub fn player(&self) -> Player {
+        self.next_player
+    }
+
+    pub fn board(&self) -> Option<usize> {
+        self.next_board.map(|b| b as usize)
     }
 
     pub fn at(&self, board: usize, cell: usize) -> CellState {
@@ -195,6 +203,20 @@ impl Game {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn board(moves: &[(usize, usize)]) -> Game {
+        let mut g = Game::new();
+        for m in moves {
+            match g.make_move(Move {
+                board: m.0 as u8,
+                square: m.1 as u8,
+            }) {
+                Ok(g_) => g = g_,
+                Err(e) => panic!("move failed: {:?}: {:?}\n{}", m, e, &g),
+            }
+        }
+        g
+    }
 
     #[test]
     fn test_move() {
@@ -214,5 +236,132 @@ mod tests {
                 panic!("move failed: {:?}", e);
             }
         };
+    }
+
+    #[test]
+    fn test_sub_win() {
+        let g = board(&[(0, 4), (4, 0), (0, 2), (2, 0), (0, 6)]);
+        assert_eq!(g.board_state(0), BoardState::Won(Player::X));
+
+        let g = board(&[(0, 4), (4, 6), (6, 4), (4, 7), (7, 4), (4, 8)]);
+        assert_eq!(g.board_state(4), BoardState::Won(Player::O));
+    }
+
+    #[test]
+    fn test_sub_draw() {
+        let g = board(&[
+            (0, 2),
+            (2, 0),
+            (0, 4),
+            (4, 0),
+            (0, 7),
+            (7, 0),
+            (0, 0),
+            (0, 1),
+            (1, 0),
+            (0, 3),
+            (3, 0),
+            (0, 5),
+            (5, 0),
+            (0, 6),
+            (6, 0),
+            (0, 8),
+        ]);
+        assert_eq!(g.board_state(0), BoardState::Drawn);
+    }
+
+    #[test]
+    fn test_move_anywhere() {
+        let g = board(&[
+            (0, 2),
+            (2, 0),
+            (0, 4),
+            (4, 0),
+            (0, 7),
+            (7, 0),
+            (0, 0),
+            (0, 1),
+            (1, 0),
+            (0, 3),
+            (3, 0),
+            (0, 5),
+            (5, 0),
+            (0, 6),
+            (6, 0),
+            (0, 8),
+            (8, 0),
+        ]);
+        for b in &[1, 2, 3, 4, 5, 6, 7, 8] {
+            let r = g.make_move(Move {
+                board: *b,
+                square: *b,
+            });
+            if let Err(e) = r {
+                panic!("Disallowed move: ({}, {}): {:?}", b, b, e);
+            }
+        }
+        assert_eq!(g.board_state(0), BoardState::Drawn);
+    }
+
+    #[test]
+    fn test_win() {
+        let g = board(&[
+            (0, 2),
+            (2, 0),
+            (0, 4),
+            (4, 0),
+            (0, 6),
+            (6, 1),
+            (1, 2),
+            (2, 1),
+            (1, 4),
+            (4, 1),
+            (1, 6),
+            (6, 2),
+            (2, 3),
+            (3, 2),
+            (2, 4),
+            (4, 2),
+            (2, 5),
+        ]);
+        assert_eq!(g.game_state(), BoardState::Won(Player::X));
+        let r = g.make_move(Move {
+            board: 5,
+            square: 1,
+        });
+        match r {
+            Ok(_) => panic!("allowed move on won board"),
+            Err(e) => {
+                assert_eq!(e, MoveError::GameOver);
+            }
+        }
+    }
+
+    #[test]
+    fn test_move_errors() {
+        let g = board(&[(0, 4), (4, 0)]);
+        let cases = &[
+            (1, 4, MoveError::WrongBoard),
+            (0, 4, MoveError::NotEmpty),
+            (0, 10, MoveError::OutOfBounds),
+            (9, 3, MoveError::OutOfBounds),
+        ];
+        for (board, square, expect) in cases {
+            let m = g.make_move(Move {
+                board: *board as u8,
+                square: *square as u8,
+            });
+            match m {
+                Ok(_) => panic!("Move succeeded, expected {:?}", expect),
+                Err(e) => {
+                    if e != *expect {
+                        panic!(
+                            "Move returned wrong error: got {:?}, expected {:?}",
+                            e, expect
+                        )
+                    }
+                }
+            }
+        }
     }
 }
