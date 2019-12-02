@@ -187,7 +187,7 @@ impl Game {
         self.next_player
     }
 
-    pub fn board(&self) -> Option<usize> {
+    pub fn board_to_play(&self) -> Option<usize> {
         self.next_board.map(|b| b as usize)
     }
 
