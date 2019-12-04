@@ -2,9 +2,10 @@
 mod game;
 
 extern crate ansi_term;
-use ansi_term::{ANSIString, Color, Style};
+use ansi_term::Style;
 
 use std::io;
+use std::io::Write;
 
 fn cell(g: game::CellState) -> &'static str {
     match g {
@@ -42,6 +43,15 @@ fn render(out: &mut dyn io::Write, g: &game::Game) -> Result<(), io::Error> {
             };
             write!(out, " {}", ch)?;
         }
+        write!(out, "      ")?;
+        let ch = 'a' as u8 + 3 * (brow as u8);
+        write!(
+            out,
+            "{}    {}    {}",
+            ch as char,
+            (ch + 1) as char,
+            (ch + 2) as char,
+        )?;
         write!(out, "\n")?;
     }
     writeln!(out, "")?;
@@ -54,25 +64,16 @@ fn render(out: &mut dyn io::Write, g: &game::Game) -> Result<(), io::Error> {
             let board = 3 * (row / 3) + col / 3;
             let sq = 3 * (row % 3) + col % 3;
             let at = g.at(board, sq);
-            let ch = match at {
-                game::CellState::Empty => {
-                    if g.board_to_play().map(|b| b == board).unwrap_or(false) {
-                        &"abcdefghi"[sq..sq + 1]
-                    } else {
-                        "."
-                    }
-                }
-                other => cell(other),
-            };
-            write!(out, "{}", stylefor(g, &[board]).paint(ch))?;
+            write!(out, "{}", stylefor(g, &[board]).paint(cell(at)))?;
             if col != 8 {
                 match col % 3 {
                     0 | 1 => {
                         write!(out, "{}", stylefor(g, &[board]).paint("  "))?;
                     }
                     2 => {
-                        write!(out, "{}", stylefor(g, &[board, board + 1]).paint(" "))?;
-                        write!(out, "{}", stylefor(g, &[board + 1]).paint("| "))?;
+                        write!(out, "{}", stylefor(g, &[board]).paint(" "))?;
+                        write!(out, "|")?;
+                        write!(out, "{}", stylefor(g, &[board + 1]).paint(" "))?;
                     }
                     _ => unreachable!(),
                 };
@@ -83,21 +84,57 @@ fn render(out: &mut dyn io::Write, g: &game::Game) -> Result<(), io::Error> {
     Ok(())
 }
 
+const CH_A: u8 = 'a' as u8;
+const CH_I: u8 = 'i' as u8;
+
+fn parse_move(line: &str) -> Result<game::Move, io::Error> {
+    let bytes = line.as_bytes();
+
+    if bytes.len() != 3 || bytes[bytes.len() - 1] != 10 {
+        return Err(io::Error::new(io::ErrorKind::Other, "unable to parse move"));
+    }
+    if bytes[0] < CH_A || bytes[0] > CH_I {
+        return Err(io::Error::new(io::ErrorKind::Other, "board out of range"));
+    }
+    if bytes[1] < CH_A || bytes[0] > CH_I {
+        return Err(io::Error::new(io::ErrorKind::Other, "square out of range"));
+    }
+    Ok(game::Move {
+        board: bytes[0] - CH_A,
+        square: bytes[1] - CH_A,
+    })
+}
+
 fn read_move(g: &game::Game) -> Result<game::Move, io::Error> {
-    render(&mut io::stdout(), g)?;
-    Err(io::Error::new(io::ErrorKind::Other, "unimplemented"))
+    let mut out = io::stdout();
+    render(&mut out, g)?;
+    write!(&mut out, "move> ")?;
+    out.flush()?;
+
+    let mut line = String::new();
+    if io::stdin().read_line(&mut line)? == 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::UnexpectedEof,
+            "EOF while reading move",
+        ));
+    }
+    parse_move(&line)
 }
 
 fn main() -> Result<(), std::io::Error> {
     let mut g = game::Game::new();
-    g = g
-        .make_move(game::Move {
-            board: 3,
-            square: 0,
-        })
-        .unwrap();
+
     loop {
-        let m = read_move(&g)?;
+        let m = match read_move(&g) {
+            Ok(m) => m,
+            Err(e) => {
+                if let io::ErrorKind::UnexpectedEof = e.kind() {
+                    return Ok(());
+                }
+                println!("reading move: {:?}", e);
+                continue;
+            }
+        };
 
         match g.make_move(m) {
             Ok(gg) => {
