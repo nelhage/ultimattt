@@ -1,5 +1,7 @@
 mod display;
 
+use std::vec::Vec;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Player {
     X,
@@ -144,6 +146,11 @@ impl Game {
     }
 
     pub fn make_move(&self, m: Move) -> Result<Game, MoveError> {
+        let mut out = self.clone();
+        out.inplace_move(m).map(|_| out)
+    }
+
+    pub fn inplace_move(&mut self, m: Move) -> Result<(), MoveError> {
         if m.board >= 9 || m.square >= 9 {
             return Err(MoveError::OutOfBounds);
         }
@@ -159,24 +166,48 @@ impl Game {
         if self.boards[m.board as usize].0[m.square as usize] != CellState::Empty {
             return Err(MoveError::NotEmpty);
         }
-        let mut out = self.clone();
-        out.boards[m.board as usize].0[m.square as usize] = CellState::Played(out.next_player);
-        if let BoardState::InPlay = out.game_states[m.board as usize] {
-            out.game_states[m.board as usize] =
-                check_winner(&out.boards[m.board as usize].0, out.next_player);
+
+        self.boards[m.board as usize].0[m.square as usize] = CellState::Played(self.next_player);
+        if let BoardState::InPlay = self.game_states[m.board as usize] {
+            self.game_states[m.board as usize] =
+                check_winner(&self.boards[m.board as usize].0, self.next_player);
         }
-        if out.boards[m.square as usize]
+        if self.boards[m.square as usize]
             .0
             .iter()
             .any(|s| *s == CellState::Empty)
         {
-            out.next_board = Some(m.square);
+            self.next_board = Some(m.square);
         } else {
-            out.next_board = None;
+            self.next_board = None;
         }
-        out.overall_state = check_winner(&out.game_states, out.next_player);
-        out.next_player = out.next_player.other();
-        return Ok(out);
+        self.overall_state = check_winner(&self.game_states, self.next_player);
+        self.next_player = self.next_player.other();
+        return Ok(());
+    }
+
+    fn moves_on(&self, board: u8, out: &mut Vec<Move>) {
+        for sq in 0..9 {
+            if let CellState::Empty = self.boards[board as usize].0[sq] {
+                out.push(Move {
+                    board: board,
+                    square: sq as u8,
+                })
+            }
+        }
+    }
+
+    pub fn all_moves(&self) -> Vec<Move> {
+        let mut out = Vec::new();
+        match self.next_board {
+            Some(b) => self.moves_on(b, &mut out),
+            None => {
+                for b in 0..9 {
+                    self.moves_on(b, &mut out);
+                }
+            }
+        }
+        out
     }
 
     pub fn game_state(&self) -> BoardState {
@@ -360,6 +391,23 @@ mod tests {
                             e, expect
                         )
                     }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_all_moves() {
+        let cases = &[
+            (Game::new(), 81),
+            (board(&[(0, 4)]), 9),
+            (board(&[(4, 4)]), 8),
+        ];
+        for (board, count) in cases {
+            assert_eq!(*count, board.all_moves().len());
+            for m in board.all_moves() {
+                if let Err(e) = board.make_move(m) {
+                    panic!("Bad move: {:?}: {:?})", m, e);
                 }
             }
         }
