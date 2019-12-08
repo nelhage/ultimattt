@@ -1,8 +1,11 @@
 #[allow(dead_code)]
 mod game;
+mod minimax;
 
 extern crate ansi_term;
 use ansi_term::Style;
+
+extern crate rand;
 
 use std::io;
 use std::io::Write;
@@ -106,19 +109,24 @@ fn parse_move(line: &str) -> Result<game::Move, io::Error> {
 }
 
 fn read_move(g: &game::Game) -> Result<game::Move, io::Error> {
-    let mut out = io::stdout();
-    render(&mut out, g)?;
-    write!(&mut out, "move> ")?;
-    out.flush()?;
+    match g.player() {
+        game::Player::X => {
+            let mut out = io::stdout();
+            render(&mut out, g)?;
+            write!(&mut out, "move> ")?;
+            out.flush()?;
 
-    let mut line = String::new();
-    if io::stdin().read_line(&mut line)? == 0 {
-        return Err(io::Error::new(
-            io::ErrorKind::UnexpectedEof,
-            "EOF while reading move",
-        ));
+            let mut line = String::new();
+            if io::stdin().read_line(&mut line)? == 0 {
+                return Err(io::Error::new(
+                    io::ErrorKind::UnexpectedEof,
+                    "EOF while reading move",
+                ));
+            }
+            parse_move(&line)
+        }
+        game::Player::O => Ok(minimax::minimax(g)),
     }
-    parse_move(&line)
 }
 
 fn main() -> Result<(), std::io::Error> {
