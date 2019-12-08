@@ -1,10 +1,21 @@
 use crate::game;
 
+use rand;
 use rand::seq::SliceRandom;
-use rand::thread_rng;
 
-pub fn minimax(g: &game::Game) -> game::Move {
-    let moves = g.all_moves();
-    let mut rng = thread_rng();
-    *moves.as_slice().choose(&mut rng).unwrap()
+pub struct AI {
+    rng: rand::rngs::ThreadRng,
+}
+
+impl AI {
+    pub fn new() -> Self {
+        AI {
+            rng: rand::thread_rng(),
+        }
+    }
+
+    pub fn select_move(&mut self, g: &game::Game) -> game::Move {
+        let moves = g.all_moves();
+        *moves.as_slice().choose(&mut self.rng).unwrap()
+    }
 }

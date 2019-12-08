@@ -108,7 +108,7 @@ fn parse_move(line: &str) -> Result<game::Move, io::Error> {
     })
 }
 
-fn read_move(g: &game::Game) -> Result<game::Move, io::Error> {
+fn read_move(g: &game::Game, ai: &mut minimax::AI) -> Result<game::Move, io::Error> {
     match g.player() {
         game::Player::X => {
             let mut out = io::stdout();
@@ -125,15 +125,16 @@ fn read_move(g: &game::Game) -> Result<game::Move, io::Error> {
             }
             parse_move(&line)
         }
-        game::Player::O => Ok(minimax::minimax(g)),
+        game::Player::O => Ok(ai.select_move(g)),
     }
 }
 
 fn main() -> Result<(), std::io::Error> {
     let mut g = game::Game::new();
+    let mut ai = minimax::AI::new();
 
     loop {
-        let m = match read_move(&g) {
+        let m = match read_move(&g, &mut ai) {
             Ok(m) => m,
             Err(e) => {
                 if let io::ErrorKind::UnexpectedEof = e.kind() {
