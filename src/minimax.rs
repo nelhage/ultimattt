@@ -3,18 +3,24 @@ use crate::game;
 use rand;
 use rand::seq::SliceRandom;
 
-pub struct AI {
+pub trait AI {
+    fn select_move(&mut self, g: &game::Game) -> game::Move;
+}
+
+pub struct Minimax {
     rng: rand::rngs::ThreadRng,
 }
 
-impl AI {
+impl Minimax {
     pub fn new() -> Self {
-        AI {
+        Self {
             rng: rand::thread_rng(),
         }
     }
+}
 
-    pub fn select_move(&mut self, g: &game::Game) -> game::Move {
+impl AI for Minimax {
+    fn select_move(&mut self, g: &game::Game) -> game::Move {
         let moves = g.all_moves();
         *moves.as_slice().choose(&mut self.rng).unwrap()
     }

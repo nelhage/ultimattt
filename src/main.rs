@@ -108,7 +108,7 @@ fn parse_move(line: &str) -> Result<game::Move, io::Error> {
     })
 }
 
-fn read_move(g: &game::Game, ai: &mut minimax::AI) -> Result<game::Move, io::Error> {
+fn read_move(g: &game::Game, ai: &mut dyn minimax::AI) -> Result<game::Move, io::Error> {
     match g.player() {
         game::Player::X => {
             let mut out = io::stdout();
@@ -131,7 +131,7 @@ fn read_move(g: &game::Game, ai: &mut minimax::AI) -> Result<game::Move, io::Err
 
 fn main() -> Result<(), std::io::Error> {
     let mut g = game::Game::new();
-    let mut ai = minimax::AI::new();
+    let mut ai = minimax::Minimax::new();
 
     loop {
         let m = match read_move(&g, &mut ai) {
