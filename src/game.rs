@@ -115,6 +115,15 @@ pub struct Move {
     pub square: u8,
 }
 
+impl Move {
+    pub fn none() -> Self {
+        Move {
+            board: 255,
+            square: 255,
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum MoveError {
     WrongBoard,
