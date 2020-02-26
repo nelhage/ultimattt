@@ -1,4 +1,5 @@
 mod display;
+pub mod notation;
 
 use std::vec::Vec;
 
@@ -13,6 +14,13 @@ impl Player {
         match self {
             Player::X => Player::O,
             Player::O => Player::X,
+        }
+    }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Player::X => "X",
+            Player::O => "O",
         }
     }
 }
@@ -193,6 +201,10 @@ impl Game {
         self.overall_state = check_winner(&self.game_states, self.next_player);
         self.next_player = self.next_player.other();
         return Ok(());
+    }
+
+    fn recalc_winner(&mut self) {
+        self.overall_state = check_winner(&self.game_states, self.next_player.other());
     }
 
     fn moves_on(&self, board: u8, out: &mut Vec<Move>) {

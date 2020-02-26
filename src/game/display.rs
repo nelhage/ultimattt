@@ -67,6 +67,12 @@ mod pr {
     }
 }
 
+impl fmt::Display for super::Player {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", pr::player(*self))
+    }
+}
+
 impl fmt::Display for super::Game {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         pr::overall_row(f, self, 0)?;
