@@ -28,13 +28,28 @@ impl Minimax {
         match g.game_state() {
             game::BoardState::Drawn => 0,
             game::BoardState::InPlay => 0,
-            game::BoardState::Won(p) => {
-                if p == g.player() {
-                    EVAL_WON
-                } else {
-                    EVAL_LOST
+            game::BoardState::Won(p) => return if p == g.player() { EVAL_WON } else { EVAL_LOST },
+        };
+
+        let mut wins = (0, 0);
+        for board in 0..9 {
+            match g.board_state(board) {
+                game::BoardState::Won(p) => {
+                    if p == game::Player::X {
+                        wins.0 += 1
+                    } else {
+                        wins.1 += 1
+                    }
                 }
+                _ => (),
             }
+        }
+
+        let score: i64 = wins.0 - wins.1;
+        if g.player() == game::Player::O {
+            -score
+        } else {
+            score
         }
     }
 

@@ -134,7 +134,7 @@ fn read_move(g: &game::Game, ai: &mut dyn minimax::AI) -> Result<game::Move, io:
 
 fn main() -> Result<(), std::io::Error> {
     let mut g = game::Game::new();
-    let mut ai = minimax::Minimax::new(3);
+    let mut ai = minimax::Minimax::new(5);
 
     loop {
         let m = match read_move(&g, &mut ai) {
