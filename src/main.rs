@@ -106,10 +106,10 @@ fn parse_move(line: &str) -> Result<game::Move, io::Error> {
     if bytes[1] < CH_A || bytes[0] > CH_I {
         return Err(io::Error::new(io::ErrorKind::Other, "square out of range"));
     }
-    Ok(game::Move {
-        board: bytes[0] - CH_A,
-        square: bytes[1] - CH_A,
-    })
+    Ok(game::Move::from_coords(
+        (bytes[0] - CH_A) as usize,
+        (bytes[1] - CH_A) as usize,
+    ))
 }
 
 fn read_move(g: &game::Game, ai: &mut dyn minimax::AI) -> Result<game::Move, io::Error> {

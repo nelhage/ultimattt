@@ -38,9 +38,6 @@ pub enum BoardState {
     Won(Player),
 }
 
-#[derive(Clone, Debug)]
-pub struct Subboard([CellState; 9]);
-
 const WIN_PATTERNS: [[usize; 3]; 8] = [
     // rows
     [0, 1, 2],
@@ -109,6 +106,41 @@ fn check_winner<T: HasOwner>(board: &[T; 9], who: Player) -> BoardState {
 }
 
 #[derive(Clone, Debug)]
+pub struct Subboard([CellState; 9]);
+
+#[derive(Clone, Debug)]
+pub struct Unpacked {
+    pub next_player: Player,
+    pub next_board: Option<u8>,
+    pub boards: [Subboard; 9],
+    pub game_states: [BoardState; 9],
+    pub overall_state: BoardState,
+}
+
+impl Default for Unpacked {
+    fn default() -> Self {
+        let board = Subboard([CellState::Empty; 9]);
+        Self {
+            next_player: Player::X,
+            next_board: None,
+            boards: [
+                board.clone(),
+                board.clone(),
+                board.clone(),
+                board.clone(),
+                board.clone(),
+                board.clone(),
+                board.clone(),
+                board.clone(),
+                board.clone(),
+            ],
+            game_states: [BoardState::InPlay; 9],
+            overall_state: BoardState::InPlay,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct Game {
     next_player: Player,
     next_board: Option<u8>,
@@ -119,16 +151,30 @@ pub struct Game {
 
 #[derive(Copy, Clone, Debug)]
 pub struct Move {
-    pub board: u8,
-    pub square: u8,
+    bits: u8,
 }
 
 impl Move {
+    pub fn from_coords(board: usize, square: usize) -> Self {
+        return Self {
+            bits: (board << 4 | square) as u8,
+        };
+    }
+
+    pub fn board(self) -> usize {
+        (self.bits >> 4) as usize
+    }
+
+    pub fn square(self) -> usize {
+        (self.bits & 0xf) as usize
+    }
+
     pub fn none() -> Self {
-        Move {
-            board: 255,
-            square: 255,
-        }
+        Move { bits: 0xff }
+    }
+
+    pub fn is_none(self) -> bool {
+        self.bits == 0xff
     }
 }
 
@@ -162,13 +208,23 @@ impl Game {
         }
     }
 
+    pub fn pack(bits: &Unpacked) -> Game {
+        Game {
+            next_player: bits.next_player,
+            next_board: bits.next_board,
+            boards: bits.boards.clone(),
+            game_states: bits.game_states.clone(),
+            overall_state: bits.overall_state,
+        }
+    }
+
     pub fn make_move(&self, m: Move) -> Result<Game, MoveError> {
         let mut out = self.clone();
         out.inplace_move(m).map(|_| out)
     }
 
     pub fn inplace_move(&mut self, m: Move) -> Result<(), MoveError> {
-        if m.board >= 9 || m.square >= 9 {
+        if m.board() >= 9 || m.square() >= 9 {
             return Err(MoveError::OutOfBounds);
         }
         match self.overall_state {
@@ -176,25 +232,24 @@ impl Game {
             _ => return Err(MoveError::GameOver),
         }
         if let Some(b) = self.next_board {
-            if b != m.board {
+            if b != m.board() as u8 {
                 return Err(MoveError::WrongBoard);
             }
         }
-        if self.boards[m.board as usize].0[m.square as usize] != CellState::Empty {
+        if self.boards[m.board()].0[m.square()] != CellState::Empty {
             return Err(MoveError::NotEmpty);
         }
 
-        self.boards[m.board as usize].0[m.square as usize] = CellState::Played(self.next_player);
-        if let BoardState::InPlay = self.game_states[m.board as usize] {
-            self.game_states[m.board as usize] =
-                check_winner(&self.boards[m.board as usize].0, self.next_player);
+        self.boards[m.board()].0[m.square()] = CellState::Played(self.next_player);
+        if let BoardState::InPlay = self.game_states[m.board()] {
+            self.game_states[m.board()] = check_winner(&self.boards[m.board()].0, self.next_player);
         }
-        if self.boards[m.square as usize]
+        if self.boards[m.square()]
             .0
             .iter()
             .any(|s| *s == CellState::Empty)
         {
-            self.next_board = Some(m.square);
+            self.next_board = Some(m.square() as u8);
         } else {
             self.next_board = None;
         }
@@ -207,13 +262,10 @@ impl Game {
         self.overall_state = check_winner(&self.game_states, self.next_player.other());
     }
 
-    fn moves_on(&self, board: u8, out: &mut Vec<Move>) {
+    fn moves_on(&self, board: usize, out: &mut Vec<Move>) {
         for sq in 0..9 {
-            if let CellState::Empty = self.boards[board as usize].0[sq] {
-                out.push(Move {
-                    board: board,
-                    square: sq as u8,
-                })
+            if let CellState::Empty = self.boards[board].0[sq] {
+                out.push(Move::from_coords(board, sq))
             }
         }
     }
@@ -221,7 +273,7 @@ impl Game {
     pub fn all_moves(&self) -> Vec<Move> {
         let mut out = Vec::new();
         match self.next_board {
-            Some(b) => self.moves_on(b, &mut out),
+            Some(b) => self.moves_on(b as usize, &mut out),
             None => {
                 for b in 0..9 {
                     self.moves_on(b, &mut out);
@@ -259,10 +311,7 @@ mod tests {
     fn board(moves: &[(usize, usize)]) -> Game {
         let mut g = Game::new();
         for m in moves {
-            match g.make_move(Move {
-                board: m.0 as u8,
-                square: m.1 as u8,
-            }) {
+            match g.make_move(Move::from_coords(m.0, m.1)) {
                 Ok(g_) => g = g_,
                 Err(e) => panic!("move failed: {:?}: {:?}\n{}", m, e, &g),
             }
@@ -273,10 +322,7 @@ mod tests {
     #[test]
     fn test_move() {
         let g = Game::new();
-        match g.make_move(Move {
-            board: 1,
-            square: 6,
-        }) {
+        match g.make_move(Move::from_coords(1, 6)) {
             Ok(gg) => {
                 assert_eq!(gg.at(1, 6), CellState::Played(Player::X));
                 assert_eq!(gg.at(0, 0), CellState::Empty);
@@ -344,10 +390,7 @@ mod tests {
             (8, 0),
         ]);
         for b in &[1, 2, 3, 4, 5, 6, 7, 8] {
-            let r = g.make_move(Move {
-                board: *b,
-                square: *b,
-            });
+            let r = g.make_move(Move::from_coords(*b, *b));
             if let Err(e) = r {
                 panic!("Disallowed move: ({}, {}): {:?}", b, b, e);
             }
@@ -377,10 +420,7 @@ mod tests {
             (2, 5),
         ]);
         assert_eq!(g.game_state(), BoardState::Won(Player::X));
-        let r = g.make_move(Move {
-            board: 5,
-            square: 1,
-        });
+        let r = g.make_move(Move::from_coords(5, 1));
         match r {
             Ok(_) => panic!("allowed move on won board"),
             Err(e) => {
@@ -399,10 +439,7 @@ mod tests {
             (9, 3, MoveError::OutOfBounds),
         ];
         for (board, square, expect) in cases {
-            let m = g.make_move(Move {
-                board: *board as u8,
-                square: *square as u8,
-            });
+            let m = g.make_move(Move::from_coords(*board, *square));
             match m {
                 Ok(_) => panic!("Move succeeded, expected {:?}", expect),
                 Err(e) => {

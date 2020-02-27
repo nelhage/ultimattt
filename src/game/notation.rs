@@ -59,7 +59,7 @@ pub fn parse(text: &str) -> Result<Game, ParseError> {
         });
     }
 
-    let mut game = Game::new();
+    let mut game: Unpacked = Default::default();
     let who = bits[0];
     game.next_player = match who {
         "X" => Player::X,
@@ -132,9 +132,10 @@ pub fn parse(text: &str) -> Result<Game, ParseError> {
         }
     }
 
-    game.recalc_winner();
+    let mut out = Game::pack(&game);
+    out.recalc_winner();
 
-    return Ok(game);
+    return Ok(out);
 }
 
 #[cfg(test)]
@@ -144,15 +145,9 @@ mod tests {
     #[test]
     fn test_simple() {
         let g = Game::new()
-            .make_move(Move {
-                board: 1,
-                square: 6,
-            })
+            .make_move(Move::from_coords(1, 6))
             .unwrap()
-            .make_move(Move {
-                board: 6,
-                square: 3,
-            })
+            .make_move(Move::from_coords(6, 3))
             .unwrap();
         let notation = render(&g);
         let got = parse(&notation).unwrap();
