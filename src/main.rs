@@ -84,6 +84,9 @@ fn render(out: &mut dyn io::Write, g: &game::Game) -> Result<(), io::Error> {
         }
         write!(out, "\n")?;
     }
+
+    write!(out, "notation:\n{}\n", game::notation::render(g))?;
+
     Ok(())
 }
 
