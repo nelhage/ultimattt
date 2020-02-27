@@ -19,6 +19,7 @@ const EVAL_WON: i64 = 1 << 60;
 const EVAL_LOST: i64 = -(1 << 60);
 
 impl Minimax {
+    #[allow(dead_code)]
     pub fn with_depth(depth: i32) -> Self {
         Self {
             rng: rand::thread_rng(),
@@ -27,6 +28,7 @@ impl Minimax {
         }
     }
 
+    #[allow(dead_code)]
     pub fn with_timeout(timeout: Duration) -> Self {
         Self {
             rng: rand::thread_rng(),
