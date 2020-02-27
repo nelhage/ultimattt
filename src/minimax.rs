@@ -92,9 +92,18 @@ impl AI for Minimax {
         let mut result: game::Move;
         loop {
             depth += 1;
+            let t_before = Instant::now();
             let got = self.minimax(g, depth);
+            let ply_duration = Instant::now().duration_since(t_before);
             result = got.0;
-            println!("minimax depth={} move={} v={}", depth, got.0, got.1);
+            println!(
+                "minimax depth={} move={} v={} t={}.{:03}s",
+                depth,
+                got.0,
+                got.1,
+                ply_duration.as_secs(),
+                ply_duration.subsec_millis(),
+            );
             if self.max_depth.map(|d| depth >= d).unwrap_or(false) {
                 break;
             }
