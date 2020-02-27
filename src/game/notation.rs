@@ -85,7 +85,7 @@ pub fn parse(text: &str) -> Result<Game, ParseError> {
             'O' => BoardState::Won(Player::O),
             '#' => BoardState::Drawn,
             '@' => {
-                game.next_board = Some(board as u8);
+                game.next_board = Some(board);
                 BoardState::InPlay
             }
             '.' => BoardState::InPlay,

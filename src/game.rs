@@ -23,6 +23,13 @@ impl Player {
             Player::O => "O",
         }
     }
+
+    pub fn bit(&self) -> usize {
+        match self {
+            Player::X => 1,
+            Player::O => 0,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -111,7 +118,7 @@ pub struct Subboard([CellState; 9]);
 #[derive(Clone, Debug)]
 pub struct Unpacked {
     pub next_player: Player,
-    pub next_board: Option<u8>,
+    pub next_board: Option<usize>,
     pub boards: [Subboard; 9],
     pub game_states: [BoardState; 9],
     pub overall_state: BoardState,
@@ -141,9 +148,33 @@ impl Default for Unpacked {
 }
 
 #[derive(Clone, Debug)]
+struct ToPlay(u8);
+
+impl ToPlay {
+    fn pack(player: Player, board: Option<usize>) -> Self {
+        Self((player.bit() as u8) << 7 | board.unwrap_or(0xf) as u8)
+    }
+
+    fn player(&self) -> Player {
+        if (self.0 >> 7) == 1 {
+            Player::X
+        } else {
+            Player::O
+        }
+    }
+
+    fn board(&self) -> Option<usize> {
+        if self.0 & 0xf == 0xf {
+            None
+        } else {
+            Some((self.0 & 0xf) as usize)
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct Game {
-    next_player: Player,
-    next_board: Option<u8>,
+    to_play: ToPlay,
     boards: [Subboard; 9],
     game_states: [BoardState; 9],
     overall_state: BoardState,
@@ -190,8 +221,7 @@ impl Game {
     pub fn new() -> Game {
         let board = Subboard([CellState::Empty; 9]);
         Game {
-            next_player: Player::X,
-            next_board: None,
+            to_play: ToPlay::pack(Player::X, None),
             boards: [
                 board.clone(),
                 board.clone(),
@@ -210,8 +240,7 @@ impl Game {
 
     pub fn pack(bits: &Unpacked) -> Game {
         Game {
-            next_player: bits.next_player,
-            next_board: bits.next_board,
+            to_play: ToPlay::pack(bits.next_player, bits.next_board),
             boards: bits.boards.clone(),
             game_states: bits.game_states.clone(),
             overall_state: bits.overall_state,
@@ -231,8 +260,8 @@ impl Game {
             BoardState::InPlay => (),
             _ => return Err(MoveError::GameOver),
         }
-        if let Some(b) = self.next_board {
-            if b != m.board() as u8 {
+        if let Some(b) = self.board_to_play() {
+            if b != m.board() {
                 return Err(MoveError::WrongBoard);
             }
         }
@@ -240,26 +269,26 @@ impl Game {
             return Err(MoveError::NotEmpty);
         }
 
-        self.boards[m.board()].0[m.square()] = CellState::Played(self.next_player);
+        self.boards[m.board()].0[m.square()] = CellState::Played(self.player());
         if let BoardState::InPlay = self.game_states[m.board()] {
-            self.game_states[m.board()] = check_winner(&self.boards[m.board()].0, self.next_player);
+            self.game_states[m.board()] = check_winner(&self.boards[m.board()].0, self.player());
         }
-        if self.boards[m.square()]
+        let next_board = if self.boards[m.square()]
             .0
             .iter()
             .any(|s| *s == CellState::Empty)
         {
-            self.next_board = Some(m.square() as u8);
+            Some(m.square())
         } else {
-            self.next_board = None;
-        }
-        self.overall_state = check_winner(&self.game_states, self.next_player);
-        self.next_player = self.next_player.other();
+            None
+        };
+        self.overall_state = check_winner(&self.game_states, self.player());
+        self.to_play = ToPlay::pack(self.player().other(), next_board);
         return Ok(());
     }
 
     fn recalc_winner(&mut self) {
-        self.overall_state = check_winner(&self.game_states, self.next_player.other());
+        self.overall_state = check_winner(&self.game_states, self.player().other());
     }
 
     fn moves_on(&self, board: usize, out: &mut Vec<Move>) {
@@ -272,7 +301,7 @@ impl Game {
 
     pub fn all_moves(&self) -> Vec<Move> {
         let mut out = Vec::new();
-        match self.next_board {
+        match self.board_to_play() {
             Some(b) => self.moves_on(b as usize, &mut out),
             None => {
                 for b in 0..9 {
@@ -288,11 +317,11 @@ impl Game {
     }
 
     pub fn player(&self) -> Player {
-        self.next_player
+        self.to_play.player()
     }
 
     pub fn board_to_play(&self) -> Option<usize> {
-        self.next_board.map(|b| b as usize)
+        self.to_play.board()
     }
 
     pub fn at(&self, board: usize, cell: usize) -> CellState {
