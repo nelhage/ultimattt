@@ -1,6 +1,7 @@
 use crate::game;
 
 use rand;
+use std::time::{Duration, Instant};
 
 pub trait AI {
     fn select_move(&mut self, g: &game::Game) -> game::Move;
@@ -10,17 +11,27 @@ pub struct Minimax {
     #[allow(dead_code)]
     rng: rand::rngs::ThreadRng,
 
-    depth: i32,
+    max_depth: Option<i32>,
+    timeout: Option<Duration>,
 }
 
 const EVAL_WON: i64 = 1 << 60;
 const EVAL_LOST: i64 = -(1 << 60);
 
 impl Minimax {
-    pub fn new(depth: i32) -> Self {
+    pub fn with_depth(depth: i32) -> Self {
         Self {
             rng: rand::thread_rng(),
-            depth: depth,
+            max_depth: Some(depth),
+            timeout: None,
+        }
+    }
+
+    pub fn with_timeout(timeout: Duration) -> Self {
+        Self {
+            rng: rand::thread_rng(),
+            max_depth: None,
+            timeout: Some(timeout),
         }
     }
 
@@ -74,6 +85,21 @@ impl Minimax {
 
 impl AI for Minimax {
     fn select_move(&mut self, g: &game::Game) -> game::Move {
-        self.minimax(g, self.depth).0
+        let deadline: Option<Instant> = self.timeout.map(|t| Instant::now() + t);
+        let mut depth = 0;
+        let mut result: game::Move;
+        loop {
+            depth += 1;
+            let got = self.minimax(g, depth);
+            result = got.0;
+            println!("minimax depth={} move={} v={}", depth, got.0, got.1);
+            if self.max_depth.map(|d| depth >= d).unwrap_or(false) {
+                break;
+            }
+            if deadline.map(|d| Instant::now() > d).unwrap_or(false) {
+                break;
+            }
+        }
+        return result;
     }
 }

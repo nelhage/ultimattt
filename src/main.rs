@@ -4,6 +4,7 @@ mod minimax;
 
 extern crate ansi_term;
 use ansi_term::Style;
+use std::time::Duration;
 
 extern crate rand;
 
@@ -134,7 +135,7 @@ fn read_move(g: &game::Game, ai: &mut dyn minimax::AI) -> Result<game::Move, io:
 
 fn main() -> Result<(), std::io::Error> {
     let mut g = game::Game::new();
-    let mut ai = minimax::Minimax::new(5);
+    let mut ai = minimax::Minimax::with_timeout(Duration::from_secs(1));
 
     loop {
         let m = match read_move(&g, &mut ai) {
