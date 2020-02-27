@@ -30,9 +30,9 @@ impl Minimax {
             game::BoardState::InPlay => 0,
             game::BoardState::Won(p) => {
                 if p == g.player() {
-                    EVAL_LOST
-                } else {
                     EVAL_WON
+                } else {
+                    EVAL_LOST
                 }
             }
         }
