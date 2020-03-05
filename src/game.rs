@@ -53,6 +53,8 @@ const WIN_PATTERNS: [[usize; 3]; 8] = [
     [6, 4, 2],
 ];
 
+const WIN_MASKS: &[u32] = &[0x7, 0x38, 0x1c0, 0x49, 0x92, 0x124, 0x111, 0x54];
+
 trait HasOwner {
     fn player(&self) -> Option<Player>;
     fn empty(&self) -> bool;
@@ -142,10 +144,91 @@ impl Default for Unpacked {
 }
 
 #[derive(Clone, Debug)]
+struct Row {
+    // These are each a packed [u9; 3] containing a bitmask for the
+    // respective player's states. The low bits store index 0.
+    x: u32,
+    o: u32,
+}
+
+#[derive(Clone, Debug)]
+struct Subboards {
+    rows: [Row; 3],
+}
+
+impl Subboards {
+    fn at(&self, board: usize, cell: usize) -> CellState {
+        let row = &self.rows[board / 3];
+        let idx = (board % 3) * 9 + cell;
+        let xbit = (row.x >> idx) & 1 == 1;
+        let obit = (row.o >> idx) & 1 == 1;
+        if xbit {
+            return CellState::Played(Player::X);
+        }
+        if obit {
+            return CellState::Played(Player::O);
+        }
+        return CellState::Empty;
+    }
+
+    fn set(&mut self, board: usize, cell: usize, who: Player) {
+        let mut row = &mut self.rows[board / 3];
+        let idx = (board % 3) * 9 + cell;
+        let bit = 1 << idx;
+        match who {
+            Player::X => {
+                row.x |= bit;
+            }
+            Player::O => {
+                row.o |= bit;
+            }
+        }
+    }
+
+    fn full(&self, board: usize) -> bool {
+        let row = &self.rows[board / 3];
+        let mask = 0x1ff << 9 * (board % 3);
+        (row.o | row.x) & mask == mask
+    }
+
+    fn mask(&self, board: usize) -> u32 {
+        let row = &self.rows[board / 3];
+        (row.o | row.x) >> (9 * (board % 3)) & 0x1ff
+    }
+
+    fn check_winner(&self, board: usize, player: Player) -> BoardState {
+        let row = &self.rows[board / 3];
+        let shift = 9 * (board % 3);
+        let mask = match player {
+            Player::X => row.x >> shift,
+            Player::O => row.o >> shift,
+        };
+        for win in WIN_MASKS {
+            if mask & win == *win {
+                return BoardState::Won(player);
+            }
+        }
+        if ((row.x | row.o) >> shift) & 0x1ff == 0x1ff {
+            BoardState::Drawn
+        } else {
+            BoardState::InPlay
+        }
+    }
+}
+
+impl Default for Subboards {
+    fn default() -> Self {
+        Subboards {
+            rows: [Row { x: 0, o: 0 }, Row { x: 0, o: 0 }, Row { x: 0, o: 0 }],
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct Game {
     next_player: Player,
     next_board: Option<u8>,
-    boards: [Subboard; 9],
+    boards: Subboards,
     game_states: [BoardState; 9],
     overall_state: BoardState,
 }
@@ -189,31 +272,42 @@ pub enum MoveError {
 
 impl Game {
     pub fn new() -> Game {
-        let board = Subboard([CellState::Empty; 9]);
         Game {
             next_player: Player::X,
             next_board: None,
-            boards: [
-                board.clone(),
-                board.clone(),
-                board.clone(),
-                board.clone(),
-                board.clone(),
-                board.clone(),
-                board.clone(),
-                board.clone(),
-                board.clone(),
-            ],
+            boards: Default::default(),
             game_states: [BoardState::InPlay; 9],
             overall_state: BoardState::InPlay,
         }
     }
 
     pub fn pack(bits: &Unpacked) -> Game {
+        let mut boards: Subboards = Default::default();
+        for row in 0..3 {
+            let mut x: u32 = 0;
+            let mut o: u32 = 0;
+            for col in 0..3 {
+                let board = &bits.boards[3 * row + col];
+                for (i, cell) in board.0.iter().enumerate() {
+                    let idx: u32 = 1 << (9 * col + i);
+                    match cell {
+                        CellState::Played(Player::X) => {
+                            x |= idx;
+                        }
+                        CellState::Played(Player::O) => {
+                            o |= idx;
+                        }
+                        CellState::Empty => (),
+                    }
+                }
+            }
+            boards.rows[row].x = x;
+            boards.rows[row].o = o;
+        }
         Game {
             next_player: bits.next_player,
             next_board: bits.next_board,
-            boards: bits.boards.clone(),
+            boards: boards,
             game_states: bits.game_states.clone(),
             overall_state: bits.overall_state,
         }
@@ -237,22 +331,18 @@ impl Game {
                 return Err(MoveError::WrongBoard);
             }
         }
-        if self.boards[m.board()].0[m.square()] != CellState::Empty {
+        if self.boards.at(m.board(), m.square()) != CellState::Empty {
             return Err(MoveError::NotEmpty);
         }
 
-        self.boards[m.board()].0[m.square()] = CellState::Played(self.next_player);
+        self.boards.set(m.board(), m.square(), self.next_player);
         if let BoardState::InPlay = self.game_states[m.board()] {
-            self.game_states[m.board()] = check_winner(&self.boards[m.board()].0, self.next_player);
+            self.game_states[m.board()] = self.boards.check_winner(m.board(), self.next_player);
         }
-        if self.boards[m.square()]
-            .0
-            .iter()
-            .any(|s| *s == CellState::Empty)
-        {
-            self.next_board = Some(m.square() as u8);
-        } else {
+        if self.boards.full(m.square()) {
             self.next_board = None;
+        } else {
+            self.next_board = Some(m.square() as u8);
         }
         self.overall_state = check_winner(&self.game_states, self.next_player);
         self.next_player = self.next_player.other();
@@ -264,10 +354,12 @@ impl Game {
     }
 
     fn moves_on(&self, board: usize, out: &mut Vec<Move>) {
+        let mut mask = self.boards.mask(board);
         for sq in 0..9 {
-            if let CellState::Empty = self.boards[board].0[sq] {
+            if mask & 1 == 0 {
                 out.push(Move::from_coords(board, sq))
             }
+            mask >>= 1;
         }
     }
 
@@ -297,7 +389,7 @@ impl Game {
     }
 
     pub fn at(&self, board: usize, cell: usize) -> CellState {
-        self.boards[board].0[cell]
+        self.boards.at(board, cell)
     }
 
     pub fn board_state(&self, board: usize) -> BoardState {
@@ -312,10 +404,17 @@ mod tests {
 
     fn board(moves: &[(usize, usize)]) -> Game {
         let mut g = Game::new();
-        for m in moves {
+        for (i, m) in moves.iter().enumerate() {
             match g.make_move(Move::from_coords(m.0, m.1)) {
                 Ok(g_) => g = g_,
                 Err(e) => panic!("move failed: {:?}: {:?}\n{}", m, e, &g),
+            }
+            let at = g.at(m.0, m.1);
+            if at != CellState::Played(g.player().other()) {
+                panic!(
+                    "board(): consistency failure i={} m={:?} bits={:?} at={:?}",
+                    i, m, g.boards, at
+                );
             }
         }
         g
