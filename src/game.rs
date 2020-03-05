@@ -54,6 +54,7 @@ const WIN_PATTERNS: [[usize; 3]; 8] = [
 ];
 
 const WIN_MASKS: &[u32] = &[0x7, 0x38, 0x1c0, 0x49, 0x92, 0x124, 0x111, 0x54];
+const BOARD_MASK: u32 = 0x1ff;
 
 trait HasOwner {
     fn player(&self) -> Option<Player>;
@@ -187,13 +188,13 @@ impl Subboards {
 
     fn full(&self, board: usize) -> bool {
         let row = &self.rows[board / 3];
-        let mask = 0x1ff << 9 * (board % 3);
+        let mask = BOARD_MASK << 9 * (board % 3);
         (row.o | row.x) & mask == mask
     }
 
     fn mask(&self, board: usize) -> u32 {
         let row = &self.rows[board / 3];
-        (row.o | row.x) >> (9 * (board % 3)) & 0x1ff
+        (row.o | row.x) >> (9 * (board % 3)) & BOARD_MASK
     }
 
     fn check_winner(&self, board: usize, player: Player) -> BoardState {
@@ -208,7 +209,7 @@ impl Subboards {
                 return BoardState::Won(player);
             }
         }
-        if ((row.x | row.o) >> shift) & 0x1ff == 0x1ff {
+        if ((row.x | row.o) >> shift) & BOARD_MASK == BOARD_MASK {
             BoardState::Drawn
         } else {
             BoardState::InPlay
@@ -225,11 +226,91 @@ impl Default for Subboards {
 }
 
 #[derive(Clone, Debug)]
+struct GameStates {
+    // (x: u9, o: u9, drawn: u9), LSB first
+    bits: u32,
+}
+
+impl Default for GameStates {
+    fn default() -> Self {
+        GameStates { bits: 0 }
+    }
+}
+
+impl GameStates {
+    fn xbits(&self) -> u32 {
+        self.bits & BOARD_MASK
+    }
+    fn obits(&self) -> u32 {
+        (self.bits >> 9) & BOARD_MASK
+    }
+    fn drawbits(&self) -> u32 {
+        (self.bits >> 18) & BOARD_MASK
+    }
+    fn donebits(&self) -> u32 {
+        (self.bits | (self.bits >> 9) | (self.bits >> 18)) & BOARD_MASK
+    }
+    fn playerbits(&self, player: Player) -> u32 {
+        match player {
+            Player::X => self.xbits(),
+            Player::O => self.obits(),
+        }
+    }
+    fn in_play(&self, board: usize) -> bool {
+        (self.donebits() & 1 << board) == 0
+    }
+
+    fn check_winner(&self, player: Player) -> BoardState {
+        let mask = self.playerbits(player);
+        for win in WIN_MASKS {
+            if mask & win == *win {
+                return BoardState::Won(player);
+            }
+        }
+        if self.donebits() == BOARD_MASK {
+            BoardState::Drawn
+        } else {
+            BoardState::InPlay
+        }
+    }
+
+    fn at(&self, board: usize) -> BoardState {
+        let bit = 1 << board;
+        if self.xbits() & bit != 0 {
+            BoardState::Won(Player::X)
+        } else if self.obits() & bit != 0 {
+            BoardState::Won(Player::O)
+        } else if self.drawbits() & bit != 0 {
+            BoardState::Drawn
+        } else {
+            BoardState::InPlay
+        }
+    }
+
+    fn set(&mut self, board: usize, state: BoardState) {
+        let mut i = board;
+        match state {
+            BoardState::Drawn => {
+                i += 18;
+            }
+            BoardState::InPlay => {
+                return;
+            }
+            BoardState::Won(Player::X) => {}
+            BoardState::Won(Player::O) => {
+                i += 9;
+            }
+        };
+        self.bits |= 1 << i;
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct Game {
     next_player: Player,
     next_board: Option<u8>,
     boards: Subboards,
-    game_states: [BoardState; 9],
+    game_states: GameStates,
     overall_state: BoardState,
 }
 
@@ -276,7 +357,7 @@ impl Game {
             next_player: Player::X,
             next_board: None,
             boards: Default::default(),
-            game_states: [BoardState::InPlay; 9],
+            game_states: Default::default(),
             overall_state: BoardState::InPlay,
         }
     }
@@ -304,11 +385,15 @@ impl Game {
             boards.rows[row].x = x;
             boards.rows[row].o = o;
         }
+        let mut states: GameStates = Default::default();
+        for i in 0..9 {
+            states.set(i, bits.game_states[i]);
+        }
         Game {
             next_player: bits.next_player,
             next_board: bits.next_board,
             boards: boards,
-            game_states: bits.game_states.clone(),
+            game_states: states,
             overall_state: bits.overall_state,
         }
     }
@@ -336,21 +421,24 @@ impl Game {
         }
 
         self.boards.set(m.board(), m.square(), self.next_player);
-        if let BoardState::InPlay = self.game_states[m.board()] {
-            self.game_states[m.board()] = self.boards.check_winner(m.board(), self.next_player);
+        if self.game_states.in_play(m.board()) {
+            self.game_states.set(
+                m.board(),
+                self.boards.check_winner(m.board(), self.next_player),
+            );
         }
         if self.boards.full(m.square()) {
             self.next_board = None;
         } else {
             self.next_board = Some(m.square() as u8);
         }
-        self.overall_state = check_winner(&self.game_states, self.next_player);
+        self.overall_state = self.game_states.check_winner(self.next_player);
         self.next_player = self.next_player.other();
         return Ok(());
     }
 
     fn recalc_winner(&mut self) {
-        self.overall_state = check_winner(&self.game_states, self.next_player.other());
+        self.overall_state = self.game_states.check_winner(self.next_player.other());
     }
 
     fn moves_on(&self, board: usize, out: &mut Vec<Move>) {
@@ -393,7 +481,7 @@ impl Game {
     }
 
     pub fn board_state(&self, board: usize) -> BoardState {
-        self.game_states[board]
+        self.game_states.at(board)
     }
 }
 
