@@ -662,11 +662,10 @@ mod tests {
 
     #[bench]
     fn bench_empty_move(b: &mut Bencher) {
-        use std::hint::black_box;
         let g = Game::new();
         b.iter(|| {
             let gg = g.make_move(Move::from_coords(0, 5));
-            black_box(&gg);
+            test::black_box(&gg);
         });
     }
 
@@ -680,11 +679,10 @@ mod tests {
 
     #[bench]
     fn bench_clone(b: &mut Bencher) {
-        use std::hint::black_box;
         let g = Game::new();
         b.iter(|| {
             let gg = g.clone();
-            black_box(&gg);
+            test::black_box(&gg);
         });
     }
 }
