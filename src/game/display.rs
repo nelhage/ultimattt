@@ -14,7 +14,7 @@ mod pr {
     }
 
     pub fn board_state(g: &Game, b: usize) -> &'static str {
-        if let Some(n) = g.board_to_play() {
+        if let Some(n) = g.next_board {
             if n as usize == b {
                 return "+";
             }
