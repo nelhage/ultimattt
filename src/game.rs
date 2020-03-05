@@ -511,4 +511,22 @@ mod tests {
             black_box(&gg);
         });
     }
+
+    #[bench]
+    fn bench_recalc_winner_empty(b: &mut Bencher) {
+        let mut g = Game::new();
+        b.iter(|| {
+            g.recalc_winner();
+        });
+    }
+
+    #[bench]
+    fn bench_clone(b: &mut Bencher) {
+        use std::hint::black_box;
+        let g = Game::new();
+        b.iter(|| {
+            let gg = g.clone();
+            black_box(&gg);
+        });
+    }
 }
