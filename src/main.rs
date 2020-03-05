@@ -1,3 +1,4 @@
+#![feature(test)]
 #[allow(dead_code)]
 mod game;
 mod minimax;

@@ -1,4 +1,5 @@
 mod display;
+extern crate test;
 pub mod notation;
 
 use std::vec::Vec;
@@ -336,6 +337,7 @@ impl Game {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use test::Bencher;
 
     fn board(moves: &[(usize, usize)]) -> Game {
         let mut g = Game::new();
@@ -498,5 +500,15 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[bench]
+    fn bench_empty_move(b: &mut Bencher) {
+        use std::hint::black_box;
+        let g = Game::new();
+        b.iter(|| {
+            let gg = g.make_move(Move::from_coords(0, 5));
+            black_box(&gg);
+        });
     }
 }
