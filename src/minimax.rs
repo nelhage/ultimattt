@@ -114,3 +114,17 @@ impl AI for Minimax {
         return result;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use test::Bencher;
+
+    #[bench]
+    fn bench_evaluate(b: &mut Bencher) {
+        use std::hint::black_box;
+        let g = game::Game::new();
+        let ai = Minimax::with_depth(3);
+        b.iter(|| ai.evaluate(black_box(&g)));
+    }
+}
