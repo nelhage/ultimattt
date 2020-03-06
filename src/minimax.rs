@@ -157,7 +157,13 @@ impl Minimax {
             return self.evaluate(g);
         }
 
-        let moves = g.all_moves();
+        let mut moves = g.all_moves();
+        if !pv[0].is_none() {
+            let idx = moves.iter().position(|m| *m == pv[0]);
+            if let Some(i) = idx {
+                moves.swap(0, i);
+            }
+        }
         for m in moves {
             let child = g.make_move(m).unwrap();
             let score = -self.minimax(
