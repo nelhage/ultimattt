@@ -9,11 +9,29 @@ pub trait AI {
     fn select_move(&mut self, g: &game::Game) -> game::Move;
 }
 
+struct Stats {
+    visited: i64,
+    terminal: i64,
+    cuts: i64,
+}
+
+impl Default for Stats {
+    fn default() -> Self {
+        Stats {
+            visited: 0,
+            terminal: 0,
+            cuts: 0,
+        }
+    }
+}
+
 pub struct Minimax {
     rng: rand::rngs::ThreadRng,
 
     max_depth: Option<i32>,
     timeout: Option<Duration>,
+
+    stats: Stats,
 }
 
 const EVAL_WON: i64 = 1 << 60;
@@ -30,6 +48,7 @@ impl Minimax {
             rng: rand::thread_rng(),
             max_depth: Some(depth),
             timeout: None,
+            stats: Default::default(),
         }
     }
 
@@ -39,6 +58,8 @@ impl Minimax {
             rng: rand::thread_rng(),
             max_depth: None,
             timeout: Some(timeout),
+
+            stats: Default::default(),
         }
     }
 
@@ -130,7 +151,9 @@ impl Minimax {
         beta: i64,
         pv: &mut [game::Move],
     ) -> i64 {
+        self.stats.visited += 1;
         if depth <= 0 {
+            self.stats.terminal += 1;
             return self.evaluate(g);
         }
 
@@ -148,6 +171,7 @@ impl Minimax {
                 alpha = score;
                 pv[0] = m;
                 if alpha > beta {
+                    self.stats.cuts += 1;
                     break;
                 }
             }
@@ -175,17 +199,20 @@ impl Minimax {
         loop {
             depth += 1;
             let t_before = Instant::now();
+            self.stats = Default::default();
             pv.resize(depth as usize, game::Move::none());
             score = self.minimax(g, depth, EVAL_LOST, EVAL_WON, pv.as_mut_slice());
             let ply_duration = Instant::now().duration_since(t_before);
             println!(
-                "minimax depth={} move={} pv={} v={} t={}.{:03}s",
+                "minimax depth={} move={} pv={} v={} t={}.{:03}s visited={} cuts={}",
                 depth,
                 pv[0],
                 self.format_pv(&pv),
                 score,
                 ply_duration.as_secs(),
                 ply_duration.subsec_millis(),
+                self.stats.visited,
+                self.stats.cuts,
             );
             if self.max_depth.map(|d| depth >= d).unwrap_or(false) {
                 break;
