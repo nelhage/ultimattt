@@ -229,6 +229,9 @@ impl Minimax {
             if deadline.map(|d| Instant::now() > d).unwrap_or(false) {
                 break;
             }
+            if score <= EVAL_LOST || score >= EVAL_WON {
+                break;
+            }
         }
         return (pv, score);
     }
