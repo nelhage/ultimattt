@@ -4,13 +4,13 @@ mod game;
 mod minimax;
 
 extern crate ansi_term;
-use ansi_term::Style;
-use std::time::Duration;
-
 extern crate rand;
 
+use ansi_term::Style;
 use std::io;
 use std::io::Write;
+use std::process::exit;
+use std::time::Duration;
 
 fn cell(g: game::CellState) -> &'static str {
     match g {
@@ -92,42 +92,52 @@ fn render(out: &mut dyn io::Write, g: &game::Game) -> Result<(), io::Error> {
     Ok(())
 }
 
-fn read_move(g: &game::Game, ai: &mut dyn minimax::AI) -> Result<game::Move, io::Error> {
-    match g.player() {
-        game::Player::X => {
-            let mut out = io::stdout();
-            render(&mut out, g)?;
-            write!(&mut out, "move> ")?;
-            out.flush()?;
+struct CLIPlayer<'a> {
+    stdin: Box<dyn io::BufRead + 'a>,
+    stdout: Box<dyn io::Write + 'a>,
+}
+
+impl<'a> minimax::AI for CLIPlayer<'a> {
+    fn select_move(&mut self, g: &game::Game) -> game::Move {
+        render(&mut self.stdout, g).unwrap();
+        loop {
+            write!(&mut self.stdout, "move> ").unwrap();
+            self.stdout.flush().unwrap();
 
             let mut line = String::new();
-            if io::stdin().read_line(&mut line)? == 0 {
-                return Err(io::Error::new(
-                    io::ErrorKind::UnexpectedEof,
-                    "EOF while reading move",
-                ));
+            if let Ok(b) = self.stdin.read_line(&mut line) {
+                if b == 0 {
+                    exit(0);
+                }
+            } else {
+                exit(0);
             }
-            game::notation::parse_move(&line)
-                .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("{:?}", e)))
+            match game::notation::parse_move(line.trim_end()) {
+                Ok(m) => {
+                    return m;
+                }
+                Err(e) => {
+                    writeln!(&mut self.stdout, "Bad move: {:?}", e).unwrap();
+                }
+            }
         }
-        game::Player::O => Ok(ai.select_move(g)),
     }
 }
 
 fn main() -> Result<(), std::io::Error> {
     let mut g = game::Game::new();
-    let mut ai = minimax::Minimax::with_timeout(Duration::from_secs(1));
+    let stdin = io::stdin();
+    let mut player_x: Box<dyn minimax::AI> = Box::new(CLIPlayer {
+        stdin: Box::new(stdin.lock()),
+        stdout: Box::new(io::stdout()),
+    });
+    let mut player_o: Box<dyn minimax::AI> =
+        Box::new(minimax::Minimax::with_timeout(Duration::from_secs(1)));
 
     loop {
-        let m = match read_move(&g, &mut ai) {
-            Ok(m) => m,
-            Err(e) => {
-                if let io::ErrorKind::UnexpectedEof = e.kind() {
-                    return Ok(());
-                }
-                println!("reading move: {:?}", e);
-                continue;
-            }
+        let m = match g.player() {
+            game::Player::X => player_x.select_move(&g),
+            game::Player::O => player_o.select_move(&g),
         };
 
         match g.make_move(m) {
