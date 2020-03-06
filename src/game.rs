@@ -53,7 +53,7 @@ const WIN_PATTERNS: [[usize; 3]; 8] = [
     [6, 4, 2],
 ];
 
-const WIN_MASKS: &[u32] = &[0x7, 0x38, 0x1c0, 0x49, 0x92, 0x124, 0x111, 0x54];
+pub(in crate) const WIN_MASKS: &[u32] = &[0x7, 0x38, 0x1c0, 0x49, 0x92, 0x124, 0x111, 0x54];
 const BOARD_MASK: u32 = 0x1ff;
 
 trait HasOwner {
@@ -153,7 +153,7 @@ struct Row {
 }
 
 #[derive(Clone, Debug)]
-struct Subboards {
+pub(in crate) struct Subboards {
     rows: [Row; 3],
 }
 
@@ -226,7 +226,7 @@ impl Default for Subboards {
 }
 
 #[derive(Clone, Debug)]
-struct GameStates {
+pub(in crate) struct GameStates {
     // (x: u9, o: u9, drawn: u9), LSB first
     bits: u32,
 }
@@ -238,25 +238,25 @@ impl Default for GameStates {
 }
 
 impl GameStates {
-    fn xbits(&self) -> u32 {
+    pub(in crate) fn xbits(&self) -> u32 {
         self.bits & BOARD_MASK
     }
-    fn obits(&self) -> u32 {
+    pub(in crate) fn obits(&self) -> u32 {
         (self.bits >> 9) & BOARD_MASK
     }
-    fn drawbits(&self) -> u32 {
+    pub(in crate) fn drawbits(&self) -> u32 {
         (self.bits >> 18) & BOARD_MASK
     }
-    fn donebits(&self) -> u32 {
+    pub(in crate) fn donebits(&self) -> u32 {
         (self.bits | (self.bits >> 9) | (self.bits >> 18)) & BOARD_MASK
     }
-    fn playerbits(&self, player: Player) -> u32 {
+    pub(in crate) fn playerbits(&self, player: Player) -> u32 {
         match player {
             Player::X => self.xbits(),
             Player::O => self.obits(),
         }
     }
-    fn in_play(&self, board: usize) -> bool {
+    pub(in crate) fn in_play(&self, board: usize) -> bool {
         (self.donebits() & 1 << board) == 0
     }
 
@@ -307,11 +307,11 @@ impl GameStates {
 
 #[derive(Clone, Debug)]
 pub struct Game {
-    next_player: Player,
-    next_board: Option<u8>,
-    boards: Subboards,
-    game_states: GameStates,
-    overall_state: BoardState,
+    pub(in crate) next_player: Player,
+    pub(in crate) next_board: Option<u8>,
+    pub(in crate) boards: Subboards,
+    pub(in crate) game_states: GameStates,
+    pub(in crate) overall_state: BoardState,
 }
 
 #[derive(Copy, Clone, Debug)]

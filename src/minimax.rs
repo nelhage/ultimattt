@@ -1,3 +1,4 @@
+extern crate test;
 use crate::game;
 
 use rand;
@@ -17,6 +18,8 @@ pub struct Minimax {
 
 const EVAL_WON: i64 = 1 << 60;
 const EVAL_LOST: i64 = -(1 << 60);
+const EVAL_PARTIAL_ONE: i64 = 1;
+const EVAL_PARTIAL_TWO: i64 = 3;
 
 impl Minimax {
     #[allow(dead_code)]
@@ -39,26 +42,50 @@ impl Minimax {
 
     fn evaluate(&self, g: &game::Game) -> i64 {
         match g.game_state() {
-            game::BoardState::Drawn => 0,
-            game::BoardState::InPlay => 0,
+            game::BoardState::Drawn => (),
+            game::BoardState::InPlay => (),
             game::BoardState::Won(p) => return if p == g.player() { EVAL_WON } else { EVAL_LOST },
         };
 
-        let mut wins = (0, 0);
-        for board in 0..9 {
-            match g.board_state(board) {
-                game::BoardState::Won(p) => {
-                    if p == game::Player::X {
-                        wins.0 += 1
-                    } else {
-                        wins.1 += 1
-                    }
+        struct WinPotentials {
+            // (x, o)
+            n1: (i64, i64),
+            n2: (i64, i64),
+        };
+
+        let mut potentials = WinPotentials {
+            n1: (0, 0),
+            n2: (0, 0),
+        };
+
+        for mask in game::WIN_MASKS {
+            let xbits = g.game_states.xbits() & mask;
+            let obits = g.game_states.xbits() & mask;
+
+            // If neither player has a play, or both players have a
+            // play, this is a dead line; assign no points
+            if (xbits == 0 && obits == 0) || (xbits != 0 && obits != 0) {
+                continue;
+            }
+            if xbits != 0 {
+                if xbits.count_ones() == 1 {
+                    potentials.n1.0 += 1;
+                } else if xbits.count_ones() == 2 {
+                    potentials.n2.0 += 1;
                 }
-                _ => (),
+            } else {
+                if obits.count_ones() == 1 {
+                    potentials.n1.1 += 1;
+                } else if obits.count_ones() == 2 {
+                    potentials.n2.1 += 1;
+                }
             }
         }
 
-        let score: i64 = wins.0 - wins.1;
+        let d1 = EVAL_PARTIAL_ONE * (potentials.n1.0 - potentials.n1.1);
+        let d2 = EVAL_PARTIAL_TWO * (potentials.n2.0 - potentials.n2.1);
+
+        let score: i64 = d1 + d2;
         if g.player() == game::Player::O {
             -score
         } else {
