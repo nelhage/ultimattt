@@ -176,6 +176,29 @@ mod tests {
     use super::*;
     use test::Bencher;
 
+    #[test]
+    fn test_eval_empty() {
+        let g = game::Game::new();
+        let ai = Minimax::with_depth(3);
+        assert_eq!(0, ai.evaluate(&g));
+    }
+
+    #[test]
+    fn test_eval_subboard() {
+        let ai = Minimax::with_depth(3);
+        let tests: &[(&'static str, i64)] = &[
+            ("X;.@.......;...X...../........./........./.O......./........./........./........./........./.........", 2),
+            ("X;.@.......;XX......./........./........./.O......./........./........./........./........./.........", 6),
+            ("X;.@.......;XX..O..../........./........./.O......./........./........./........./........./.........", 2),
+            ("X;.@.......;XX..X..../........./........./.O......./........./........./........./........./.........", 12),
+            ("X;.@.......;XX..X...O/........./........./.O......./........./........./........./........./.........", 7),
+        ];
+        for (i, tc) in tests.iter().enumerate() {
+            let g = game::notation::parse(tc.0).unwrap();
+            assert_eq!(ai.score_board(&g, 0), tc.1, "test#{}: {}", i, tc.0);
+        }
+    }
+
     #[bench]
     fn bench_evaluate(b: &mut Bencher) {
         use std::hint::black_box;
