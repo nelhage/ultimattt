@@ -324,7 +324,7 @@ pub struct Game {
     pub(in crate) overall_state: BoardState,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct Move {
     bits: u8,
 }
