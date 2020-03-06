@@ -170,7 +170,7 @@ impl Minimax {
             if score > alpha {
                 alpha = score;
                 pv[0] = m;
-                if alpha > beta {
+                if alpha >= beta {
                     self.stats.cuts += 1;
                     break;
                 }
