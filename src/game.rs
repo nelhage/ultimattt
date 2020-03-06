@@ -39,6 +39,15 @@ pub enum BoardState {
     Won(Player),
 }
 
+impl BoardState {
+    pub fn terminal(&self) -> bool {
+        match self {
+            BoardState::Drawn | BoardState::Won(_) => true,
+            _ => false,
+        }
+    }
+}
+
 pub(in crate) const WIN_PATTERNS: [[usize; 3]; 8] = [
     // rows
     [0, 1, 2],

@@ -152,7 +152,7 @@ impl Minimax {
         pv: &mut [game::Move],
     ) -> i64 {
         self.stats.visited += 1;
-        if depth <= 0 {
+        if depth <= 0 || g.game_state().terminal() {
             self.stats.terminal += 1;
             return self.evaluate(g);
         }
