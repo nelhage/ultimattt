@@ -10,5 +10,9 @@ edition = "2018"
 ansi_term = "0.12.1"
 rand = "0.7.2"
 
+[dependencies.smallvec]
+version = "1.2.0"
+features = ["union"]
+
 [profile.release]
 debug = true

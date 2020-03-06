@@ -1,7 +1,9 @@
+extern crate smallvec;
 extern crate test;
 use crate::game;
 
 use rand;
+use smallvec::SmallVec;
 use std::time::{Duration, Instant};
 use std::vec::Vec;
 
@@ -157,6 +159,8 @@ impl Minimax {
             self.stats.terminal += 1;
             return self.evaluate(g);
         }
+        let mut localpv: SmallVec<[game::Move; 10]> = SmallVec::new();
+        localpv.resize((depth - 1) as usize, game::Move::none());
 
         let mut moves = g.all_moves();
         if !pv[0].is_none() {
@@ -167,16 +171,11 @@ impl Minimax {
         }
         for m in moves {
             let child = g.make_move(m).unwrap();
-            let score = -self.minimax(
-                &child,
-                depth - 1,
-                -beta,
-                -alpha,
-                &mut pv[1..(depth as usize)],
-            );
+            let score = -self.minimax(&child, depth - 1, -beta, -alpha, localpv.as_mut_slice());
             if score > alpha {
                 alpha = score;
                 pv[0] = m;
+                pv[1..(depth as usize)].copy_from_slice(&localpv);
                 if alpha >= beta {
                     self.stats.cuts += 1;
                     break;
@@ -274,6 +273,20 @@ mod tests {
             .unwrap();
         let mut ai = Minimax::with_depth(5);
         ai.select_move(&g);
+    }
+
+    #[test]
+    fn test_minimax_pv() {
+        let g = game::Game::new();
+        let mut ai = Minimax::with_depth(6);
+        let (pv, _) = ai.search(&g);
+        pv.iter().fold(g, |g, m| {
+            let n = g.make_move(*m);
+            match n {
+                Ok(gg) => gg,
+                Err(e) => panic!("make move({}): {:?}", game::notation::render_move(*m), e),
+            }
+        });
     }
 
     #[bench]
