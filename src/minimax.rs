@@ -123,22 +123,37 @@ impl Minimax {
         }
     }
 
-    fn minimax(&mut self, g: &game::Game, depth: i32, pv: &mut [game::Move]) -> i64 {
+    fn minimax(
+        &mut self,
+        g: &game::Game,
+        depth: i32,
+        mut alpha: i64,
+        beta: i64,
+        pv: &mut [game::Move],
+    ) -> i64 {
         if depth <= 0 {
             return self.evaluate(g);
         }
 
-        let mut best = EVAL_LOST - 1;
         let moves = g.all_moves();
         for m in moves {
             let child = g.make_move(m).unwrap();
-            let score = -self.minimax(&child, depth - 1, &mut pv[1..(depth as usize)]);
-            if score > best {
-                best = score;
+            let score = -self.minimax(
+                &child,
+                depth - 1,
+                -beta,
+                -alpha,
+                &mut pv[1..(depth as usize)],
+            );
+            if score > alpha {
+                alpha = score;
                 pv[0] = m;
+                if alpha > beta {
+                    break;
+                }
             }
         }
-        best
+        alpha
     }
 
     fn format_pv(&self, pv: &[game::Move]) -> String {
@@ -162,7 +177,7 @@ impl Minimax {
             depth += 1;
             let t_before = Instant::now();
             pv.resize(depth as usize, game::Move::none());
-            score = self.minimax(g, depth, pv.as_mut_slice());
+            score = self.minimax(g, depth, EVAL_LOST, EVAL_WON, pv.as_mut_slice());
             let ply_duration = Instant::now().duration_since(t_before);
             println!(
                 "minimax depth={} move={} pv={} v={} t={}.{:03}s",
