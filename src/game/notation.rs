@@ -34,6 +34,12 @@ pub fn render(g: &Game) -> String {
     out
 }
 
+pub fn render_move(m: Move) -> String {
+    let board = 'a' as u8 + m.board() as u8;
+    let cell = 'a' as u8 + m.square() as u8;
+    return format!("{}{}", board as char, cell as char);
+}
+
 #[derive(Clone, Debug)]
 pub enum ErrorKind {
     NotImplemented,

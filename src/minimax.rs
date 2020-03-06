@@ -3,6 +3,7 @@ use crate::game;
 
 use rand;
 use std::time::{Duration, Instant};
+use std::vec::Vec;
 
 pub trait AI {
     fn select_move(&mut self, g: &game::Game) -> game::Move;
@@ -122,41 +123,53 @@ impl Minimax {
         }
     }
 
-    fn minimax(&mut self, g: &game::Game, depth: i32) -> (game::Move, i64) {
+    fn minimax(&mut self, g: &game::Game, depth: i32, pv: &mut [game::Move]) -> i64 {
         if depth <= 0 {
-            return (game::Move::none(), self.evaluate(g));
+            return self.evaluate(g);
         }
 
-        let mut best = (game::Move::none(), EVAL_LOST - 1);
+        let mut best = EVAL_LOST - 1;
         let moves = g.all_moves();
         for m in moves {
             let child = g.make_move(m).unwrap();
-            let mut eval = self.minimax(&child, depth - 1);
-            eval.1 *= -1;
-            if eval.1 > best.1 {
-                best = (m, eval.1)
+            let score = -self.minimax(&child, depth - 1, &mut pv[1..(depth as usize)]);
+            if score > best {
+                best = score;
+                pv[0] = m;
             }
         }
         best
     }
-}
 
-impl AI for Minimax {
-    fn select_move(&mut self, g: &game::Game) -> game::Move {
+    fn format_pv(&self, pv: &[game::Move]) -> String {
+        let mut s = "[".to_owned();
+        for m in pv {
+            s += &game::notation::render_move(*m);
+            s += " ";
+        }
+        s.pop();
+        s += "]";
+        return s;
+    }
+
+    fn search(&mut self, g: &game::Game) -> (Vec<game::Move>, i64) {
+        let mut pv = Vec::new();
+
         let deadline: Option<Instant> = self.timeout.map(|t| Instant::now() + t);
-        let mut depth = 0;
-        let mut result: game::Move;
+        let mut depth: i32 = 0;
+        let mut score;
         loop {
             depth += 1;
             let t_before = Instant::now();
-            let got = self.minimax(g, depth);
+            pv.resize(depth as usize, game::Move::none());
+            score = self.minimax(g, depth, pv.as_mut_slice());
             let ply_duration = Instant::now().duration_since(t_before);
-            result = got.0;
             println!(
-                "minimax depth={} move={} v={} t={}.{:03}s",
+                "minimax depth={} move={} pv={} v={} t={}.{:03}s",
                 depth,
-                got.0,
-                got.1,
+                pv[0],
+                self.format_pv(&pv),
+                score,
                 ply_duration.as_secs(),
                 ply_duration.subsec_millis(),
             );
@@ -167,7 +180,14 @@ impl AI for Minimax {
                 break;
             }
         }
-        return result;
+        return (pv, score);
+    }
+}
+
+impl AI for Minimax {
+    fn select_move(&mut self, g: &game::Game) -> game::Move {
+        let (pv, _) = self.search(g);
+        pv[0]
     }
 }
 
