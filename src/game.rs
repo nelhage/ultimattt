@@ -39,7 +39,7 @@ pub enum BoardState {
     Won(Player),
 }
 
-const WIN_PATTERNS: [[usize; 3]; 8] = [
+pub(in crate) const WIN_PATTERNS: [[usize; 3]; 8] = [
     // rows
     [0, 1, 2],
     [3, 4, 5],
@@ -190,6 +190,16 @@ impl Subboards {
         let row = &self.rows[board / 3];
         let mask = BOARD_MASK << 9 * (board % 3);
         (row.o | row.x) & mask == mask
+    }
+
+    pub(in crate) fn xbits(&self, board: usize) -> u32 {
+        let row = &self.rows[board / 3];
+        (row.x >> (9 * (board % 3))) & BOARD_MASK
+    }
+
+    pub(in crate) fn obits(&self, board: usize) -> u32 {
+        let row = &self.rows[board / 3];
+        (row.o >> (9 * (board % 3))) & BOARD_MASK
     }
 
     fn mask(&self, board: usize) -> u32 {

@@ -21,6 +21,8 @@ const EVAL_LOST: i64 = -(1 << 60);
 const EVAL_PARTIAL_ONE: i64 = 1;
 const EVAL_PARTIAL_TWO: i64 = 3;
 
+const OVERALL_PARTIAL_WIN: i64 = 10;
+
 impl Minimax {
     #[allow(dead_code)]
     pub fn with_depth(depth: i32) -> Self {
@@ -40,6 +42,50 @@ impl Minimax {
         }
     }
 
+    fn score_board(&self, g: &game::Game, board: usize) -> i64 {
+        if !g.game_states.in_play(board) {
+            return 0;
+        }
+        struct WinPotentials {
+            // (x, o)
+            n1: (i64, i64),
+            n2: (i64, i64),
+        };
+        let xbits = g.boards.xbits(board);
+        let obits = g.boards.obits(board);
+        let mut potentials = WinPotentials {
+            n1: (0, 0),
+            n2: (0, 0),
+        };
+
+        for mask in game::WIN_MASKS {
+            let xs = xbits & mask;
+            let os = obits & mask;
+
+            // If neither player has a play, or both players have a
+            // play, this is a dead line; assign no points
+            if (xs == 0 && os == 0) || (xs != 0 && os != 0) {
+                continue;
+            }
+            if xs != 0 {
+                if xs.count_ones() == 1 {
+                    potentials.n1.0 += 1;
+                } else if xs.count_ones() == 2 {
+                    potentials.n2.0 += 1;
+                }
+            } else {
+                if os.count_ones() == 1 {
+                    potentials.n1.1 += 1;
+                } else if os.count_ones() == 2 {
+                    potentials.n2.1 += 1;
+                }
+            }
+        }
+        let d1 = EVAL_PARTIAL_ONE * (potentials.n1.0 - potentials.n1.1);
+        let d2 = EVAL_PARTIAL_TWO * (potentials.n2.0 - potentials.n2.1);
+        return d1 + d2;
+    }
+
     fn evaluate(&self, g: &game::Game) -> i64 {
         match g.game_state() {
             game::BoardState::Drawn => (),
@@ -47,45 +93,28 @@ impl Minimax {
             game::BoardState::Won(p) => return if p == g.player() { EVAL_WON } else { EVAL_LOST },
         };
 
-        struct WinPotentials {
-            // (x, o)
-            n1: (i64, i64),
-            n2: (i64, i64),
-        };
-
-        let mut potentials = WinPotentials {
-            n1: (0, 0),
-            n2: (0, 0),
-        };
-
-        for mask in game::WIN_MASKS {
+        let mut board_scores: [i64; 9] = [0; 9];
+        for board in 0..9 {
+            board_scores[board] = self.score_board(g, board);
+        }
+        let mut score: i64 = 0;
+        for (i, mask) in game::WIN_MASKS.iter().enumerate() {
             let xbits = g.game_states.xbits() & mask;
-            let obits = g.game_states.xbits() & mask;
+            let obits = g.game_states.obits() & mask;
 
-            // If neither player has a play, or both players have a
-            // play, this is a dead line; assign no points
-            if (xbits == 0 && obits == 0) || (xbits != 0 && obits != 0) {
+            // If both players have a play, this is a dead line. Award
+            // no points.
+            if xbits != 0 && obits != 0 {
                 continue;
             }
-            if xbits != 0 {
-                if xbits.count_ones() == 1 {
-                    potentials.n1.0 += 1;
-                } else if xbits.count_ones() == 2 {
-                    potentials.n2.0 += 1;
-                }
-            } else {
-                if obits.count_ones() == 1 {
-                    potentials.n1.1 += 1;
-                } else if obits.count_ones() == 2 {
-                    potentials.n2.1 += 1;
-                }
+            score += (xbits.count_ones() as i64) * OVERALL_PARTIAL_WIN;
+            score -= (obits.count_ones() as i64) * OVERALL_PARTIAL_WIN;
+
+            for idx in game::WIN_PATTERNS[i].iter() {
+                score += board_scores[*idx];
             }
         }
 
-        let d1 = EVAL_PARTIAL_ONE * (potentials.n1.0 - potentials.n1.1);
-        let d2 = EVAL_PARTIAL_TWO * (potentials.n2.0 - potentials.n2.1);
-
-        let score: i64 = d1 + d2;
         if g.player() == game::Player::O {
             -score
         } else {
