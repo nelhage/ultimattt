@@ -188,6 +188,9 @@ impl Minimax {
     fn format_pv(&self, pv: &[game::Move]) -> String {
         let mut s = "[".to_owned();
         for m in pv {
+            if m.is_none() {
+                break;
+            }
             s += &game::notation::render_move(*m);
             s += " ";
         }
