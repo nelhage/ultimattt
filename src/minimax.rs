@@ -25,6 +25,7 @@ impl Default for Stats {
     }
 }
 
+#[allow(dead_code)]
 pub struct Minimax {
     rng: rand::rngs::ThreadRng,
 
