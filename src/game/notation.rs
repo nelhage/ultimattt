@@ -144,6 +144,29 @@ pub fn parse(text: &str) -> Result<Game, ParseError> {
     return Ok(out);
 }
 
+#[derive(Clone, Debug)]
+pub enum ParseMoveError {
+    BadLength,
+    BadCharacter(char),
+}
+
+fn parse_coord(ch: char) -> Result<usize, ParseMoveError> {
+    if ch < 'a' || ch > 'i' {
+        return Err(ParseMoveError::BadCharacter(ch));
+    }
+    Ok((ch as u8 - 'a' as u8) as usize)
+}
+
+pub fn parse_move(text: &str) -> Result<Move, ParseMoveError> {
+    if text.len() != 2 {
+        return Err(ParseMoveError::BadLength);
+    }
+    let mut chars = text.chars();
+    let board = parse_coord(chars.next().unwrap())?;
+    let square = parse_coord(chars.next().unwrap())?;
+    Ok(Move::from_coords(board, square))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

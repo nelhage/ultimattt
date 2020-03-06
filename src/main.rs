@@ -92,27 +92,6 @@ fn render(out: &mut dyn io::Write, g: &game::Game) -> Result<(), io::Error> {
     Ok(())
 }
 
-const CH_A: u8 = 'a' as u8;
-const CH_I: u8 = 'i' as u8;
-
-fn parse_move(line: &str) -> Result<game::Move, io::Error> {
-    let bytes = line.as_bytes();
-
-    if bytes.len() != 3 || bytes[bytes.len() - 1] != 10 {
-        return Err(io::Error::new(io::ErrorKind::Other, "unable to parse move"));
-    }
-    if bytes[0] < CH_A || bytes[0] > CH_I {
-        return Err(io::Error::new(io::ErrorKind::Other, "board out of range"));
-    }
-    if bytes[1] < CH_A || bytes[0] > CH_I {
-        return Err(io::Error::new(io::ErrorKind::Other, "square out of range"));
-    }
-    Ok(game::Move::from_coords(
-        (bytes[0] - CH_A) as usize,
-        (bytes[1] - CH_A) as usize,
-    ))
-}
-
 fn read_move(g: &game::Game, ai: &mut dyn minimax::AI) -> Result<game::Move, io::Error> {
     match g.player() {
         game::Player::X => {
@@ -128,7 +107,8 @@ fn read_move(g: &game::Game, ai: &mut dyn minimax::AI) -> Result<game::Move, io:
                     "EOF while reading move",
                 ));
             }
-            parse_move(&line)
+            game::notation::parse_move(&line)
+                .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("{:?}", e)))
         }
         game::Player::O => Ok(ai.select_move(g)),
     }
