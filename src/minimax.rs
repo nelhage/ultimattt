@@ -10,7 +10,6 @@ pub trait AI {
 }
 
 pub struct Minimax {
-    #[allow(dead_code)]
     rng: rand::rngs::ThreadRng,
 
     max_depth: Option<i32>,
@@ -232,6 +231,15 @@ mod tests {
             let g = game::notation::parse(tc.0).unwrap();
             assert_eq!(ai.score_board(&g, 0), tc.1, "test#{}: {}", i, tc.0);
         }
+    }
+
+    #[test]
+    fn test_minimax_basic() {
+        let g = game::Game::new()
+            .make_move(game::Move::from_coords(0, 5))
+            .unwrap();
+        let mut ai = Minimax::with_depth(5);
+        ai.select_move(&g);
     }
 
     #[bench]
