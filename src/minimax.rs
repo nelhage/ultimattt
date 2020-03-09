@@ -42,12 +42,25 @@ impl Default for Config {
     }
 }
 
+struct ResponseTable {
+    moves: [game::Move; 256],
+}
+
+impl Default for ResponseTable {
+    fn default() -> Self {
+        Self {
+            moves: [game::Move::none(); 256],
+        }
+    }
+}
+
 #[allow(dead_code)]
 pub struct Minimax {
     rng: rand::rngs::ThreadRng,
 
     config: Config,
     stats: Stats,
+    response: [ResponseTable; 2],
 }
 
 const EVAL_WON: i64 = 1 << 60;
@@ -74,7 +87,7 @@ where
 
     fn next(&mut self) -> Option<Self::Item> {
         self.i += 1;
-        if self.i == 1 && !self.pv.is_none() {
+        if self.i == 1 {
             return Some(self.pv);
         }
         loop {
@@ -98,6 +111,7 @@ impl Minimax {
             rng: rand::thread_rng(),
             config: config.clone(),
             stats: Default::default(),
+            response: Default::default(),
         }
     }
 
@@ -195,6 +209,19 @@ impl Minimax {
         }
     }
 
+    fn move_iterator<'a>(
+        &self,
+        g: &'a game::Game,
+        pv: game::Move,
+    ) -> impl Iterator<Item = game::Move> + 'a {
+        let i = if pv.is_none() { 1 } else { 0 };
+        MoveIterator {
+            i: i,
+            pv: pv,
+            all_moves: g.all_moves(),
+        }
+    }
+
     fn minimax(
         &mut self,
         g: &game::Game,
@@ -211,20 +238,25 @@ impl Minimax {
         let mut localpv: SmallVec<[game::Move; 10]> = SmallVec::new();
         localpv.resize((depth - 1) as usize, game::Move::none());
 
-        let moves = MoveIterator {
-            i: 0,
-            pv: pv[0],
-            all_moves: g.all_moves(),
-        };
+        let moves = self.move_iterator(g, pv[0]);
         for m in moves {
             let child = match g.make_move(m) {
                 Ok(g) => g,
                 Err(_) => continue,
             };
+            if depth > 1 {
+                let r = self.response_to(g.player()).moves[m.bits() as usize];
+                if !r.is_none() {
+                    localpv[0] = r;
+                }
+            }
             let score = -self.minimax(&child, depth - 1, -beta, -alpha, localpv.as_mut_slice());
             if score > alpha {
                 alpha = score;
                 pv[0] = m;
+                if depth > 1 {
+                    self.response_to(g.player()).moves[m.bits() as usize] = localpv[0];
+                }
                 pv[1..(depth as usize)].copy_from_slice(&localpv);
                 if alpha >= beta {
                     self.stats.cuts += 1;
@@ -233,6 +265,14 @@ impl Minimax {
             }
         }
         alpha
+    }
+
+    fn response_to(&mut self, player: game::Player) -> &mut ResponseTable {
+        let i = match player {
+            game::Player::X => 0,
+            game::Player::O => 1,
+        };
+        &mut self.response[i]
     }
 
     fn format_pv(&self, pv: &[game::Move]) -> String {

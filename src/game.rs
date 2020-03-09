@@ -360,6 +360,10 @@ impl Move {
     pub fn is_none(self) -> bool {
         self.bits == 0xff
     }
+
+    pub fn bits(self) -> u8 {
+        self.bits
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
