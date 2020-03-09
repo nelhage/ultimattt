@@ -27,13 +27,26 @@ impl Default for Stats {
     }
 }
 
+#[derive(Clone)]
+pub struct Config {
+    pub max_depth: Option<i32>,
+    pub timeout: Option<Duration>,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Config {
+            max_depth: None,
+            timeout: None,
+        }
+    }
+}
+
 #[allow(dead_code)]
 pub struct Minimax {
     rng: rand::rngs::ThreadRng,
 
-    max_depth: Option<i32>,
-    timeout: Option<Duration>,
-
+    config: Config,
     stats: Stats,
 }
 
@@ -45,25 +58,19 @@ const EVAL_PARTIAL_TWO: i64 = 3;
 const OVERALL_PARTIAL_WIN: i64 = 10;
 
 impl Minimax {
-    #[allow(dead_code)]
-    pub fn with_depth(depth: i32) -> Self {
+    pub fn with_config(config: &Config) -> Self {
         Self {
             rng: rand::thread_rng(),
-            max_depth: Some(depth),
-            timeout: None,
+            config: config.clone(),
             stats: Default::default(),
         }
     }
 
-    #[allow(dead_code)]
     pub fn with_timeout(timeout: Duration) -> Self {
-        Self {
-            rng: rand::thread_rng(),
-            max_depth: None,
+        Self::with_config(&Config {
             timeout: Some(timeout),
-
-            stats: Default::default(),
-        }
+            ..Default::default()
+        })
     }
 
     fn score_board(&self, g: &game::Game, board: usize) -> i64 {
@@ -202,7 +209,7 @@ impl Minimax {
     fn search(&mut self, g: &game::Game) -> (Vec<game::Move>, i64) {
         let mut pv = Vec::new();
 
-        let deadline: Option<Instant> = self.timeout.map(|t| Instant::now() + t);
+        let deadline: Option<Instant> = self.config.timeout.map(|t| Instant::now() + t);
         let mut depth: i32 = 0;
         let mut score;
         loop {
@@ -223,7 +230,7 @@ impl Minimax {
                 self.stats.visited,
                 self.stats.cuts,
             );
-            if self.max_depth.map(|d| depth >= d).unwrap_or(false) {
+            if self.config.max_depth.map(|d| depth >= d).unwrap_or(false) {
                 break;
             }
             if deadline.map(|d| Instant::now() > d).unwrap_or(false) {
