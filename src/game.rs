@@ -361,6 +361,10 @@ impl Move {
         self.bits == 0xff
     }
 
+    pub fn is_some(self) -> bool {
+        !self.is_none()
+    }
+
     pub fn bits(self) -> u8 {
         self.bits
     }

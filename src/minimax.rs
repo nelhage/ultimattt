@@ -75,7 +75,7 @@ where
     T: Iterator<Item = game::Move>,
 {
     i: usize,
-    pv: game::Move,
+    ordered: SmallVec<[game::Move; 2]>,
     all_moves: T,
 }
 
@@ -86,20 +86,20 @@ where
     type Item = game::Move;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.i += 1;
-        if self.i == 1 {
-            return Some(self.pv);
+        if self.i < self.ordered.len() {
+            let m = Some(self.ordered[self.i]);
+            self.i += 1;
+            return m;
         }
         loop {
-            match self.all_moves.next() {
-                None => return None,
-                Some(m) => {
-                    if m == self.pv {
-                        continue;
-                    }
-                    return Some(m);
+            self.i += 1;
+            let out = self.all_moves.next();
+            if let Some(m) = out {
+                if self.ordered.iter().any(|n| *n == m) {
+                    continue;
                 }
             }
+            return out;
         }
     }
 }
@@ -210,16 +210,20 @@ impl Minimax {
     }
 
     fn move_iterator<'a>(
-        &self,
+        &mut self,
         g: &'a game::Game,
         pv: game::Move,
+        _prev: game::Move,
     ) -> impl Iterator<Item = game::Move> + 'a {
-        let i = if pv.is_none() { 1 } else { 0 };
-        MoveIterator {
-            i: i,
-            pv: pv,
+        let mut it = MoveIterator {
+            i: 0,
+            ordered: SmallVec::new(),
             all_moves: g.all_moves(),
+        };
+        if pv.is_some() {
+            it.ordered.push(pv);
         }
+        it
     }
 
     fn minimax(
@@ -229,6 +233,7 @@ impl Minimax {
         mut alpha: i64,
         beta: i64,
         pv: &mut [game::Move],
+        prev: game::Move,
     ) -> i64 {
         self.stats.visited += 1;
         if depth <= 0 || g.game_state().terminal() {
@@ -238,7 +243,7 @@ impl Minimax {
         let mut localpv: SmallVec<[game::Move; 10]> = SmallVec::new();
         localpv.resize((depth - 1) as usize, game::Move::none());
 
-        let moves = self.move_iterator(g, pv[0]);
+        let moves = self.move_iterator(g, pv[0], prev);
         for m in moves {
             let child = match g.make_move(m) {
                 Ok(g) => g,
@@ -250,7 +255,7 @@ impl Minimax {
                     localpv[0] = r;
                 }
             }
-            let score = -self.minimax(&child, depth - 1, -beta, -alpha, localpv.as_mut_slice());
+            let score = -self.minimax(&child, depth - 1, -beta, -alpha, localpv.as_mut_slice(), m);
             if score > alpha {
                 alpha = score;
                 pv[0] = m;
@@ -300,7 +305,14 @@ impl Minimax {
             let t_before = Instant::now();
             self.stats = Default::default();
             pv.resize(depth as usize, game::Move::none());
-            score = self.minimax(g, depth, EVAL_LOST, EVAL_WON, pv.as_mut_slice());
+            score = self.minimax(
+                g,
+                depth,
+                EVAL_LOST,
+                EVAL_WON,
+                pv.as_mut_slice(),
+                game::Move::none(),
+            );
             let ply_duration = Instant::now().duration_since(t_before);
             println!(
                 "minimax depth={} move={} pv={} v={} t={}.{:03}s visited={} cuts={}",
