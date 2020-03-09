@@ -5,12 +5,15 @@ mod minimax;
 
 extern crate ansi_term;
 extern crate rand;
+extern crate structopt;
 
+use crate::minimax::AI;
 use ansi_term::Style;
 use std::io;
 use std::io::Write;
 use std::process::exit;
 use std::time::Duration;
+use structopt::StructOpt;
 
 fn cell(g: game::CellState) -> &'static str {
     match g {
@@ -124,33 +127,63 @@ impl<'a> minimax::AI for CLIPlayer<'a> {
     }
 }
 
+#[derive(Debug, StructOpt)]
+#[structopt(name = "ultimatett", about = "Ultimate Tic Tac Toe")]
+struct Opt {
+    #[structopt(subcommand)]
+    cmd: Command,
+}
+
+#[derive(Debug, StructOpt)]
+enum Command {
+    Play {},
+    Analyze { position: String },
+}
+
 fn main() -> Result<(), std::io::Error> {
-    let mut g = game::Game::new();
-    let stdin = io::stdin();
-    let mut player_x: Box<dyn minimax::AI> = Box::new(CLIPlayer {
-        stdin: Box::new(stdin.lock()),
-        stdout: Box::new(io::stdout()),
-    });
-    let mut player_o: Box<dyn minimax::AI> =
-        Box::new(minimax::Minimax::with_timeout(Duration::from_secs(1)));
+    let opt = Opt::from_args();
+    match opt.cmd {
+        Command::Play { .. } => {
+            let mut g = game::Game::new();
+            let stdin = io::stdin();
+            let mut player_x: Box<dyn minimax::AI> = Box::new(CLIPlayer {
+                stdin: Box::new(stdin.lock()),
+                stdout: Box::new(io::stdout()),
+            });
+            let mut player_o: Box<dyn minimax::AI> =
+                Box::new(minimax::Minimax::with_timeout(Duration::from_secs(1)));
 
-    loop {
-        let m = match g.player() {
-            game::Player::X => player_x.select_move(&g),
-            game::Player::O => player_o.select_move(&g),
-        };
+            loop {
+                let m = match g.player() {
+                    game::Player::X => player_x.select_move(&g),
+                    game::Player::O => player_o.select_move(&g),
+                };
 
-        match g.make_move(m) {
-            Ok(gg) => {
-                g = gg;
+                match g.make_move(m) {
+                    Ok(gg) => {
+                        g = gg;
+                    }
+                    Err(e) => {
+                        println!("bad move: {:?}", e);
+                    }
+                };
+                match g.game_state() {
+                    game::BoardState::InPlay => (),
+                    _ => break,
+                }
             }
-            Err(e) => {
-                println!("bad move: {:?}", e);
-            }
-        };
-        match g.game_state() {
-            game::BoardState::InPlay => (),
-            _ => break,
+        }
+        Command::Analyze { position } => {
+            let game = match game::notation::parse(&position) {
+                Ok(g) => g,
+                Err(e) => {
+                    println!("Parsing position: {:?}", e);
+                    exit(1)
+                }
+            };
+            let mut ai = minimax::Minimax::with_timeout(Duration::from_secs(1));
+            let m = ai.select_move(&game);
+            println!("move={}", game::notation::render_move(m));
         }
     }
     Ok(())

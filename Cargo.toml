@@ -14,5 +14,8 @@ rand = "0.7.2"
 version = "1.2.0"
 features = ["union"]
 
+[dependencies.structopt]
+version = "0.3.11"
+
 [profile.release]
 debug = true
