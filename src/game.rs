@@ -460,27 +460,8 @@ impl Game {
         self.overall_state = self.game_states.check_winner(self.next_player.other());
     }
 
-    fn moves_on(&self, board: usize, out: &mut Vec<Move>) {
-        let mut mask = self.boards.mask(board);
-        for sq in 0..9 {
-            if mask & 1 == 0 {
-                out.push(Move::from_coords(board, sq))
-            }
-            mask >>= 1;
-        }
-    }
-
-    pub fn all_moves(&self) -> Vec<Move> {
-        let mut out = Vec::new();
-        match self.next_board {
-            Some(b) => self.moves_on(b as usize, &mut out),
-            None => {
-                for b in 0..9 {
-                    self.moves_on(b, &mut out);
-                }
-            }
-        }
-        out
+    pub fn all_moves<'a>(&'a self) -> impl Iterator<Item = Move> + 'a {
+        MoveIterator::from_game(&self)
     }
 
     pub fn game_state(&self) -> BoardState {
@@ -501,6 +482,56 @@ impl Game {
 
     pub fn board_state(&self, board: usize) -> BoardState {
         self.game_states.at(board)
+    }
+}
+
+struct MoveIterator<'a> {
+    game: &'a Game,
+    board: usize,
+    mask: u32,
+    cell: usize,
+}
+
+impl<'a> MoveIterator<'a> {
+    fn from_game(game: &'a Game) -> Self {
+        let board = match game.board_to_play() {
+            Some(b) => b,
+            None => 0,
+        };
+        MoveIterator {
+            game: game,
+            cell: 0,
+            mask: game.boards.mask(board),
+            board: board,
+        }
+    }
+}
+
+impl<'a> Iterator for MoveIterator<'a> {
+    type Item = Move;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            if self.cell >= 9 {
+                if let Some(_) = self.game.board_to_play() {
+                    return None;
+                }
+                self.board += 1;
+                if self.board >= 9 {
+                    return None;
+                }
+                self.cell = 0;
+                self.mask = self.game.boards.mask(self.board);
+            }
+
+            let bit = self.mask & 1 == 0;
+            let cell = self.cell;
+            self.mask >>= 1;
+            self.cell += 1;
+            if bit {
+                return Some(Move::from_coords(self.board, cell));
+            }
+        }
     }
 }
 
@@ -670,7 +701,7 @@ mod tests {
             (board(&[(4, 4)]), 8),
         ];
         for (board, count) in cases {
-            assert_eq!(*count, board.all_moves().len());
+            assert_eq!(*count, board.all_moves().collect::<Vec<Move>>().len());
             for m in board.all_moves() {
                 if let Err(e) = board.make_move(m) {
                     panic!("Bad move: {:?}: {:?})", m, e);

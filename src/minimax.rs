@@ -57,6 +57,41 @@ const EVAL_PARTIAL_TWO: i64 = 3;
 
 const OVERALL_PARTIAL_WIN: i64 = 10;
 
+struct MoveIterator<T>
+where
+    T: Iterator<Item = game::Move>,
+{
+    i: usize,
+    pv: game::Move,
+    all_moves: T,
+}
+
+impl<T> Iterator for MoveIterator<T>
+where
+    T: Iterator<Item = game::Move>,
+{
+    type Item = game::Move;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.i += 1;
+        if self.i == 1 && !self.pv.is_none() {
+            return Some(self.pv);
+        }
+        loop {
+            match self.all_moves.next() {
+                None => return None,
+                Some(m) => {
+                    if m == self.pv {
+                        continue;
+                    }
+                    return Some(m);
+                }
+            }
+        }
+    }
+}
+
+#[allow(dead_code)]
 impl Minimax {
     pub fn with_config(config: &Config) -> Self {
         Self {
@@ -69,6 +104,13 @@ impl Minimax {
     pub fn with_timeout(timeout: Duration) -> Self {
         Self::with_config(&Config {
             timeout: Some(timeout),
+            ..Default::default()
+        })
+    }
+
+    pub fn with_depth(depth: i32) -> Self {
+        Self::with_config(&Config {
+            max_depth: Some(depth),
             ..Default::default()
         })
     }
@@ -169,15 +211,16 @@ impl Minimax {
         let mut localpv: SmallVec<[game::Move; 10]> = SmallVec::new();
         localpv.resize((depth - 1) as usize, game::Move::none());
 
-        let mut moves = g.all_moves();
-        if !pv[0].is_none() {
-            let idx = moves.iter().position(|m| *m == pv[0]);
-            if let Some(i) = idx {
-                moves.swap(0, i);
-            }
-        }
+        let moves = MoveIterator {
+            i: 0,
+            pv: pv[0],
+            all_moves: g.all_moves(),
+        };
         for m in moves {
-            let child = g.make_move(m).unwrap();
+            let child = match g.make_move(m) {
+                Ok(g) => g,
+                Err(_) => continue,
+            };
             let score = -self.minimax(&child, depth - 1, -beta, -alpha, localpv.as_mut_slice());
             if score > alpha {
                 alpha = score;
