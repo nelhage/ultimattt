@@ -256,11 +256,9 @@ impl Minimax {
             if score > alpha {
                 alpha = score;
                 pv[0] = m;
-                if depth > 1 {
-                    self.set_response(g.player(), m, localpv[0]);
-                }
                 pv[1..(depth as usize)].copy_from_slice(&localpv);
                 if alpha >= beta {
+                    self.set_response(g.player().other(), prev, m);
                     self.stats.cuts += 1;
                     break;
                 }
