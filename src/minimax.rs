@@ -213,14 +213,17 @@ impl Minimax {
         &mut self,
         g: &'a game::Game,
         pv: game::Move,
-        _prev: game::Move,
+        prev: game::Move,
     ) -> impl Iterator<Item = game::Move> + 'a {
         let mut it = MoveIterator {
             i: 0,
             ordered: SmallVec::new(),
             all_moves: g.all_moves(),
         };
-        if pv.is_some() {
+        let refutation = self.response_to(g.player().other(), prev);
+        if refutation.is_some() {
+            it.ordered.push(refutation);
+        } else if pv.is_some() {
             it.ordered.push(pv);
         }
         it
@@ -249,18 +252,12 @@ impl Minimax {
                 Ok(g) => g,
                 Err(_) => continue,
             };
-            if depth > 1 {
-                let r = self.response_to(g.player()).moves[m.bits() as usize];
-                if !r.is_none() {
-                    localpv[0] = r;
-                }
-            }
             let score = -self.minimax(&child, depth - 1, -beta, -alpha, localpv.as_mut_slice(), m);
             if score > alpha {
                 alpha = score;
                 pv[0] = m;
                 if depth > 1 {
-                    self.response_to(g.player()).moves[m.bits() as usize] = localpv[0];
+                    self.set_response(g.player(), m, localpv[0]);
                 }
                 pv[1..(depth as usize)].copy_from_slice(&localpv);
                 if alpha >= beta {
@@ -272,12 +269,19 @@ impl Minimax {
         alpha
     }
 
-    fn response_to(&mut self, player: game::Player) -> &mut ResponseTable {
+    fn response_to(&self, player: game::Player, m: game::Move) -> game::Move {
         let i = match player {
             game::Player::X => 0,
             game::Player::O => 1,
         };
-        &mut self.response[i]
+        self.response[i].moves[m.bits() as usize]
+    }
+    fn set_response(&mut self, player: game::Player, m: game::Move, resp: game::Move) {
+        let i = match player {
+            game::Player::X => 0,
+            game::Player::O => 1,
+        };
+        self.response[i].moves[m.bits() as usize] = resp;
     }
 
     fn format_pv(&self, pv: &[game::Move]) -> String {
