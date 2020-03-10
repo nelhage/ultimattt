@@ -35,6 +35,7 @@ fn stylefor(g: &game::Game, boards: &[usize]) -> Style {
 }
 
 fn render(out: &mut dyn io::Write, g: &game::Game) -> Result<(), io::Error> {
+    write!(out, "{} to play:\n", g.player())?;
     for brow in 0..3 {
         if brow != 0 {
             write!(out, "---+---+---\n")?;
@@ -95,14 +96,23 @@ fn render(out: &mut dyn io::Write, g: &game::Game) -> Result<(), io::Error> {
     Ok(())
 }
 
+trait Readline {
+    fn read_line(&self, buf: &mut String) -> io::Result<usize>;
+}
+
+impl Readline for io::Stdin {
+    fn read_line(&self, buf: &mut String) -> io::Result<usize> {
+        self.read_line(buf)
+    }
+}
+
 struct CLIPlayer<'a> {
-    stdin: Box<dyn io::BufRead + 'a>,
+    stdin: Box<dyn Readline + 'a>,
     stdout: Box<dyn io::Write + 'a>,
 }
 
 impl<'a> minimax::AI for CLIPlayer<'a> {
     fn select_move(&mut self, g: &game::Game) -> game::Move {
-        render(&mut self.stdout, g).unwrap();
         loop {
             write!(&mut self.stdout, "move> ").unwrap();
             self.stdout.flush().unwrap();
@@ -121,6 +131,7 @@ impl<'a> minimax::AI for CLIPlayer<'a> {
                 }
                 Err(e) => {
                     writeln!(&mut self.stdout, "Bad move: {:?}", e).unwrap();
+                    render(&mut self.stdout, g).unwrap();
                 }
             }
         }
@@ -136,24 +147,45 @@ struct Opt {
 
 #[derive(Debug, StructOpt)]
 enum Command {
-    Play {},
-    Analyze { position: String },
+    Play {
+        #[structopt(short = "x", long, default_value = "human")]
+        playerx: String,
+        #[structopt(short = "o", long, default_value = "minimax")]
+        playero: String,
+    },
+    Analyze {
+        position: String,
+    },
+}
+
+fn parse_player<'a>(spec: &str) -> Result<Box<dyn minimax::AI + 'a>, std::io::Error> {
+    match spec {
+        "human" => Ok(Box::new(CLIPlayer {
+            stdin: Box::new(io::stdin()),
+            stdout: Box::new(io::stdout()),
+        })),
+        "minimax" => Ok(Box::new(minimax::Minimax::with_timeout(
+            Duration::from_secs(1),
+        ))),
+        _ => Err(io::Error::new(
+            io::ErrorKind::Other,
+            format!("bad player spec: {}", spec),
+        )),
+    }
 }
 
 fn main() -> Result<(), std::io::Error> {
     let opt = Opt::from_args();
+    let mut stdout = io::stdout();
     match opt.cmd {
-        Command::Play { .. } => {
+        Command::Play {
+            playerx, playero, ..
+        } => {
             let mut g = game::Game::new();
-            let stdin = io::stdin();
-            let mut player_x: Box<dyn minimax::AI> = Box::new(CLIPlayer {
-                stdin: Box::new(stdin.lock()),
-                stdout: Box::new(io::stdout()),
-            });
-            let mut player_o: Box<dyn minimax::AI> =
-                Box::new(minimax::Minimax::with_timeout(Duration::from_secs(1)));
-
+            let mut player_x = parse_player(&playerx)?;
+            let mut player_o = parse_player(&playero)?;
             loop {
+                render(&mut stdout, &g)?;
                 let m = match g.player() {
                     game::Player::X => player_x.select_move(&g),
                     game::Player::O => player_o.select_move(&g),
