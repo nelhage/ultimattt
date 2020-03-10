@@ -4,6 +4,7 @@ use crate::game;
 
 use rand;
 use smallvec::SmallVec;
+use std::convert::TryInto;
 use std::time::{Duration, Instant};
 use std::vec::Vec;
 
@@ -70,6 +71,48 @@ const EVAL_PARTIAL_TWO: i64 = 3;
 
 const OVERALL_PARTIAL_WIN: i64 = 10;
 
+struct DedupIterator<T>
+where
+    T: Iterator<Item = game::Move>,
+{
+    seen: [u64; 4],
+    inner: T,
+}
+
+impl<T> DedupIterator<T>
+where
+    T: Iterator<Item = game::Move>,
+{
+    fn new(inner: T) -> Self {
+        Self {
+            seen: [0; 4],
+            inner: inner,
+        }
+    }
+}
+
+impl<T> Iterator for DedupIterator<T>
+where
+    T: Iterator<Item = game::Move>,
+{
+    type Item = game::Move;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            let n = self.inner.next();
+            if let Some(ref e) = n {
+                let idx: usize = (e.bits() / 64) as usize;
+                let bit = 1 << (e.bits() % 64);
+                if self.seen[idx] & bit != 0 {
+                    continue;
+                }
+                self.seen[idx] |= bit;
+            }
+            return n;
+        }
+    }
+}
+
 struct MoveIterator<T>
 where
     T: Iterator<Item = game::Move>,
@@ -86,21 +129,13 @@ where
     type Item = game::Move;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.i < self.ordered.len() {
-            let m = Some(self.ordered[self.i]);
-            self.i += 1;
-            return m;
-        }
-        loop {
-            self.i += 1;
-            let out = self.all_moves.next();
-            if let Some(m) = out {
-                if self.ordered.iter().any(|n| *n == m) {
-                    continue;
-                }
-            }
-            return out;
-        }
+        let out = if self.i < self.ordered.len() {
+            Some(self.ordered[self.i])
+        } else {
+            self.all_moves.next()
+        };
+        self.i += 1;
+        out
     }
 }
 
@@ -226,7 +261,7 @@ impl Minimax {
         } else if pv.is_some() {
             it.ordered.push(pv);
         }
-        it
+        DedupIterator::new(it)
     }
 
     fn minimax(
