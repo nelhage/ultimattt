@@ -243,8 +243,8 @@ impl Minimax {
             self.stats.terminal += 1;
             return self.evaluate(g);
         }
-        let mut localpv: SmallVec<[game::Move; 10]> = SmallVec::new();
-        localpv.resize((depth - 1) as usize, game::Move::none());
+        let mut localpv: SmallVec<[game::Move; 10]> =
+            SmallVec::from_elem(game::Move::none(), (depth - 1) as usize);
 
         let moves = self.move_iterator(g, pv[0], prev);
         for m in moves {
