@@ -111,32 +111,6 @@ where
     }
 }
 
-struct MoveIterator<T>
-where
-    T: Iterator<Item = game::Move>,
-{
-    i: usize,
-    ordered: SmallVec<[game::Move; 2]>,
-    all_moves: T,
-}
-
-impl<T> Iterator for MoveIterator<T>
-where
-    T: Iterator<Item = game::Move>,
-{
-    type Item = game::Move;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let out = if self.i < self.ordered.len() {
-            Some(self.ordered[self.i])
-        } else {
-            self.all_moves.next()
-        };
-        self.i += 1;
-        out
-    }
-}
-
 #[allow(dead_code)]
 impl Minimax {
     pub fn with_config(config: &Config) -> Self {
@@ -248,18 +222,16 @@ impl Minimax {
         pv: game::Move,
         prev: game::Move,
     ) -> impl Iterator<Item = game::Move> + 'a {
-        let mut it = MoveIterator {
-            i: 0,
-            ordered: SmallVec::new(),
-            all_moves: g.all_moves(),
-        };
+        let mut ordered: SmallVec<[game::Move; 2]> = SmallVec::new();
+        let all_moves = g.all_moves();
+
         let refutation = self.response_to(g.player().other(), prev);
         if refutation.is_some() {
-            it.ordered.push(refutation);
+            ordered.push(refutation);
         } else if pv.is_some() {
-            it.ordered.push(pv);
+            ordered.push(pv);
         }
-        DedupIterator::new(it)
+        DedupIterator::new(ordered.into_iter().chain(all_moves))
     }
 
     fn minimax(
