@@ -1,5 +1,4 @@
 mod display;
-extern crate test;
 pub mod notation;
 
 use std::vec::Vec;
@@ -464,7 +463,7 @@ impl Game {
         return Ok(());
     }
 
-    fn recalc_winner(&mut self) {
+    pub fn recalc_winner(&mut self) {
         self.overall_state = self.game_states.check_winner(self.next_player.other());
     }
 
@@ -546,7 +545,6 @@ impl<'a> Iterator for MoveIterator<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use test::Bencher;
 
     fn board(moves: &[(usize, usize)]) -> Game {
         let mut g = Game::new();
@@ -716,31 +714,5 @@ mod tests {
                 }
             }
         }
-    }
-
-    #[bench]
-    fn bench_empty_move(b: &mut Bencher) {
-        let g = Game::new();
-        b.iter(|| {
-            let gg = g.make_move(Move::from_coords(0, 5));
-            test::black_box(&gg);
-        });
-    }
-
-    #[bench]
-    fn bench_recalc_winner_empty(b: &mut Bencher) {
-        let mut g = Game::new();
-        b.iter(|| {
-            g.recalc_winner();
-        });
-    }
-
-    #[bench]
-    fn bench_clone(b: &mut Bencher) {
-        let g = Game::new();
-        b.iter(|| {
-            let gg = g.clone();
-            test::black_box(&gg);
-        });
     }
 }

@@ -4,18 +4,31 @@ version = "0.1.0"
 authors = ["Nelson Elhage <nelhage@nelhage.com>"]
 edition = "2018"
 
+[[bin]]
+name = "ultimattt"
+path = "src/main.rs"
+
+[lib]
+name = "ultimattt"
+path = "src/lib.rs"
+
+[[bench]]
+name = "bench_ultimatett"
+path = "src/bench.rs"
+harness = false
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[profile.release]
+debug = true
 
 [dependencies]
 ansi_term = "0.12.1"
 rand = "0.7.2"
-
-[dependencies.smallvec]
-version = "1.2.0"
-features = ["union"]
+smallvec = "1.2.0"
 
 [dependencies.structopt]
 version = "0.3.11"
 
-[profile.release]
-debug = true
+[dev-dependencies]
+criterion = "0.3"

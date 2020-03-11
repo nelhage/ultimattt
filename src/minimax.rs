@@ -1,10 +1,8 @@
 extern crate smallvec;
-extern crate test;
 use crate::game;
 
 use rand;
 use smallvec::SmallVec;
-use std::convert::TryInto;
 use std::time::{Duration, Instant};
 use std::vec::Vec;
 
@@ -208,7 +206,7 @@ impl Minimax {
         return d1 + d2;
     }
 
-    fn evaluate(&self, g: &game::Game) -> i64 {
+    pub fn evaluate(&self, g: &game::Game) -> i64 {
         match g.game_state() {
             game::BoardState::Drawn => (),
             game::BoardState::InPlay => (),
@@ -386,7 +384,6 @@ impl AI for Minimax {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use test::Bencher;
 
     #[test]
     fn test_eval_empty() {
@@ -432,13 +429,5 @@ mod tests {
                 Err(e) => panic!("make move({}): {:?}", game::notation::render_move(*m), e),
             }
         });
-    }
-
-    #[bench]
-    fn bench_evaluate(b: &mut Bencher) {
-        use std::hint::black_box;
-        let g = game::Game::new();
-        let ai = Minimax::with_depth(3);
-        b.iter(|| ai.evaluate(black_box(&g)));
     }
 }

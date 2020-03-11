@@ -1,19 +1,16 @@
-#![feature(test)]
-#[allow(dead_code)]
-mod game;
-mod minimax;
-
 extern crate ansi_term;
 extern crate rand;
 extern crate structopt;
 
-use crate::minimax::AI;
 use ansi_term::Style;
 use std::io;
 use std::io::Write;
 use std::process::exit;
 use std::time::Duration;
 use structopt::StructOpt;
+use ultimattt::game;
+use ultimattt::minimax;
+use ultimattt::minimax::AI;
 
 fn cell(g: game::CellState) -> &'static str {
     match g {
