@@ -135,9 +135,32 @@ impl<'a> minimax::AI for CLIPlayer<'a> {
     }
 }
 
+fn parse_duration(arg: &str) -> Result<Duration, io::Error> {
+    if !arg.ends_with("s") {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            format!("Bad time spec, must end in 's': {}", arg),
+        ));
+    }
+    let idx = arg.char_indices().last().unwrap().0;
+    arg[0..idx]
+        .parse::<u64>()
+        .map(|s| Duration::from_secs(s))
+        .map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("Bad time spec '{}': {}", e, arg),
+            )
+        })
+}
+
 #[derive(Debug, StructOpt)]
 #[structopt(name = "ultimatett", about = "Ultimate Tic Tac Toe")]
 struct Opt {
+    #[structopt(long, default_value = "1s", parse(try_from_str=parse_duration))]
+    timeout: Duration,
+    #[structopt(long)]
+    depth: Option<i32>,
     #[structopt(subcommand)]
     cmd: Command,
 }
@@ -155,15 +178,21 @@ enum Command {
     },
 }
 
-fn parse_player<'a>(spec: &str) -> Result<Box<dyn minimax::AI + 'a>, std::io::Error> {
+fn make_ai(opt: &Opt) -> minimax::Minimax {
+    minimax::Minimax::with_config(&minimax::Config {
+        timeout: Some(opt.timeout),
+        max_depth: opt.depth,
+        ..Default::default()
+    })
+}
+
+fn parse_player<'a>(opt: &Opt, spec: &str) -> Result<Box<dyn minimax::AI + 'a>, std::io::Error> {
     match spec {
         "human" => Ok(Box::new(CLIPlayer {
             stdin: Box::new(io::stdin()),
             stdout: Box::new(io::stdout()),
         })),
-        "minimax" => Ok(Box::new(minimax::Minimax::with_timeout(
-            Duration::from_secs(1),
-        ))),
+        "minimax" => Ok(Box::new(make_ai(&opt))),
         _ => Err(io::Error::new(
             io::ErrorKind::Other,
             format!("bad player spec: {}", spec),
@@ -176,11 +205,13 @@ fn main() -> Result<(), std::io::Error> {
     let mut stdout = io::stdout();
     match opt.cmd {
         Command::Play {
-            playerx, playero, ..
+            ref playerx,
+            ref playero,
+            ..
         } => {
             let mut g = game::Game::new();
-            let mut player_x = parse_player(&playerx)?;
-            let mut player_o = parse_player(&playero)?;
+            let mut player_x = parse_player(&opt, playerx)?;
+            let mut player_o = parse_player(&opt, playero)?;
             loop {
                 render(&mut stdout, &g)?;
                 let m = match g.player() {
@@ -202,15 +233,15 @@ fn main() -> Result<(), std::io::Error> {
                 }
             }
         }
-        Command::Analyze { position } => {
-            let game = match game::notation::parse(&position) {
+        Command::Analyze { ref position } => {
+            let game = match game::notation::parse(position) {
                 Ok(g) => g,
                 Err(e) => {
                     println!("Parsing position: {:?}", e);
                     exit(1)
                 }
             };
-            let mut ai = minimax::Minimax::with_timeout(Duration::from_secs(1));
+            let mut ai = make_ai(&opt);
             let m = ai.select_move(&game);
             println!("move={}", game::notation::render_move(m));
         }
