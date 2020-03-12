@@ -304,7 +304,8 @@ impl Minimax {
     fn search(&mut self, g: &game::Game) -> (Vec<game::Move>, i64) {
         let mut pv = Vec::new();
 
-        let deadline: Option<Instant> = self.config.timeout.map(|t| Instant::now() + t);
+        let t_start = Instant::now();
+        let deadline: Option<Instant> = self.config.timeout.map(|t| t_start + t);
         let mut depth: i32 = 0;
         let mut score;
         loop {
@@ -320,18 +321,23 @@ impl Minimax {
                 pv.as_mut_slice(),
                 game::Move::none(),
             );
+            let duration = Instant::now().duration_since(t_start);
             let ply_duration = Instant::now().duration_since(t_before);
+            let m_ms = (self.stats.visited as f64) / (1000.0 * ply_duration.as_secs_f64());
             println!(
-                "minimax depth={} move={} pv={} v={} t={}.{:03}s visited={} cuts={}",
+                "minimax depth={} move={} v={} t={}.{:03}s({}.{:03}s) m/ms={:.3} visited={} cuts={}",
                 depth,
                 pv[0],
-                self.format_pv(&pv),
                 score,
                 ply_duration.as_secs(),
                 ply_duration.subsec_millis(),
+                duration.as_secs(),
+                duration.subsec_millis(),
+                m_ms,
                 self.stats.visited,
                 self.stats.cuts,
             );
+            println!("  pv={}", self.format_pv(&pv),);
             if self.config.max_depth.map(|d| depth >= d).unwrap_or(false) {
                 break;
             }
