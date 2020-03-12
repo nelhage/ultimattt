@@ -257,7 +257,23 @@ impl Minimax {
                 Ok(g) => g,
                 Err(_) => continue,
             };
-            let score = -self.minimax(&child, depth - 1, -beta, -alpha, localpv.as_mut_slice(), m);
+            let score = if pv[0].is_some() {
+                let zw = -self.minimax(
+                    &child,
+                    depth - 1,
+                    -alpha - 1,
+                    -alpha,
+                    localpv.as_mut_slice(),
+                    m,
+                );
+                if zw > alpha && zw < beta {
+                    -self.minimax(&child, depth - 1, -beta, -alpha, localpv.as_mut_slice(), m)
+                } else {
+                    zw
+                }
+            } else {
+                -self.minimax(&child, depth - 1, -beta, -alpha, localpv.as_mut_slice(), m)
+            };
             if score > alpha {
                 alpha = score;
                 pv[0] = m;
