@@ -6,7 +6,7 @@ edition = "2018"
 
 [[bin]]
 name = "ultimattt"
-path = "src/main.rs"
+path = "src/main/main.rs"
 
 [lib]
 name = "ultimattt"
@@ -26,9 +26,9 @@ debug = true
 ansi_term = "0.12.1"
 rand = "0.7.2"
 smallvec = "1.2.0"
-
-[dependencies.structopt]
-version = "0.3.11"
+serde = {version = "1.0.104", features = ["derive"]}
+serde_json = "1.0.48"
+structopt = "0.3.11"
 
 [dev-dependencies]
 criterion = "0.3"

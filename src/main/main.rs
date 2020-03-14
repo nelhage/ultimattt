@@ -1,6 +1,9 @@
 extern crate ansi_term;
 extern crate rand;
+extern crate serde_json;
 extern crate structopt;
+
+mod worker;
 
 use ansi_term::Style;
 use std::io;
@@ -156,7 +159,7 @@ fn parse_duration(arg: &str) -> Result<Duration, io::Error> {
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "ultimatett", about = "Ultimate Tic Tac Toe")]
-struct Opt {
+pub struct Opt {
     #[structopt(long, default_value = "1s", parse(try_from_str=parse_duration))]
     timeout: Duration,
     #[structopt(long)]
@@ -176,6 +179,7 @@ enum Command {
     Analyze {
         position: String,
     },
+    Worker {},
 }
 
 fn make_ai(opt: &Opt) -> minimax::Minimax {
@@ -244,6 +248,13 @@ fn main() -> Result<(), std::io::Error> {
             let mut ai = make_ai(&opt);
             let m = ai.select_move(&game);
             println!("move={}", game::notation::render_move(m));
+        }
+        Command::Worker { .. } => {
+            let mut stdin = io::stdin();
+            let mut stdout = io::stdout();
+
+            let mut worker = worker::Worker::new(&mut stdin, &mut stdout, &opt);
+            worker.run()?;
         }
     }
     Ok(())

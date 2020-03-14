@@ -48,7 +48,7 @@ impl Stats {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct Config {
     pub max_depth: Option<i64>,
     pub timeout: Option<Duration>,
@@ -74,22 +74,6 @@ impl Default for ResponseTable {
         }
     }
 }
-
-#[allow(dead_code)]
-pub struct Minimax {
-    rng: rand::rngs::ThreadRng,
-
-    config: Config,
-    stats: Stats,
-    response: [ResponseTable; 2],
-}
-
-const EVAL_WON: i64 = 1 << 60;
-const EVAL_LOST: i64 = -(1 << 60);
-const EVAL_PARTIAL_ONE: i64 = 1;
-const EVAL_PARTIAL_TWO: i64 = 3;
-
-const OVERALL_PARTIAL_WIN: i64 = 10;
 
 struct DedupIterator<T>
 where
@@ -134,6 +118,22 @@ where
 }
 
 #[allow(dead_code)]
+pub struct Minimax {
+    rng: rand::rngs::ThreadRng,
+
+    config: Config,
+    stats: Stats,
+    response: [ResponseTable; 2],
+}
+
+const EVAL_WON: i64 = 1 << 60;
+const EVAL_LOST: i64 = -(1 << 60);
+const EVAL_PARTIAL_ONE: i64 = 1;
+const EVAL_PARTIAL_TWO: i64 = 3;
+
+const OVERALL_PARTIAL_WIN: i64 = 10;
+
+#[allow(dead_code)]
 impl Minimax {
     pub fn with_config(config: &Config) -> Self {
         Self {
@@ -156,6 +156,10 @@ impl Minimax {
             max_depth: Some(depth),
             ..Default::default()
         })
+    }
+
+    pub fn config(&self) -> &Config {
+        &self.config
     }
 
     fn score_board(&self, g: &game::Game, board: usize) -> i64 {
