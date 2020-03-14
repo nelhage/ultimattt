@@ -3,6 +3,7 @@ use crate::game;
 
 use rand;
 use smallvec::SmallVec;
+use std::cmp::max;
 use std::time::{Duration, Instant};
 use std::vec::Vec;
 
@@ -10,7 +11,10 @@ pub trait AI {
     fn select_move(&mut self, g: &game::Game) -> game::Move;
 }
 
-struct Stats {
+#[derive(Clone)]
+pub struct Stats {
+    depth: i64,
+    score: i64,
     visited: i64,
     terminal: i64,
     cuts: i64,
@@ -19,16 +23,34 @@ struct Stats {
 impl Default for Stats {
     fn default() -> Self {
         Stats {
+            depth: 0,
             visited: 0,
             terminal: 0,
             cuts: 0,
+            score: 0,
+        }
+    }
+}
+
+impl Stats {
+    pub fn merge(&self, other: &Stats) -> Stats {
+        Stats {
+            visited: self.visited + other.visited,
+            terminal: self.terminal + other.terminal,
+            cuts: self.cuts + other.cuts,
+            depth: max(self.depth, other.depth),
+            score: if self.depth >= other.depth {
+                self.score
+            } else {
+                other.score
+            },
         }
     }
 }
 
 #[derive(Clone)]
 pub struct Config {
-    pub max_depth: Option<i32>,
+    pub max_depth: Option<i64>,
     pub timeout: Option<Duration>,
 }
 
@@ -129,7 +151,7 @@ impl Minimax {
         })
     }
 
-    pub fn with_depth(depth: i32) -> Self {
+    pub fn with_depth(depth: i64) -> Self {
         Self::with_config(&Config {
             max_depth: Some(depth),
             ..Default::default()
@@ -237,7 +259,7 @@ impl Minimax {
     fn minimax(
         &mut self,
         g: &game::Game,
-        depth: i32,
+        depth: i64,
         mut alpha: i64,
         beta: i64,
         pv: &mut [game::Move],
@@ -301,19 +323,22 @@ impl Minimax {
         return s;
     }
 
-    fn search(&mut self, g: &game::Game) -> (Vec<game::Move>, i64) {
+    pub fn analyze(&mut self, g: &game::Game) -> (Vec<Stats>, Vec<game::Move>) {
+        let mut allstats = Vec::new();
         let mut pv = Vec::new();
 
         let t_start = Instant::now();
         let deadline: Option<Instant> = self.config.timeout.map(|t| t_start + t);
-        let mut depth: i32 = 0;
-        let mut score;
+        let mut depth: i64 = 0;
         loop {
             depth += 1;
             let t_before = Instant::now();
-            self.stats = Default::default();
+            self.stats = Stats {
+                depth: depth,
+                ..Default::default()
+            };
             pv.resize(depth as usize, game::Move::none());
-            score = self.minimax(
+            self.stats.score = self.minimax(
                 g,
                 depth,
                 EVAL_LOST,
@@ -328,7 +353,7 @@ impl Minimax {
                 "minimax depth={} move={} v={} t={}.{:03}s({}.{:03}s) m/ms={:.3} visited={} cuts={}",
                 depth,
                 pv[0],
-                score,
+                self.stats.score,
                 ply_duration.as_secs(),
                 ply_duration.subsec_millis(),
                 duration.as_secs(),
@@ -337,6 +362,7 @@ impl Minimax {
                 self.stats.visited,
                 self.stats.cuts,
             );
+            allstats.push(self.stats.clone());
             println!("  pv={}", self.format_pv(&pv),);
             if self.config.max_depth.map(|d| depth >= d).unwrap_or(false) {
                 break;
@@ -344,17 +370,17 @@ impl Minimax {
             if deadline.map(|d| Instant::now() > d).unwrap_or(false) {
                 break;
             }
-            if score <= EVAL_LOST || score >= EVAL_WON {
+            if self.stats.score <= EVAL_LOST || self.stats.score >= EVAL_WON {
                 break;
             }
         }
-        return (pv, score);
+        return (allstats, pv);
     }
 }
 
 impl AI for Minimax {
     fn select_move(&mut self, g: &game::Game) -> game::Move {
-        let (pv, _) = self.search(g);
+        let (_, pv) = self.analyze(g);
         pv[0]
     }
 }

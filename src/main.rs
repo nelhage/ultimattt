@@ -160,7 +160,7 @@ struct Opt {
     #[structopt(long, default_value = "1s", parse(try_from_str=parse_duration))]
     timeout: Duration,
     #[structopt(long)]
-    depth: Option<i32>,
+    depth: Option<i64>,
     #[structopt(subcommand)]
     cmd: Command,
 }
