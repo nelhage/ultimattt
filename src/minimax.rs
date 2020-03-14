@@ -323,7 +323,7 @@ impl Minimax {
         return s;
     }
 
-    pub fn analyze(&mut self, g: &game::Game) -> (Vec<Stats>, Vec<game::Move>) {
+    pub fn analyze(&mut self, g: &game::Game) -> (Vec<game::Move>, Vec<Stats>) {
         let mut allstats = Vec::new();
         let mut pv = Vec::new();
 
@@ -374,13 +374,13 @@ impl Minimax {
                 break;
             }
         }
-        return (allstats, pv);
+        return (pv, allstats);
     }
 }
 
 impl AI for Minimax {
     fn select_move(&mut self, g: &game::Game) -> game::Move {
-        let (_, pv) = self.analyze(g);
+        let (pv, _) = self.analyze(g);
         pv[0]
     }
 }
@@ -425,7 +425,7 @@ mod tests {
     fn test_minimax_pv() {
         let g = game::Game::new();
         let mut ai = Minimax::with_depth(6);
-        let (pv, _) = ai.search(&g);
+        let (pv, _) = ai.analyze(&g);
         pv.iter().fold(g, |g, m| {
             let n = g.make_move(*m);
             match n {
