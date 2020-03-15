@@ -1,11 +1,13 @@
 extern crate ansi_term;
 extern crate rand;
+extern crate regex;
 extern crate serde_json;
 extern crate structopt;
 
 mod worker;
 
 use ansi_term::Style;
+use regex::Regex;
 use std::io;
 use std::io::Write;
 use std::process::exit;
@@ -139,22 +141,32 @@ impl<'a> minimax::AI for CLIPlayer<'a> {
 }
 
 fn parse_duration(arg: &str) -> Result<Duration, io::Error> {
-    if !arg.ends_with("s") {
-        return Err(io::Error::new(
+    let pat =
+        Regex::new(r"^(?:([0-9]+)h\s*)?(?:([0-9]+)m\s*)?(?:([0-9]+)s\s*)?(?:([0-9]+)ms\s*)?$")
+            .unwrap();
+    match pat.captures(arg) {
+        None => Err(io::Error::new(
             io::ErrorKind::Other,
-            format!("Bad time spec, must end in 's': {}", arg),
-        ));
+            format!("Unable to parse duration: '{}'", arg),
+        )),
+        Some(caps) => {
+            let mut secs: u64 = 0;
+            let mut msecs: u64 = 0;
+            if let Some(h) = caps.get(1) {
+                secs += 60 * 60 * h.as_str().parse::<u64>().unwrap();
+            }
+            if let Some(m) = caps.get(2) {
+                secs += 60 * m.as_str().parse::<u64>().unwrap();
+            }
+            if let Some(s) = caps.get(3) {
+                secs += s.as_str().parse::<u64>().unwrap();
+            }
+            if let Some(ms) = caps.get(4) {
+                msecs += ms.as_str().parse::<u64>().unwrap();
+            }
+            Ok(Duration::from_millis(1000 * secs + msecs))
+        }
     }
-    let idx = arg.char_indices().last().unwrap().0;
-    arg[0..idx]
-        .parse::<u64>()
-        .map(|s| Duration::from_secs(s))
-        .map_err(|e| {
-            io::Error::new(
-                io::ErrorKind::Other,
-                format!("Bad time spec '{}': {}", e, arg),
-            )
-        })
 }
 
 #[derive(Debug, StructOpt)]
@@ -258,4 +270,42 @@ fn main() -> Result<(), std::io::Error> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_parse_duration() {
+        let tests: &[(&'static str, Option<Duration>)] = &[
+            ("5s", Some(Duration::from_secs(5))),
+            ("5m", Some(Duration::from_secs(60 * 5))),
+            ("5m 8s", Some(Duration::from_secs(60 * 5 + 8))),
+            (
+                "2h3s 1ms",
+                Some(Duration::from_secs(60 * 60 * 2 + 3) + Duration::from_millis(1)),
+            ),
+            ("5sec", None),
+            ("5d", None),
+            ("4h4s3m", None),
+        ];
+        for tc in tests {
+            let got = parse_duration(tc.0);
+            match (got, tc.1) {
+                (Err(..), None) => (),
+                (Ok(s), None) => {
+                    panic!("parse({}): got {:?}, expected error", tc.0, s);
+                }
+                (Err(e), Some(d)) => {
+                    panic!("parse({}): got err({:?}), expected {:?}", tc.0, e, d);
+                }
+                (Ok(g), Some(d)) => {
+                    if g != d {
+                        panic!("parse({}): got {:?}, expected {:?}", tc.0, g, d);
+                    }
+                }
+            }
+        }
+    }
 }
