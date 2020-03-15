@@ -13,6 +13,7 @@ pub struct Worker<'a> {
     stdout: &'a mut dyn io::Write,
 
     ai: Option<minimax::Minimax>,
+    shutdown: bool,
 }
 
 impl<'a> Worker<'a> {
@@ -22,17 +23,19 @@ impl<'a> Worker<'a> {
             stdout: stdout,
             opt: opt,
             ai: None,
+            shutdown: false,
         }
     }
 
     pub fn run(&mut self) -> Result<(), io::Error> {
-        loop {
+        while !self.shutdown {
             let mut line = String::new();
             self.stdin.read_line(&mut line)?;
             let cmd: protocol::Command = serde_json::from_str(&line)?;
             let resp = self.handle_command(&cmd);
             writeln!(&mut self.stdout, "{}", serde_json::to_string(&resp)?)?;
         }
+        Ok(())
     }
 
     fn handle_command(&mut self, cmd: &protocol::Command) -> protocol::Response {
@@ -62,6 +65,10 @@ impl<'a> Worker<'a> {
                 protocol::Response::Move {
                     move_: notation::render_move(m),
                 }
+            }
+            protocol::Command::Shutdown() => {
+                self.shutdown = true;
+                protocol::Response::Ok()
             }
         }
     }

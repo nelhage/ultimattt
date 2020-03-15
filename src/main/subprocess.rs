@@ -57,6 +57,14 @@ impl Player {
     }
 }
 
+impl Drop for Player {
+    fn drop(&mut self) {
+        match self.send_command(&protocol::Command::Shutdown()) {
+            _ => (),
+        }
+    }
+}
+
 impl minimax::AI for Player {
     fn select_move(&mut self, g: &game::Game) -> game::Move {
         match self

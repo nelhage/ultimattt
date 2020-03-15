@@ -16,6 +16,7 @@ pub enum Command {
         limit: Option<Duration>,
         max_depth: Option<i64>,
     },
+    Shutdown(),
 }
 
 #[derive(Serialize, Deserialize, Debug)]
