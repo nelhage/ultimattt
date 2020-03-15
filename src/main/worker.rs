@@ -1,4 +1,4 @@
-use super::Opt;
+use super::{Opt, Readline};
 
 use std::io;
 use ultimattt::game::notation;
@@ -9,14 +9,14 @@ use ultimattt::protocol;
 pub struct Worker<'a> {
     #[allow(dead_code)]
     opt: &'a Opt,
-    stdin: &'a mut dyn io::Read,
+    stdin: &'a mut dyn Readline,
     stdout: &'a mut dyn io::Write,
 
     ai: Option<minimax::Minimax>,
 }
 
 impl<'a> Worker<'a> {
-    pub fn new(stdin: &'a mut dyn io::Read, stdout: &'a mut dyn io::Write, opt: &'a Opt) -> Self {
+    pub fn new(stdin: &'a mut dyn Readline, stdout: &'a mut dyn io::Write, opt: &'a Opt) -> Self {
         Worker {
             stdin: stdin,
             stdout: stdout,
@@ -27,9 +27,11 @@ impl<'a> Worker<'a> {
 
     pub fn run(&mut self) -> Result<(), io::Error> {
         loop {
-            let cmd: protocol::Command = serde_json::from_reader(&mut self.stdin)?;
+            let mut line = String::new();
+            self.stdin.read_line(&mut line)?;
+            let cmd: protocol::Command = serde_json::from_str(&line)?;
             let resp = self.handle_command(&cmd);
-            serde_json::to_writer(&mut self.stdout, &resp)?;
+            writeln!(&mut self.stdout, "{}", serde_json::to_string(&resp)?)?;
         }
     }
 

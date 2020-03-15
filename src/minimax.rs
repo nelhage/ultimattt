@@ -353,7 +353,7 @@ impl Minimax {
             let duration = Instant::now().duration_since(t_start);
             let ply_duration = Instant::now().duration_since(t_before);
             let m_ms = (self.stats.visited as f64) / (1000.0 * ply_duration.as_secs_f64());
-            println!(
+            eprintln!(
                 "minimax depth={} move={} v={} t={}.{:03}s({}.{:03}s) m/ms={:.3} visited={} cuts={}",
                 depth,
                 pv[0],
@@ -367,7 +367,7 @@ impl Minimax {
                 self.stats.cuts,
             );
             allstats.push(self.stats.clone());
-            println!("  pv={}", self.format_pv(&pv),);
+            eprintln!("  pv={}", self.format_pv(&pv),);
             if self.config.max_depth.map(|d| depth >= d).unwrap_or(false) {
                 break;
             }

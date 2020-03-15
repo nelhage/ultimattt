@@ -4,6 +4,7 @@ extern crate regex;
 extern crate serde_json;
 extern crate structopt;
 
+mod subprocess;
 mod worker;
 
 use ansi_term::Style;
@@ -98,7 +99,7 @@ fn render(out: &mut dyn io::Write, g: &game::Game) -> Result<(), io::Error> {
     Ok(())
 }
 
-trait Readline {
+pub trait Readline {
     fn read_line(&self, buf: &mut String) -> io::Result<usize>;
 }
 
@@ -202,17 +203,38 @@ fn make_ai(opt: &Opt) -> minimax::Minimax {
     })
 }
 
-fn parse_player<'a>(opt: &Opt, spec: &str) -> Result<Box<dyn minimax::AI + 'a>, std::io::Error> {
-    match spec {
-        "human" => Ok(Box::new(CLIPlayer {
+fn parse_player<'a>(
+    opt: &Opt,
+    player: game::Player,
+    spec: &str,
+) -> Result<Box<dyn minimax::AI + 'a>, std::io::Error> {
+    if spec == "human" {
+        Ok(Box::new(CLIPlayer {
             stdin: Box::new(io::stdin()),
             stdout: Box::new(io::stdout()),
-        })),
-        "minimax" => Ok(Box::new(make_ai(&opt))),
-        _ => Err(io::Error::new(
+        }))
+    } else if spec.starts_with("minimax") {
+        Ok(Box::new(make_ai(&opt)))
+    } else if spec.starts_with("subprocess@") {
+        let tail = spec.splitn(2, '@').nth(1).unwrap();
+        let args = tail
+            .split_whitespace()
+            .map(|s| s.to_owned())
+            .collect::<Vec<String>>();
+        Ok(Box::new(subprocess::Player::new(
+            args,
+            player,
+            &minimax::Config {
+                timeout: Some(opt.timeout),
+                max_depth: opt.depth,
+                ..Default::default()
+            },
+        )?))
+    } else {
+        Err(io::Error::new(
             io::ErrorKind::Other,
             format!("bad player spec: {}", spec),
-        )),
+        ))
     }
 }
 
@@ -226,8 +248,8 @@ fn main() -> Result<(), std::io::Error> {
             ..
         } => {
             let mut g = game::Game::new();
-            let mut player_x = parse_player(&opt, playerx)?;
-            let mut player_o = parse_player(&opt, playero)?;
+            let mut player_x = parse_player(&opt, game::Player::X, playerx)?;
+            let mut player_o = parse_player(&opt, game::Player::O, playero)?;
             loop {
                 render(&mut stdout, &g)?;
                 let m = match g.player() {

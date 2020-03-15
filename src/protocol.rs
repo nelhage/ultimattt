@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use std::time::Duration;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[serde(tag = "op", content = "body")]
 pub enum Command {
     NewGame {
@@ -18,7 +18,7 @@ pub enum Command {
     },
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[serde(tag = "op", content = "body")]
 pub enum Response {
     Ok(),
