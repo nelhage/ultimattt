@@ -58,6 +58,7 @@ impl Stats {
 pub struct Config {
     pub max_depth: Option<i64>,
     pub timeout: Option<Duration>,
+    pub debug: usize,
 }
 
 impl Default for Config {
@@ -65,6 +66,7 @@ impl Default for Config {
         Config {
             max_depth: None,
             timeout: None,
+            debug: 0,
         }
     }
 }
@@ -359,21 +361,25 @@ impl Minimax {
             let duration = Instant::now().duration_since(t_start);
             let ply_duration = Instant::now().duration_since(t_before);
             let m_ms = (self.stats.visited as f64) / (1000.0 * ply_duration.as_secs_f64());
-            eprintln!(
-                "minimax depth={} move={} v={} t={}.{:03}s({}.{:03}s) m/ms={:.3} visited={} cuts={}",
-                depth,
-                pv[0],
-                self.stats.score,
-                ply_duration.as_secs(),
-                ply_duration.subsec_millis(),
-                duration.as_secs(),
-                duration.subsec_millis(),
-                m_ms,
-                self.stats.visited,
-                self.stats.cuts,
-            );
+            if self.config.debug > 0 {
+                eprintln!(
+                    "minimax depth={} move={} v={} t={}.{:03}s({}.{:03}s) m/ms={:.3} visited={} cuts={}",
+                    depth,
+                    pv[0],
+                    self.stats.score,
+                    ply_duration.as_secs(),
+                    ply_duration.subsec_millis(),
+                    duration.as_secs(),
+                    duration.subsec_millis(),
+                    m_ms,
+                    self.stats.visited,
+                    self.stats.cuts,
+                );
+                if self.config.debug > 1 {
+                    eprintln!("  pv={}", self.format_pv(&pv),);
+                }
+            }
             allstats.push(self.stats.clone());
-            eprintln!("  pv={}", self.format_pv(&pv),);
             if self.config.max_depth.map(|d| depth >= d).unwrap_or(false) {
                 break;
             }

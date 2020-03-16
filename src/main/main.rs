@@ -179,6 +179,8 @@ pub struct Opt {
     timeout: Duration,
     #[structopt(long)]
     depth: Option<i64>,
+    #[structopt(long, default_value = "1")]
+    debug: usize,
     #[structopt(subcommand)]
     cmd: Command,
 }
@@ -214,6 +216,7 @@ fn ai_config(opt: &Opt) -> minimax::Config {
     minimax::Config {
         timeout: Some(opt.timeout),
         max_depth: opt.depth,
+        debug: opt.debug,
         ..Default::default()
     }
 }
