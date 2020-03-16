@@ -66,7 +66,7 @@ impl Drop for Player {
 }
 
 impl minimax::AI for Player {
-    fn select_move(&mut self, g: &game::Game) -> game::Move {
+    fn select_move(&mut self, g: &game::Game) -> Result<game::Move, minimax::Error> {
         match self
             .send_command(&protocol::Command::GetMove {
                 id: "game0".to_owned(),
@@ -76,10 +76,12 @@ impl minimax::AI for Player {
             })
             .unwrap()
         {
-            protocol::Response::Move { ref move_ } => game::notation::parse_move(move_).unwrap(),
-            other => {
-                panic!("subprocess, got error: {:?}", other);
-            }
+            protocol::Response::Move { ref move_ } => game::notation::parse_move(move_)
+                .map_err(|e| minimax::Error::Other(format!("parsing move: {:?}", e))),
+            other => Err(minimax::Error::Other(format!(
+                "subprocess error: {:?}",
+                other
+            ))),
         }
     }
 }

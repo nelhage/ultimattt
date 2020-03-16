@@ -61,7 +61,7 @@ impl<'a> Worker<'a> {
                     ..Default::default()
                 };
                 let ai = self.get_ai(&config);
-                let m = ai.select_move(&board);
+                let m = ai.select_move(&board).unwrap();
                 protocol::Response::Move {
                     move_: notation::render_move(m),
                 }

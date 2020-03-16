@@ -115,7 +115,7 @@ struct CLIPlayer<'a> {
 }
 
 impl<'a> minimax::AI for CLIPlayer<'a> {
-    fn select_move(&mut self, g: &game::Game) -> game::Move {
+    fn select_move(&mut self, g: &game::Game) -> Result<game::Move, minimax::Error> {
         loop {
             write!(&mut self.stdout, "move> ").unwrap();
             self.stdout.flush().unwrap();
@@ -123,14 +123,14 @@ impl<'a> minimax::AI for CLIPlayer<'a> {
             let mut line = String::new();
             if let Ok(b) = self.stdin.read_line(&mut line) {
                 if b == 0 {
-                    exit(0);
+                    return Err(minimax::Error::Quit);
                 }
             } else {
-                exit(0);
+                return Err(minimax::Error::Quit);
             }
             match game::notation::parse_move(line.trim_end()) {
                 Ok(m) => {
-                    return m;
+                    return Ok(m);
                 }
                 Err(e) => {
                     writeln!(&mut self.stdout, "Bad move: {:?}", e).unwrap();
@@ -256,6 +256,13 @@ fn main() -> Result<(), std::io::Error> {
                     game::Player::X => player_x.select_move(&g),
                     game::Player::O => player_o.select_move(&g),
                 };
+                if let Err(e) = m {
+                    match e {
+                        minimax::Error::Other(msg) => panic!(msg),
+                        minimax::Error::Quit => break,
+                    }
+                }
+                let m = m.unwrap();
 
                 match g.make_move(m) {
                     Ok(gg) => {
@@ -280,7 +287,9 @@ fn main() -> Result<(), std::io::Error> {
                 }
             };
             let mut ai = make_ai(&opt);
-            let m = ai.select_move(&game);
+            let m = ai
+                .select_move(&game)
+                .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("analyzing: {:?}", e)))?;
             println!("move={}", game::notation::render_move(m));
         }
         Command::Worker { .. } => {
