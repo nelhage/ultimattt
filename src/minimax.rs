@@ -7,8 +7,14 @@ use std::cmp::max;
 use std::time::{Duration, Instant};
 use std::vec::Vec;
 
+#[derive(Debug)]
+pub enum Error {
+    Quit,
+    Other(String),
+}
+
 pub trait AI {
-    fn select_move(&mut self, g: &game::Game) -> game::Move;
+    fn select_move(&mut self, g: &game::Game) -> Result<game::Move, Error>;
 }
 
 #[derive(Clone)]
@@ -383,9 +389,9 @@ impl Minimax {
 }
 
 impl AI for Minimax {
-    fn select_move(&mut self, g: &game::Game) -> game::Move {
+    fn select_move(&mut self, g: &game::Game) -> Result<game::Move, Error> {
         let (pv, _) = self.analyze(g);
-        pv[0]
+        Ok(pv[0])
     }
 }
 
@@ -422,7 +428,7 @@ mod tests {
             .make_move(game::Move::from_coords(0, 5))
             .unwrap();
         let mut ai = Minimax::with_depth(5);
-        ai.select_move(&g);
+        ai.select_move(&g).unwrap();
     }
 
     #[test]
