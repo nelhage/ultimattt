@@ -4,6 +4,8 @@ extern crate regex;
 extern crate serde_json;
 extern crate structopt;
 
+mod epsilon_greedy;
+mod selfplay;
 mod subprocess;
 mod worker;
 
@@ -182,6 +184,18 @@ pub struct Opt {
 }
 
 #[derive(Debug, StructOpt)]
+struct SelfplayParameters {
+    #[structopt(short = "1", long)]
+    player1: String,
+    #[structopt(short = "2", long)]
+    player2: String,
+    #[structopt(long)]
+    games: usize,
+    #[structopt(long, default_value = "0.05")]
+    epsilon: f64,
+}
+
+#[derive(Debug, StructOpt)]
 enum Command {
     Play {
         #[structopt(short = "x", long, default_value = "human")]
@@ -192,15 +206,20 @@ enum Command {
     Analyze {
         position: String,
     },
+    Selfplay(SelfplayParameters),
     Worker {},
 }
 
-fn make_ai(opt: &Opt) -> minimax::Minimax {
-    minimax::Minimax::with_config(&minimax::Config {
+fn ai_config(opt: &Opt) -> minimax::Config {
+    minimax::Config {
         timeout: Some(opt.timeout),
         max_depth: opt.depth,
         ..Default::default()
-    })
+    }
+}
+
+fn make_ai(opt: &Opt) -> minimax::Minimax {
+    minimax::Minimax::with_config(&ai_config(opt))
 }
 
 fn parse_player<'a>(
@@ -224,17 +243,34 @@ fn parse_player<'a>(
         Ok(Box::new(subprocess::Player::new(
             args,
             player,
-            &minimax::Config {
-                timeout: Some(opt.timeout),
-                max_depth: opt.depth,
-                ..Default::default()
-            },
+            &ai_config(opt),
         )?))
     } else {
         Err(io::Error::new(
             io::ErrorKind::Other,
             format!("bad player spec: {}", spec),
         ))
+    }
+}
+
+fn build_selfplay_player<'a>(
+    player: game::Player,
+    config: &minimax::Config,
+    cmd: &str,
+    epsilon: f64,
+) -> Result<Box<dyn minimax::AI + 'a>, io::Error> {
+    let args = cmd
+        .split_whitespace()
+        .map(|s| s.to_owned())
+        .collect::<Vec<String>>();
+    let player = subprocess::Player::new(args, player, &config)?;
+    if epsilon != 0.0 {
+        Ok(Box::new(epsilon_greedy::Player::new(
+            Box::new(player),
+            epsilon,
+        )))
+    } else {
+        Ok(Box::new(player))
     }
 }
 
@@ -298,6 +334,20 @@ fn main() -> Result<(), std::io::Error> {
 
             let mut worker = worker::Worker::new(&mut stdin, &mut stdout, &opt);
             worker.run()?;
+        }
+        Command::Selfplay(ref params) => {
+            let config = ai_config(&opt);
+            let builder1 = |p| build_selfplay_player(p, &config, &params.player1, params.epsilon);
+            let builder2 = |p| build_selfplay_player(p, &config, &params.player2, params.epsilon);
+            let mut engine = selfplay::Executor::new(builder1, builder2);
+            let res = engine.execute(params.games)?;
+            println!(
+                "self-play games={} p1={} p2={} draw={}",
+                res.games,
+                res.player1_wins(),
+                res.player2_wins(),
+                res.draws(),
+            );
         }
     }
     Ok(())
