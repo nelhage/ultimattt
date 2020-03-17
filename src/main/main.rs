@@ -351,6 +351,22 @@ fn main() -> Result<(), std::io::Error> {
                 res.player2_wins(),
                 res.draws(),
             );
+            let p1_x = res.p1_x_results();
+            let p1_o = res.p1_o_results();
+            println!(
+                "  p1@X: games={} p1={} p2={} draw={}",
+                p1_x.0 + p1_x.1 + p1_x.2,
+                p1_x.0,
+                p1_x.1,
+                p1_x.2,
+            );
+            println!(
+                "  p1@O: games={} p1={} p2={} draw={}",
+                p1_o.0 + p1_o.1 + p1_o.2,
+                p1_o.0,
+                p1_o.1,
+                p1_o.2,
+            );
         }
     }
     Ok(())

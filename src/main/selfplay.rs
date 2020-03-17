@@ -18,6 +18,7 @@ pub struct Results {
     pub games: usize,
 }
 
+#[allow(dead_code)]
 impl Results {
     pub fn player1_wins(&self) -> usize {
         self.p1_x.0 + self.p1_o.1
@@ -27,6 +28,22 @@ impl Results {
     }
     pub fn draws(&self) -> usize {
         self.p1_x.2 + self.p1_o.2
+    }
+
+    pub fn p1_x_results(&self) -> (usize, usize, usize) {
+        self.p1_x
+    }
+
+    pub fn p1_o_results(&self) -> (usize, usize, usize) {
+        self.p1_o
+    }
+
+    pub fn p2_x_results(&self) -> (usize, usize, usize) {
+        (self.p1_o.1, self.p1_o.0, self.p1_o.2)
+    }
+
+    pub fn p2_o_results(&self) -> (usize, usize, usize) {
+        (self.p1_x.1, self.p1_x.0, self.p1_x.2)
     }
 }
 
