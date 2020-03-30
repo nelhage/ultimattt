@@ -139,7 +139,7 @@ const EVAL_LOST: i64 = -(1 << 60);
 const EVAL_PARTIAL_ONE: i64 = 1;
 const EVAL_PARTIAL_TWO: i64 = 3;
 
-const OVERALL_PARTIAL_WIN: i64 = 10;
+const OVERALL_PARTIAL_WIN: i64 = 20;
 
 #[allow(dead_code)]
 impl Minimax {
