@@ -19,6 +19,7 @@ use structopt::StructOpt;
 use ultimattt::game;
 use ultimattt::minimax;
 use ultimattt::minimax::AI;
+use ultimattt::prove;
 
 fn cell(g: game::CellState) -> &'static str {
     match g {
@@ -206,6 +207,8 @@ enum Command {
         playero: String,
     },
     Analyze {
+        #[structopt(long)]
+        prove: bool,
         position: String,
     },
     Selfplay(SelfplayParameters),
@@ -317,7 +320,10 @@ fn main() -> Result<(), std::io::Error> {
                 }
             }
         }
-        Command::Analyze { ref position } => {
+        Command::Analyze {
+            prove,
+            ref position,
+        } => {
             let game = match game::notation::parse(position) {
                 Ok(g) => g,
                 Err(e) => {
@@ -325,11 +331,26 @@ fn main() -> Result<(), std::io::Error> {
                     exit(1)
                 }
             };
-            let mut ai = make_ai(&opt);
-            let m = ai
-                .select_move(&game)
-                .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("analyzing: {:?}", e)))?;
-            println!("move={}", game::notation::render_move(m));
+            if prove {
+                let result = prove::Prover::prove(
+                    &prove::Config {
+                        debug: 1,
+                        timeout: Some(opt.timeout),
+                        ..Default::default()
+                    },
+                    &game,
+                );
+                println!(
+                    "result={:?} ({}, {})",
+                    result.result, result.proof, result.disproof
+                );
+            } else {
+                let mut ai = make_ai(&opt);
+                let m = ai.select_move(&game).map_err(|e| {
+                    io::Error::new(io::ErrorKind::Other, format!("analyzing: {:?}", e))
+                })?;
+                println!("move={}", game::notation::render_move(m));
+            }
         }
         Command::Worker { .. } => {
             let mut stdin = io::stdin();
