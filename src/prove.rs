@@ -396,17 +396,17 @@ impl Prover {
                 .pos
                 .make_move(m)
                 .expect("all_moves() returned valid move");
-            let id = {
-                let mut alloc = self.nodes.alloc(
-                    nid,
-                    if node.flag(FLAG_AND) { 0 } else { FLAG_AND },
-                    &child_pos,
-                );
-                self.evaluate(&mut *alloc);
-                self.set_proof_numbers(&mut *alloc);
-                alloc.id
-            };
-            children.push(id);
+            let mut alloc = self.nodes.alloc(
+                nid,
+                if node.flag(FLAG_AND) { 0 } else { FLAG_AND },
+                &child_pos,
+            );
+            self.evaluate(&mut *alloc);
+            self.set_proof_numbers(&mut *alloc);
+            children.push(alloc.id);
+            if alloc.delta == 0 {
+                break;
+            }
         }
         self.stats.nodes += children.len();
         mem::swap(&mut children, &mut self.nodes.get_mut(nid).children);
