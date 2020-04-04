@@ -262,8 +262,11 @@ pub struct Prover {
 
 pub struct ProofResult {
     pub result: Evaluation,
+    pub duration: Duration,
     pub proof: u32,
     pub disproof: u32,
+
+    pub allocated: usize,
     pub stats: Stats,
 }
 
@@ -296,9 +299,11 @@ impl Prover {
                 (_, 0) => Evaluation::False,
                 _ => root.value,
             },
+            duration: Instant::now() - prover.start,
             proof: root.proof(),
             disproof: root.disproof(),
             stats: prover.stats.clone(),
+            allocated: prover.nodes.stats.allocated.get(),
         }
     }
 
@@ -370,11 +375,13 @@ impl Prover {
                 if self.config.debug > 0 {
                     let elapsed = now.duration_since(self.start);
                     eprintln!(
-                        "t={}.{:03}s nodes={}/{} pn=({}, {})",
+                        "t={}.{:03}s nodes={}/{} proved={} disproved={} root=({}, {})",
                         elapsed.as_secs(),
                         elapsed.subsec_millis(),
                         self.nodes.stats.live(),
                         self.nodes.stats.allocated.get(),
+                        self.stats.proved,
+                        self.stats.disproved,
                         self.nodes.get(self.root).proof(),
                         self.nodes.get(self.root).disproof(),
                     );
@@ -386,15 +393,6 @@ impl Prover {
                 }
             }
         }
-    }
-
-    fn depth(&self, mut nid: NodeID) -> usize {
-        let mut depth = 0;
-        while nid.exists() {
-            depth += 1;
-            nid = self.nodes.get(nid).parent;
-        }
-        depth
     }
 
     fn select_most_proving(&self, mut nid: NodeID) -> NodeID {
@@ -419,6 +417,7 @@ impl Prover {
     }
 
     fn expand(&mut self, nid: NodeID) {
+        self.stats.expanded += 1;
         let mut children = Vec::new();
         mem::swap(&mut children, &mut self.nodes.get_mut(nid).children);
         let ref node = self.nodes.get(nid);
@@ -463,14 +462,27 @@ impl Prover {
             if phi == oldphi && delta == olddelta {
                 return nid;
             }
+            let mut children = Vec::new();
             {
                 let ref mut node_mut = self.nodes.get_mut(nid);
                 node_mut.phi = phi;
                 node_mut.delta = delta;
-
-                // TODO free dead children
-                if node_mut.parent.exists() {
-                    nid = node_mut.parent
+                if phi == 0 || delta == 0 {
+                    mem::swap(&mut children, &mut node_mut.children);
+                }
+            }
+            for ch in children {
+                self.free_tree(ch)
+            }
+            {
+                let ref node = self.nodes.get(nid);
+                if node.proof() == 0 {
+                    self.stats.proved += 1;
+                } else if node.disproof() == 0 {
+                    self.stats.disproved += 1;
+                }
+                if node.parent.exists() {
+                    nid = node.parent
                 } else {
                     return nid;
                 }
@@ -478,7 +490,25 @@ impl Prover {
         }
     }
 
+    fn free_tree(&mut self, nid: NodeID) {
+        let mut children = Vec::new();
+        mem::swap(&mut children, &mut self.nodes.get_mut(nid).children);
+        self.nodes.free(nid);
+        for ch in children {
+            self.free_tree(ch);
+        }
+    }
+
     fn player(&self) -> game::Player {
         self.position.player()
+    }
+
+    fn depth(&self, mut nid: NodeID) -> usize {
+        let mut depth = 0;
+        while nid.exists() {
+            depth += 1;
+            nid = self.nodes.get(nid).parent;
+        }
+        depth
     }
 }

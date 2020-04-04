@@ -341,8 +341,13 @@ fn main() -> Result<(), std::io::Error> {
                     &game,
                 );
                 println!(
-                    "result={:?} ({}, {})",
-                    result.result, result.proof, result.disproof
+                    "result={:?} time={}.{:03}s pn={} dpn={} searched={}",
+                    result.result,
+                    result.duration.as_secs(),
+                    result.duration.subsec_millis(),
+                    result.proof,
+                    result.disproof,
+                    result.allocated,
                 );
             } else {
                 let mut ai = make_ai(&opt);
