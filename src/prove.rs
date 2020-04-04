@@ -258,6 +258,7 @@ pub struct Prover {
     nodes: NodePool,
 
     start: Instant,
+    tick: Instant,
     limit: Option<Instant>,
 
     position: game::Game,
@@ -275,14 +276,17 @@ pub struct ProofResult {
 }
 
 const PROGRESS_INTERVAL: isize = 10000;
+static TICK_INTERVAL: Duration = Duration::from_millis(100);
 
 impl Prover {
     pub fn prove(cfg: &Config, pos: &game::Game) -> ProofResult {
+        let start = Instant::now();
         let mut prover = Prover {
             config: cfg.clone(),
             stats: Default::default(),
             nodes: NodePool::new(),
-            start: Instant::now(),
+            start: start,
+            tick: start,
             limit: cfg.timeout.map(|t| Instant::now() + t),
             position: pos.clone(),
             root: NodeID::none(),
@@ -376,7 +380,7 @@ impl Prover {
             i += 1;
             if i % PROGRESS_INTERVAL == 0 {
                 let now = Instant::now();
-                if self.config.debug > 0 {
+                if now > self.tick && self.config.debug > 0 {
                     let elapsed = now.duration_since(self.start);
                     eprintln!(
                         "t={}.{:03}s nodes={}/{} proved={} disproved={} root=({}, {}) rss={}",
@@ -390,6 +394,7 @@ impl Prover {
                         self.nodes.get(self.root).disproof(),
                         read_rss(),
                     );
+                    self.tick = now + TICK_INTERVAL;
                 }
                 if let Some(limit) = self.limit {
                     if now > limit {
