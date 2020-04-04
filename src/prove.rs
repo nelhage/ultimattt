@@ -73,6 +73,10 @@ impl Node {
         (self.flags & flag) != 0
     }
 
+    fn set_flag(&mut self, flag: u16) {
+        self.flags |= flag;
+    }
+
     fn proof(&self) -> u32 {
         if self.flag(FLAG_AND) {
             self.delta
@@ -355,7 +359,7 @@ impl Prover {
         let mut i = 0;
         while {
             let ref nd = self.nodes.get(root);
-            nd.phi != 0 || nd.delta != 0
+            nd.phi != 0 && nd.delta != 0
         } {
             let next = self.select_most_proving(current);
             self.expand(next);
@@ -384,9 +388,27 @@ impl Prover {
         }
     }
 
+    fn depth(&self, mut nid: NodeID) -> usize {
+        let mut depth = 0;
+        while nid.exists() {
+            depth += 1;
+            nid = self.nodes.get(nid).parent;
+        }
+        depth
+    }
+
     fn select_most_proving(&self, mut nid: NodeID) -> NodeID {
         while self.nodes.get(nid).flag(FLAG_EXPANDED) {
             let ref node = self.nodes.get(nid);
+            debug_assert!(
+                node.phi != 0,
+                format!(
+                    "expand phi=0, root=({}, {}), depth={}",
+                    self.nodes.get(self.root).proof(),
+                    self.nodes.get(self.root).disproof(),
+                    self.depth(self.root),
+                )
+            );
             let child = node
                 .children
                 .iter()
@@ -400,6 +422,13 @@ impl Prover {
         let mut children = Vec::new();
         mem::swap(&mut children, &mut self.nodes.get_mut(nid).children);
         let ref node = self.nodes.get(nid);
+        match node.pos.game_state() {
+            game::BoardState::InPlay => (),
+            _ => debug_assert!(
+                false,
+                format!("expanding a terminal node! ({}, {})", node.phi, node.delta)
+            ),
+        };
         debug_assert!(!node.flag(FLAG_EXPANDED));
         for m in node.pos.all_moves() {
             let child_pos = node
@@ -418,22 +447,34 @@ impl Prover {
                 break;
             }
         }
-        mem::swap(&mut children, &mut self.nodes.get_mut(nid).children);
+        {
+            let ref mut node_mut = self.nodes.get_mut(nid);
+            node_mut.set_flag(FLAG_EXPANDED);
+            mem::swap(&mut children, &mut node_mut.children);
+        }
     }
 
     fn update_ancestors(&mut self, mut nid: NodeID) -> NodeID {
         loop {
             let ref node = self.nodes.get(nid);
-            debug_assert!(!node.flag(FLAG_EXPANDED));
+            debug_assert!(node.flag(FLAG_EXPANDED));
             let (oldphi, olddelta) = (node.phi, node.delta);
             let (phi, delta) = self.calc_proof_numbers(node);
             if phi == oldphi && delta == olddelta {
                 return nid;
             }
-            let ref mut node_mut = self.nodes.get_mut(nid);
-            node_mut.phi = phi;
-            node_mut.delta = delta;
-            nid = node_mut.parent;
+            {
+                let ref mut node_mut = self.nodes.get_mut(nid);
+                node_mut.phi = phi;
+                node_mut.delta = delta;
+
+                // TODO free dead children
+                if node_mut.parent.exists() {
+                    nid = node_mut.parent
+                } else {
+                    return nid;
+                }
+            }
         }
     }
 
