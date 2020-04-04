@@ -69,7 +69,8 @@ struct Node {
 
     value: Evaluation,
     flags: u16,
-    children: Vec<NodeID>,
+    first_child: NodeID,
+    sibling: NodeID,
 }
 
 impl Node {
@@ -179,7 +180,8 @@ impl NodePool {
                 delta: 0,
                 value: Evaluation::Unknown,
                 flags: FLAG_FREE,
-                children: Vec::new(),
+                first_child: NodeID::none(),
+                sibling: NodeID::none(),
             }));
             i += 1;
         }
@@ -229,7 +231,7 @@ impl NodePool {
             node: unsafe { self.get_mut_unchecked(out) },
         };
         debug_assert!(alloc.flag(FLAG_FREE));
-        debug_assert!(alloc.children.len() == 0);
+        debug_assert!(!alloc.first_child.exists());
         alloc.parent = parent;
         alloc.pos = pos.clone();
         alloc.phi = 0;
@@ -245,7 +247,8 @@ impl NodePool {
             let ref mut node = self.get_mut(nd);
             node.parent = old_free;
             node.flags = FLAG_FREE;
-            node.children.clear();
+            node.first_child = NodeID::none();
+            node.sibling = NodeID::none();
         }
         self.stats.freed.set(self.stats.freed.get() + 1);
         self.free.set(nd);
@@ -343,9 +346,12 @@ impl Prover {
         if node.flag(FLAG_EXPANDED) {
             delta = 0;
             phi = std::u32::MAX;
-            for c in node.children.iter() {
-                delta = delta.saturating_add(self.nodes.get(*c).phi);
-                phi = min(phi, self.nodes.get(*c).delta);
+            let mut c = node.first_child;
+            while c.exists() {
+                let node = self.nodes.get(c);
+                delta = delta.saturating_add(node.phi);
+                phi = min(phi, node.delta);
+                c = node.sibling;
             }
         } else {
             match node.value {
@@ -417,19 +423,25 @@ impl Prover {
                     self.depth(self.root),
                 )
             );
-            let child = node
-                .children
-                .iter()
-                .find(|&c| self.nodes.get(*c).delta == node.phi);
-            nid = *child.expect("consistency error: no child found!");
+            let mut child = NodeID::none();
+            let mut c = node.first_child;
+            while c.exists() {
+                let ch = self.nodes.get(c);
+                if ch.delta == node.phi {
+                    child = c;
+                    break;
+                }
+                c = ch.sibling;
+            }
+            debug_assert!(child.exists(), "found a child");
+            nid = child;
         }
         nid
     }
 
     fn expand(&mut self, nid: NodeID) {
         self.stats.expanded += 1;
-        let mut children = Vec::new();
-        mem::swap(&mut children, &mut self.nodes.get_mut(nid).children);
+        let mut last_child = NodeID::none();
         let ref node = self.nodes.get(nid);
         match node.pos.game_state() {
             game::BoardState::InPlay => (),
@@ -451,7 +463,8 @@ impl Prover {
             );
             self.evaluate(&mut *alloc);
             self.set_proof_numbers(&mut *alloc);
-            children.push(alloc.id);
+            alloc.sibling = last_child;
+            last_child = alloc.id;
             if alloc.delta == 0 {
                 break;
             }
@@ -459,7 +472,7 @@ impl Prover {
         {
             let ref mut node_mut = self.nodes.get_mut(nid);
             node_mut.set_flag(FLAG_EXPANDED);
-            mem::swap(&mut children, &mut node_mut.children);
+            node_mut.first_child = last_child;
         }
     }
 
@@ -472,17 +485,19 @@ impl Prover {
             if phi == oldphi && delta == olddelta {
                 return nid;
             }
-            let mut children = Vec::new();
+            let mut free_child = NodeID::none();
             {
                 let ref mut node_mut = self.nodes.get_mut(nid);
                 node_mut.phi = phi;
                 node_mut.delta = delta;
                 if phi == 0 || delta == 0 {
-                    mem::swap(&mut children, &mut node_mut.children);
+                    free_child = node_mut.first_child;
+                    node_mut.first_child = NodeID::none();
                 }
             }
-            for ch in children {
-                self.free_tree(ch)
+            while free_child.exists() {
+                self.free_tree(free_child);
+                free_child = self.nodes.get(free_child).sibling;
             }
             {
                 let ref node = self.nodes.get(nid);
@@ -501,11 +516,12 @@ impl Prover {
     }
 
     fn free_tree(&mut self, nid: NodeID) {
-        let mut children = Vec::new();
-        mem::swap(&mut children, &mut self.nodes.get_mut(nid).children);
         self.nodes.free(nid);
-        for ch in children {
-            self.free_tree(ch);
+        let mut child = self.nodes.get(nid).first_child;
+        while child.exists() {
+            let next = self.nodes.get(child).sibling;
+            self.free_tree(child);
+            child = next;
         }
     }
 
