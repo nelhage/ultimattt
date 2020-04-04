@@ -46,6 +46,7 @@ impl NodeID {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[repr(u16)]
 pub enum Evaluation {
     True,
     False,
