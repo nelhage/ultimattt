@@ -26,17 +26,9 @@ impl Default for Config {
 
 #[derive(Clone, Default, Debug)]
 pub struct Stats {
-    pub nodes: usize,
     pub proved: usize,
     pub disproved: usize,
-    pub dropped: usize,
     pub expanded: usize,
-}
-
-impl Stats {
-    pub fn live(&self) -> usize {
-        self.nodes - (self.proved + self.disproved + self.dropped)
-    }
 }
 
 #[repr(transparent)]
@@ -105,6 +97,18 @@ struct NodePool {
     free: Cell<NodeID>,
     slabs: UnsafeCell<Vec<Box<[UnsafeCell<Node>; PAGE_SIZE]>>>,
     writing: Cell<NodeID>,
+    stats: NodePoolStats,
+}
+
+struct NodePoolStats {
+    allocated: Cell<usize>,
+    freed: Cell<usize>,
+}
+
+impl NodePoolStats {
+    fn live(&self) -> usize {
+        self.allocated.get() - self.freed.get()
+    }
 }
 
 struct AllocedNode<'a> {
@@ -139,6 +143,10 @@ impl NodePool {
             free: Cell::new(NodeID::none()),
             slabs: UnsafeCell::new(Vec::new()),
             writing: Cell::new(NodeID::none()),
+            stats: NodePoolStats {
+                allocated: Cell::new(0),
+                freed: Cell::new(0),
+            },
         }
     }
 
@@ -203,6 +211,7 @@ impl NodePool {
         if !self.free.get().exists() {
             self.new_slab();
         }
+        self.stats.allocated.set(self.stats.allocated.get() + 1);
         let out = self.free.get();
         self.free.set(self.get(out).parent);
         self.writing.set(out);
@@ -230,6 +239,7 @@ impl NodePool {
             node.flags = FLAG_FREE;
             node.children.clear();
         }
+        self.stats.freed.set(self.stats.freed.get() + 1);
         self.free.set(nd);
     }
 }
@@ -268,7 +278,6 @@ impl Prover {
         };
 
         {
-            prover.stats.nodes += 1;
             let mut root = prover.nodes.alloc(NodeID::none(), 0, pos);
             prover.root = root.id;
             prover.evaluate(&mut *root);
@@ -357,10 +366,11 @@ impl Prover {
                 if self.config.debug > 0 {
                     let elapsed = now.duration_since(self.start);
                     eprintln!(
-                        "t={}.{:03}s nodes={} pn=({}, {})",
+                        "t={}.{:03}s nodes={}/{} pn=({}, {})",
                         elapsed.as_secs(),
                         elapsed.subsec_millis(),
-                        self.stats.nodes,
+                        self.nodes.stats.live(),
+                        self.nodes.stats.allocated.get(),
                         self.nodes.get(self.root).proof(),
                         self.nodes.get(self.root).disproof(),
                     );
@@ -408,7 +418,6 @@ impl Prover {
                 break;
             }
         }
-        self.stats.nodes += children.len();
         mem::swap(&mut children, &mut self.nodes.get_mut(nid).children);
     }
 
