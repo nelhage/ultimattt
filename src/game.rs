@@ -372,6 +372,7 @@ impl Move {
 #[derive(Debug, PartialEq, Eq)]
 pub enum MoveError {
     WrongBoard,
+    WonBoard,
     OutOfBounds,
     NotEmpty,
     GameOver,
@@ -437,6 +438,9 @@ impl Game {
             BoardState::InPlay => (),
             _ => return Err(MoveError::GameOver),
         }
+        if !self.game_states.in_play(m.board()) {
+            return Err(MoveError::WonBoard);
+        }
         if let Some(b) = self.next_board {
             if b != m.board() as u8 {
                 return Err(MoveError::WrongBoard);
@@ -447,16 +451,14 @@ impl Game {
         }
 
         self.boards.set(m.board(), m.square(), self.next_player);
-        if self.game_states.in_play(m.board()) {
-            self.game_states.set(
-                m.board(),
-                self.boards.check_winner(m.board(), self.next_player),
-            );
-        }
-        if self.boards.full(m.square()) {
-            self.next_board = None;
-        } else {
+        self.game_states.set(
+            m.board(),
+            self.boards.check_winner(m.board(), self.next_player),
+        );
+        if self.game_states.in_play(m.square()) {
             self.next_board = Some(m.square() as u8);
+        } else {
+            self.next_board = None;
         }
         self.overall_state = self.game_states.check_winner(self.next_player);
         self.next_player = self.next_player.other();
@@ -641,6 +643,21 @@ mod tests {
             }
         }
         assert_eq!(g.board_state(0), BoardState::Drawn);
+    }
+
+    #[test]
+    fn test_move_anywhere_won() {
+        let g = board(&[(0, 4), (4, 0), (0, 2), (2, 0), (0, 6), (6, 0)]);
+        for b in &[1, 2, 3, 4, 5, 6, 7, 8] {
+            let r = g.make_move(Move::from_coords(*b, *b));
+            if let Err(e) = r {
+                panic!("Disallowed move: ({}, {}): {:?}", b, b, e);
+            }
+        }
+        let r = g.make_move(Move::from_coords(0, 1));
+        if let Ok(_) = r {
+            panic!("Can't move into a won board");
+        }
     }
 
     #[test]
