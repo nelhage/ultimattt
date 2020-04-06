@@ -505,7 +505,7 @@ impl<'a> MoveIterator<'a> {
     fn from_game(game: &'a Game) -> Self {
         let board = match game.board_to_play() {
             Some(b) => b,
-            None => 0,
+            None => (0..9).find(|b| game.game_states.in_play(*b)).unwrap_or(9),
         };
         MoveIterator {
             game: game,
@@ -526,6 +526,9 @@ impl<'a> Iterator for MoveIterator<'a> {
                     return None;
                 }
                 self.board += 1;
+                if !self.game.game_states.in_play(self.board) {
+                    continue;
+                }
                 if self.board >= 9 {
                     return None;
                 }
@@ -657,6 +660,11 @@ mod tests {
         let r = g.make_move(Move::from_coords(0, 1));
         if let Ok(_) = r {
             panic!("Can't move into a won board");
+        };
+        for m in g.all_moves() {
+            if let Err(e) = g.make_move(m) {
+                panic!("all_moves returned illegal move {}: {:?}", m, e);
+            }
         }
     }
 
