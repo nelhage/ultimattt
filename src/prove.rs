@@ -7,13 +7,14 @@ use node_pool::{NodeID, Pool};
 
 use bytesize::ByteSize;
 use std::cmp::min;
+use std::mem;
 use std::mem::MaybeUninit;
 use std::path::Path;
 use std::time::{Duration, Instant};
 
 #[derive(Clone, Debug)]
 pub struct Config {
-    pub debug: isize,
+    pub debug: usize,
     pub max_nodes: Option<u64>,
     pub timeout: Option<Duration>,
 }
@@ -156,6 +157,9 @@ static TICK_INTERVAL: Duration = Duration::from_millis(100);
 
 impl Prover {
     pub fn prove(cfg: &Config, pos: &game::Game) -> ProofResult {
+        if cfg.debug > 1 {
+            eprintln!("Entering prove() sizeof(Node)={}", mem::size_of::<Node>());
+        }
         let start = Instant::now();
         let mut prover = Prover {
             config: cfg.clone(),

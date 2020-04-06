@@ -334,7 +334,7 @@ fn main() -> Result<(), std::io::Error> {
             if prove {
                 let result = prove::Prover::prove(
                     &prove::Config {
-                        debug: 1,
+                        debug: opt.debug,
                         timeout: Some(opt.timeout),
                         ..Default::default()
                     },
