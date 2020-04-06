@@ -389,7 +389,7 @@ impl Prover {
                 if now > self.tick && self.config.debug > 0 {
                     let elapsed = now.duration_since(self.start);
                     eprintln!(
-                        "t={}.{:03}s nodes={}/{} proved={} disproved={} root=({}, {}) rss={}",
+                        "t={}.{:03}s nodes={}/{} proved={} disproved={} root=({}, {}) n/ms={:.0} rss={}",
                         elapsed.as_secs(),
                         elapsed.subsec_millis(),
                         self.nodes.stats.live(),
@@ -398,6 +398,7 @@ impl Prover {
                         self.stats.disproved,
                         self.nodes.get(self.root).proof(),
                         self.nodes.get(self.root).disproof(),
+                        (self.nodes.stats.allocated.get() as f64) / (elapsed.as_millis() as f64),
                         read_rss(),
                     );
                     self.tick = now + TICK_INTERVAL;
