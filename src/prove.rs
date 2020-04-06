@@ -1,12 +1,13 @@
 use crate::game;
 extern crate bytesize;
 
+mod node_pool;
+
+use node_pool::{NodeID, Pool};
+
 use bytesize::ByteSize;
-use std::cell::{Cell, UnsafeCell};
 use std::cmp::min;
-use std::mem;
 use std::mem::MaybeUninit;
-use std::ops::{Deref, DerefMut};
 use std::path::Path;
 use std::time::{Duration, Instant};
 
@@ -32,20 +33,6 @@ pub struct Stats {
     pub proved: usize,
     pub disproved: usize,
     pub expanded: usize,
-}
-
-#[repr(transparent)]
-#[derive(Copy, Debug, Clone, PartialEq, Eq)]
-struct NodeID(u32);
-
-impl NodeID {
-    fn none() -> Self {
-        NodeID(0xffffffff)
-    }
-
-    fn exists(self) -> bool {
-        self.0 != 0xffffffff
-    }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -99,166 +86,52 @@ impl Node {
     }
 }
 
-const PAGE_SIZE: usize = 1 << 20;
-const PAGE_MASK: usize = PAGE_SIZE - 1;
-
-struct NodePool {
-    free: Cell<NodeID>,
-    slabs: UnsafeCell<Vec<Box<[UnsafeCell<Node>; PAGE_SIZE]>>>,
-    writing: Cell<NodeID>,
-    stats: NodePoolStats,
-}
-
-struct NodePoolStats {
-    allocated: Cell<usize>,
-    freed: Cell<usize>,
-}
-
-impl NodePoolStats {
-    fn live(&self) -> usize {
-        self.allocated.get() - self.freed.get()
-    }
-}
-
-struct AllocedNode<'a> {
-    pool: &'a NodePool,
-    id: NodeID,
-    node: &'a mut Node,
-}
-
-impl<'a> Drop for AllocedNode<'a> {
-    fn drop(&mut self) {
-        self.pool.writing.set(NodeID::none());
-    }
-}
-
-impl<'a> Deref for AllocedNode<'a> {
-    type Target = Node;
-
-    fn deref(&self) -> &Node {
-        self.node
-    }
-}
-
-impl<'a> DerefMut for AllocedNode<'a> {
-    fn deref_mut(&mut self) -> &mut Node {
-        self.node
-    }
-}
-
-impl NodePool {
-    fn new() -> Self {
-        Self {
-            free: Cell::new(NodeID::none()),
-            slabs: UnsafeCell::new(Vec::new()),
-            writing: Cell::new(NodeID::none()),
-            stats: NodePoolStats {
-                allocated: Cell::new(0),
-                freed: Cell::new(0),
-            },
-        }
+impl node_pool::Node for Node {
+    unsafe fn init(ptr: *mut MaybeUninit<Node>, free: NodeID) {
+        ptr.write(MaybeUninit::new(Node {
+            parent: free,
+            pos: MaybeUninit::zeroed().assume_init(),
+            phi: 0,
+            delta: 0,
+            value: Evaluation::Unknown,
+            flags: FLAG_FREE,
+            first_child: NodeID::none(),
+            sibling: NodeID::none(),
+        }));
     }
 
-    fn new_slab(&self) {
-        let ref mut slabs = unsafe { self.slabs.get().as_mut().unwrap() };
-        let mut slab = unsafe {
-            Box::<[MaybeUninit<UnsafeCell<Node>>; PAGE_SIZE]>::new_uninit().assume_init()
-        };
-
-        let mut i: usize = 0;
-        let base = slabs.len() * PAGE_SIZE;
-        for elem in &mut slab[..] {
-            let next_free = if (i + 1) == PAGE_SIZE {
-                NodeID::none()
-            } else {
-                NodeID((base + i + 1) as u32)
-            };
-            *elem = MaybeUninit::new(UnsafeCell::new(Node {
-                parent: next_free,
-                pos: unsafe { MaybeUninit::zeroed().assume_init() },
-                phi: 0,
-                delta: 0,
-                value: Evaluation::Unknown,
-                flags: FLAG_FREE,
-                first_child: NodeID::none(),
-                sibling: NodeID::none(),
-            }));
-            i += 1;
-        }
-
-        slabs.push(unsafe { mem::transmute::<_, Box<[UnsafeCell<Node>; PAGE_SIZE]>>(slab) });
-        self.free.set(NodeID(base as u32));
+    fn alloc(&mut self) {
+        debug_assert!(self.flag(FLAG_FREE));
+        debug_assert!(!self.first_child.exists());
+        self.parent = NodeID::none();
+        // self.pos = pos.clone();
+        self.phi = 0;
+        self.delta = 0;
+        self.value = Evaluation::Unknown;
+        self.flags = 0;
     }
 
-    fn get(&self, nd: NodeID) -> &Node {
-        if self.writing.get().exists() {
-            panic!(format!("get(): Can't get a node while mutating a node"));
-        }
-        debug_assert!(nd.exists());
-        unsafe {
-            &*(*self.slabs.get())[(nd.0 as usize) / PAGE_SIZE][(nd.0 as usize) & PAGE_MASK].get()
-        }
+    fn free(&mut self) {
+        self.flags = FLAG_FREE;
+        self.first_child = NodeID::none();
+        self.sibling = NodeID::none();
     }
 
-    unsafe fn get_mut_unchecked(&self, nd: NodeID) -> &mut Node {
-        debug_assert!(nd.exists());
-        &mut *((*self.slabs.get())[(nd.0 as usize) / PAGE_SIZE][(nd.0 as usize) & PAGE_MASK].get())
+    fn set_free_ptr(&mut self, free: NodeID) {
+        debug_assert!(self.flag(FLAG_FREE));
+        self.parent = free;
     }
 
-    fn get_mut(&mut self, nd: NodeID) -> &mut Node {
-        if self.writing.get().exists() {
-            panic!(format!("get_mut(): Can't get a node while mutating a node"));
-        }
-        unsafe { self.get_mut_unchecked(nd) }
-    }
-
-    fn alloc(&self, parent: NodeID, flags: u16, pos: &game::Game) -> AllocedNode {
-        if self.writing.get().exists() {
-            panic!(format!(
-                "alloc(): Can't allocate a node while mutating another node"
-            ));
-        }
-        if !self.free.get().exists() {
-            self.new_slab();
-        }
-        self.stats.allocated.set(self.stats.allocated.get() + 1);
-        let out = self.free.get();
-        self.free.set(self.get(out).parent);
-        self.writing.set(out);
-        let mut alloc = AllocedNode {
-            pool: self,
-            id: out,
-            node: unsafe { self.get_mut_unchecked(out) },
-        };
-        debug_assert!(alloc.flag(FLAG_FREE));
-        debug_assert!(!alloc.first_child.exists());
-        alloc.parent = parent;
-        alloc.pos = pos.clone();
-        alloc.phi = 0;
-        alloc.delta = 0;
-        alloc.value = Evaluation::Unknown;
-        alloc.flags = flags;
-        alloc
-    }
-
-    fn free(&mut self, nd: NodeID) {
-        let old_free = self.free.get();
-        {
-            let ref mut node = self.get_mut(nd);
-            node.parent = old_free;
-            node.flags = FLAG_FREE;
-            node.first_child = NodeID::none();
-            node.sibling = NodeID::none();
-        }
-        self.stats.freed.set(self.stats.freed.get() + 1);
-        self.free.set(nd);
+    fn get_free_ptr(&self) -> NodeID {
+        debug_assert!(self.flag(FLAG_FREE));
+        self.parent
     }
 }
 
 pub struct Prover {
     config: Config,
     stats: Stats,
-    nodes: NodePool,
+    nodes: Pool<Node>,
 
     start: Instant,
     tick: Instant,
@@ -287,7 +160,7 @@ impl Prover {
         let mut prover = Prover {
             config: cfg.clone(),
             stats: Default::default(),
-            nodes: NodePool::new(),
+            nodes: Pool::new(),
             start: start,
             tick: start,
             limit: cfg.timeout.map(|t| Instant::now() + t),
@@ -296,7 +169,9 @@ impl Prover {
         };
 
         {
-            let mut root = prover.nodes.alloc(NodeID::none(), 0, pos);
+            let mut root = prover.nodes.alloc();
+            root.parent = NodeID::none();
+            root.pos = pos.clone();
             prover.root = root.id;
             prover.evaluate(&mut *root);
             prover.set_proof_numbers(&mut *root);
@@ -457,11 +332,12 @@ impl Prover {
                 .pos
                 .make_move(m)
                 .expect("all_moves() returned valid move");
-            let mut alloc = self.nodes.alloc(
-                nid,
-                if node.flag(FLAG_AND) { 0 } else { FLAG_AND },
-                &child_pos,
-            );
+            let mut alloc = self.nodes.alloc();
+            alloc.parent = nid;
+            if !node.flag(FLAG_AND) {
+                alloc.set_flag(FLAG_AND)
+            }
+            alloc.pos = child_pos.clone();
             self.evaluate(&mut *alloc);
             self.set_proof_numbers(&mut *alloc);
             alloc.sibling = last_child;
