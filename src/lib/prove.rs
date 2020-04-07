@@ -17,6 +17,7 @@ pub struct Config {
     pub debug: usize,
     pub max_nodes: Option<usize>,
     pub timeout: Option<Duration>,
+    pub pn2: bool,
 }
 
 impl Default for Config {
@@ -25,6 +26,7 @@ impl Default for Config {
             debug: 0,
             max_nodes: None,
             timeout: None,
+            pn2: false,
         }
     }
 }
@@ -201,6 +203,9 @@ impl Prover {
             root: NodeID::none(),
             cursor: Cursor { stack: Vec::new() },
         };
+        if prover.config.pn2 {
+            prover.config.max_nodes = prover.config.max_nodes.map(|n| n / 2);
+        }
 
         {
             let mut root = prover.nodes.alloc();
@@ -211,7 +216,7 @@ impl Prover {
             prover.evaluate(&mut root);
             prover.set_proof_numbers(&mut *root);
         }
-        prover.search(prover.root);
+        prover.search(prover.root, prover.config.max_nodes);
 
         let ref root = prover.nodes.get(prover.root);
         ProofResult {
@@ -283,7 +288,7 @@ impl Prover {
         (phi, delta)
     }
 
-    fn search(&mut self, root: NodeID) {
+    fn search(&mut self, root: NodeID, limit: Option<usize>) {
         let mut current = root;
         let mut i = 0;
         while {
@@ -318,12 +323,7 @@ impl Prover {
                         break;
                     }
                 }
-                if self
-                    .config
-                    .max_nodes
-                    .map(|n| self.nodes.stats.live() > n)
-                    .unwrap_or(false)
-                {
+                if limit.map(|n| self.nodes.stats.live() > n).unwrap_or(false) {
                     break;
                 }
             }
@@ -361,6 +361,12 @@ impl Prover {
 
     fn expand(&mut self, nid: NodeID) {
         self.stats.expanded += 1;
+
+        if self.config.pn2 {
+            self.pn2(nid);
+            return;
+        }
+
         let mut last_child = NodeID::none();
         let ref node = self.nodes.get(nid);
         match self.cursor.position(nid).game_state() {
@@ -394,6 +400,39 @@ impl Prover {
             node_mut.set_flag(FLAG_EXPANDED);
             node_mut.first_child = last_child;
         }
+    }
+
+    fn pn2(&mut self, nid: NodeID) {
+        let oldroot = self.root;
+        let mut oldstats: Stats = Default::default();
+        mem::swap(&mut oldstats, &mut self.stats);
+
+        self.root = nid;
+        self.config.pn2 = false;
+
+        self.search(self.root, Some(self.nodes.stats.live()));
+
+        let mut child: NodeID;
+        {
+            let ref mut node = self.nodes.get_mut(nid);
+            if node.proof() == 0 {
+                node.value = Evaluation::True;
+            } else if node.disproof() == 0 {
+                node.value = Evaluation::False;
+            }
+            child = node.first_child;
+        }
+        while child.exists() {
+            let ref mut nd = self.nodes.get_mut(child);
+            nd.flags &= !FLAG_EXPANDED;
+            child = nd.sibling;
+            let free_child = nd.first_child;
+            self.free_siblings(free_child);
+        }
+
+        self.root = oldroot;
+        mem::swap(&mut oldstats, &mut self.stats);
+        self.config.pn2 = true;
     }
 
     fn update_ancestors(&mut self, mut nid: NodeID) -> NodeID {
