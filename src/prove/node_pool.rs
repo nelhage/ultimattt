@@ -7,9 +7,26 @@ pub trait Node
 where
     Self: Sized,
 {
+    // Initialize a node newly requested from the OS allocator. This
+    // is responsible for leaving the node in a state s.t. that it is
+    // legal to call `assume_init` on the `MaybeUninit`, as well as
+    // marking the node as free
     unsafe fn init(ptr: *mut MaybeUninit<Self>, free: NodeID);
+
+    // Set up a node that is about to be allocated and returned from
+    // `alloc`. This should mark a node as allocated, and do any
+    // per-allocation setup.
     fn alloc(&mut self);
+
+    // Free a node. This should mark a node as free, and tear down any
+    // appropriate state.
     fn free(&mut self);
+
+    // Nodes need to contain storage for a NodeID used as a freelist
+    // pointer while the node is free. These methods provide access to
+    // that pointer. These methods will only be called on nodes
+    // between calls to init and alloc, or after a free and before
+    // another alloc.
     fn set_free_ptr(&mut self, free: NodeID);
     fn get_free_ptr(&self) -> NodeID;
 }
