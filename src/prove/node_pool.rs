@@ -131,8 +131,8 @@ where
     }
 
     pub fn get(&self, nd: NodeID) -> &T {
-        if self.writing.get().exists() {
-            panic!(format!("get(): Can't get a node while mutating a node"));
+        if self.writing.get() == nd {
+            panic!(format!("get(): Can't get a node while mutating it"));
         }
         debug_assert!(nd.exists());
         unsafe {

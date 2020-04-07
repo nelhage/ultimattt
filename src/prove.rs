@@ -37,7 +37,7 @@ pub struct Stats {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-#[repr(u16)]
+#[repr(u8)]
 pub enum Evaluation {
     True,
     False,
@@ -50,12 +50,12 @@ const FLAG_FREE: u16 = 1 << 2;
 
 struct Node {
     parent: NodeID,
-    pos: game::Game,
 
     phi: u32,
     delta: u32,
 
     value: Evaluation,
+    r#move: game::Move,
     flags: u16,
     first_child: NodeID,
     sibling: NodeID,
@@ -91,7 +91,7 @@ impl node_pool::Node for Node {
     unsafe fn init(ptr: *mut MaybeUninit<Node>, free: NodeID) {
         ptr.write(MaybeUninit::new(Node {
             parent: free,
-            pos: MaybeUninit::zeroed().assume_init(),
+            r#move: game::Move::none(),
             phi: 0,
             delta: 0,
             value: Evaluation::Unknown,
@@ -138,6 +138,7 @@ pub struct Prover {
     tick: Instant,
     limit: Option<Instant>,
 
+    cursor: Cursor,
     position: game::Game,
     root: NodeID,
 }
@@ -150,6 +151,33 @@ pub struct ProofResult {
 
     pub allocated: usize,
     pub stats: Stats,
+}
+
+struct Cursor {
+    stack: Vec<(NodeID, game::Game)>,
+}
+
+impl Cursor {
+    fn position(&self, nid: NodeID) -> &game::Game {
+        debug_assert!(nid == self.current());
+        &self.stack.last().unwrap().1
+    }
+
+    fn current(&self) -> NodeID {
+        self.stack.last().unwrap().0
+    }
+
+    fn descend(&mut self, nid: NodeID, node: &Node) {
+        let pos = match self.position(node.parent).make_move(node.r#move) {
+            Ok(pos) => pos,
+            Err(_) => panic!("illegal tree"),
+        };
+        self.stack.push((nid, pos));
+    }
+
+    fn ascend(&mut self) {
+        self.stack.pop();
+    }
 }
 
 const PROGRESS_INTERVAL: isize = 10000;
@@ -170,14 +198,16 @@ impl Prover {
             limit: cfg.timeout.map(|t| Instant::now() + t),
             position: pos.clone(),
             root: NodeID::none(),
+            cursor: Cursor { stack: Vec::new() },
         };
 
         {
             let mut root = prover.nodes.alloc();
+            prover.cursor.stack.push((root.id, pos.clone()));
+
             root.parent = NodeID::none();
-            root.pos = pos.clone();
             prover.root = root.id;
-            prover.evaluate(&mut *root);
+            prover.evaluate(&mut root);
             prover.set_proof_numbers(&mut *root);
         }
         prover.search(prover.root);
@@ -197,9 +227,9 @@ impl Prover {
         }
     }
 
-    fn evaluate(&self, node: &mut Node) {
+    fn evaluate(&self, node: &mut node_pool::AllocedNode<Node>) {
         let player = self.player();
-        let res = node.pos.game_state();
+        let res = self.cursor.position(node.id).game_state();
         node.value = match res {
             game::BoardState::InPlay => Evaluation::Unknown,
             game::BoardState::Drawn => Evaluation::False,
@@ -291,7 +321,7 @@ impl Prover {
         }
     }
 
-    fn select_most_proving(&self, mut nid: NodeID) -> NodeID {
+    fn select_most_proving(&mut self, mut nid: NodeID) -> NodeID {
         while self.nodes.get(nid).flag(FLAG_EXPANDED) {
             let ref node = self.nodes.get(nid);
             debug_assert!(
@@ -314,6 +344,7 @@ impl Prover {
                 c = ch.sibling;
             }
             debug_assert!(child.exists(), "found a child");
+            self.cursor.descend(child, &self.nodes.get(child));
             nid = child;
         }
         nid
@@ -323,7 +354,7 @@ impl Prover {
         self.stats.expanded += 1;
         let mut last_child = NodeID::none();
         let ref node = self.nodes.get(nid);
-        match node.pos.game_state() {
+        match self.cursor.position(nid).game_state() {
             game::BoardState::InPlay => (),
             _ => debug_assert!(
                 false,
@@ -331,19 +362,18 @@ impl Prover {
             ),
         };
         debug_assert!(!node.flag(FLAG_EXPANDED));
-        for m in node.pos.all_moves() {
-            let child_pos = node
-                .pos
-                .make_move(m)
-                .expect("all_moves() returned valid move");
+        let pos = self.cursor.position(nid).clone();
+        for m in pos.all_moves() {
             let mut alloc = self.nodes.alloc();
             alloc.parent = nid;
             if !node.flag(FLAG_AND) {
                 alloc.set_flag(FLAG_AND)
             }
-            alloc.pos = child_pos.clone();
-            self.evaluate(&mut *alloc);
+            alloc.r#move = m;
+            self.cursor.descend(alloc.id, &*alloc);
+            self.evaluate(&mut alloc);
             self.set_proof_numbers(&mut *alloc);
+            self.cursor.ascend();
             alloc.sibling = last_child;
             last_child = alloc.id;
             if alloc.delta == 0 {
@@ -388,7 +418,8 @@ impl Prover {
                     self.stats.disproved += 1;
                 }
                 if node.parent.exists() {
-                    nid = node.parent
+                    nid = node.parent;
+                    self.cursor.ascend();
                 } else {
                     return nid;
                 }
