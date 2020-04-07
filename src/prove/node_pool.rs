@@ -37,7 +37,7 @@ where
 {
     free: Cell<NodeID>,
     slabs: UnsafeCell<Vec<Box<[UnsafeCell<T>; PAGE_SIZE]>>>,
-    writing: Cell<NodeID>,
+    allocating: Cell<NodeID>,
     pub stats: Stats,
 }
 
@@ -66,7 +66,7 @@ where
     T: Sized + Node,
 {
     fn drop(&mut self) {
-        self.pool.writing.set(NodeID::none());
+        self.pool.allocating.set(NodeID::none());
     }
 }
 
@@ -98,7 +98,7 @@ where
         Self {
             free: Cell::new(NodeID::none()),
             slabs: UnsafeCell::new(Vec::new()),
-            writing: Cell::new(NodeID::none()),
+            allocating: Cell::new(NodeID::none()),
             stats: Stats {
                 allocated: Cell::new(0),
                 freed: Cell::new(0),
@@ -131,7 +131,7 @@ where
     }
 
     pub fn get(&self, nd: NodeID) -> &T {
-        if self.writing.get() == nd {
+        if self.allocating.get() == nd {
             panic!(format!(
                 "get(): Can't get a node while it is being allocated"
             ));
@@ -148,16 +148,18 @@ where
     }
 
     pub fn get_mut(&mut self, nd: NodeID) -> &mut T {
-        if self.writing.get().exists() {
-            panic!(format!("get_mut(): Can't get a node while mutating a node"));
+        if self.allocating.get().exists() {
+            panic!(format!(
+                "get_mut(): Can't mutate a node while allocating a node"
+            ));
         }
         unsafe { self.get_mut_unchecked(nd) }
     }
 
     pub fn alloc(&self) -> AllocedNode<T> {
-        if self.writing.get().exists() {
+        if self.allocating.get().exists() {
             panic!(format!(
-                "alloc(): Can't allocate a node while mutating another node"
+                "alloc(): Can't allocate a node while another is still allocating"
             ));
         }
         if !self.free.get().exists() {
@@ -166,7 +168,7 @@ where
         self.stats.allocated.set(self.stats.allocated.get() + 1);
         let out = self.free.get();
         self.free.set(self.get(out).get_free_ptr());
-        self.writing.set(out);
+        self.allocating.set(out);
         let mut alloc = AllocedNode {
             pool: self,
             id: out,
@@ -177,8 +179,8 @@ where
     }
 
     pub fn free(&mut self, nd: NodeID) {
-        if self.writing.get() == nd {
-            panic!("Can't free a node while it is being allocated");
+        if self.allocating.get() == nd {
+            panic!("Can't free a node that is being allocated");
         }
         let old_free = self.free.get();
         {
