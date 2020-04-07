@@ -132,7 +132,9 @@ where
 
     pub fn get(&self, nd: NodeID) -> &T {
         if self.writing.get() == nd {
-            panic!(format!("get(): Can't get a node while mutating it"));
+            panic!(format!(
+                "get(): Can't get a node while it is being allocated"
+            ));
         }
         debug_assert!(nd.exists());
         unsafe {
@@ -175,6 +177,9 @@ where
     }
 
     pub fn free(&mut self, nd: NodeID) {
+        if self.writing.get() == nd {
+            panic!("Can't free a node while it is being allocated");
+        }
         let old_free = self.free.get();
         {
             let ref mut node = self.get_mut(nd);
