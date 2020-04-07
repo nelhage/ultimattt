@@ -209,6 +209,8 @@ enum Command {
     Analyze {
         #[structopt(long)]
         prove: bool,
+        #[structopt(long)]
+        max_nodes: Option<usize>,
         position: String,
     },
     Selfplay(SelfplayParameters),
@@ -322,6 +324,7 @@ fn main() -> Result<(), std::io::Error> {
         }
         Command::Analyze {
             prove,
+            max_nodes,
             ref position,
         } => {
             let game = match game::notation::parse(position) {
@@ -336,6 +339,7 @@ fn main() -> Result<(), std::io::Error> {
                     &prove::Config {
                         debug: opt.debug,
                         timeout: Some(opt.timeout),
+                        max_nodes: max_nodes,
                         ..Default::default()
                     },
                     &game,

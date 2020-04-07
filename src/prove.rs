@@ -15,7 +15,7 @@ use std::time::{Duration, Instant};
 #[derive(Clone, Debug)]
 pub struct Config {
     pub debug: usize,
-    pub max_nodes: Option<u64>,
+    pub max_nodes: Option<usize>,
     pub timeout: Option<Duration>,
 }
 
@@ -316,6 +316,14 @@ impl Prover {
                     if now > limit {
                         break;
                     }
+                }
+                if self
+                    .config
+                    .max_nodes
+                    .map(|n| self.nodes.stats.live() > n)
+                    .unwrap_or(false)
+                {
+                    break;
                 }
             }
         }
