@@ -113,6 +113,7 @@ impl node_pool::Node for Node {
     }
 
     fn free(&mut self) {
+        debug_assert!(!self.flag(FLAG_FREE));
         self.flags = FLAG_FREE;
         self.first_child = NodeID::none();
         self.sibling = NodeID::none();
@@ -414,9 +415,8 @@ impl Prover {
                     node_mut.first_child = NodeID::none();
                 }
             }
-            while free_child.exists() {
-                self.free_tree(free_child);
-                free_child = self.nodes.get(free_child).sibling;
+            if free_child.exists() {
+                self.free_siblings(free_child);
             }
             {
                 let ref node = self.nodes.get(nid);
@@ -435,13 +435,17 @@ impl Prover {
         }
     }
 
-    fn free_tree(&mut self, nid: NodeID) {
-        self.nodes.free(nid);
-        let mut child = self.nodes.get(nid).first_child;
-        while child.exists() {
-            let next = self.nodes.get(child).sibling;
-            self.free_tree(child);
-            child = next;
+    fn free_siblings(&mut self, child: NodeID) {
+        let mut todo = vec![child];
+        while let Some(it) = todo.pop() {
+            let ref node = self.nodes.get(it);
+            if node.sibling.exists() {
+                todo.push(node.sibling);
+            }
+            if node.first_child.exists() {
+                todo.push(node.first_child);
+            }
+            self.nodes.free(it);
         }
     }
 
