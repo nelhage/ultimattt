@@ -3,10 +3,17 @@ extern crate ultimattt;
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
+use std::mem;
 use ultimattt::game::{Game, Move};
 use ultimattt::minimax::Minimax;
 
-fn bench_empty_move(c: &mut Criterion) {
+fn bench_game(c: &mut Criterion) {
+    eprintln!(
+        "sizeof(Game)={} alignof(Game)={}",
+        mem::size_of::<Game>(),
+        mem::align_of::<Game>()
+    );
+
     c.bench_function("move(ae)", |b| {
         let g = Game::new();
         b.iter(|| {
@@ -14,18 +21,12 @@ fn bench_empty_move(c: &mut Criterion) {
             black_box(&gg);
         })
     });
-}
-
-fn bench_recalc_winner_empty(c: &mut Criterion) {
     c.bench_function("recalc_winner", |b| {
         let mut g = Game::new();
         b.iter(|| {
             g.recalc_winner();
         });
     });
-}
-
-fn bench_clone(c: &mut Criterion) {
     c.bench_function("Game::clone", |b| {
         let g = Game::new();
         b.iter(|| {
@@ -35,12 +36,7 @@ fn bench_clone(c: &mut Criterion) {
     });
 }
 
-criterion_group!(
-    game,
-    bench_empty_move,
-    bench_recalc_winner_empty,
-    bench_clone,
-);
+criterion_group!(game, bench_game,);
 
 fn bench_evaluate(c: &mut Criterion) {
     c.bench_function("evaluate", |b| {
@@ -49,5 +45,6 @@ fn bench_evaluate(c: &mut Criterion) {
         b.iter(|| ai.evaluate(black_box(&g)));
     });
 }
+
 criterion_group!(minimax, bench_evaluate);
 criterion_main!(game, minimax);
