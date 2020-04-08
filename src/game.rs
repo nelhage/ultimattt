@@ -3,7 +3,7 @@ pub mod notation;
 
 use std::vec::Vec;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub enum Player {
     X,
     O,
@@ -25,13 +25,13 @@ impl Player {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub enum CellState {
     Empty,
     Played(Player),
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub enum BoardState {
     InPlay,
     Drawn,
@@ -152,7 +152,7 @@ impl Default for Unpacked {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 struct Row {
     // These are each a packed [u9; 3] containing a bitmask for the
     // respective player's states. The low bits store index 0.
@@ -160,7 +160,7 @@ struct Row {
     o: u32,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub(in crate) struct Subboards {
     rows: [Row; 3],
 }
@@ -243,7 +243,7 @@ impl Default for Subboards {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub(in crate) struct GameStates {
     // (x: u9, o: u9, drawn: u9), LSB first
     bits: u32,
@@ -323,7 +323,7 @@ impl GameStates {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Game {
     pub(in crate) next_player: Player,
     pub(in crate) next_board: Option<u8>,
@@ -332,7 +332,7 @@ pub struct Game {
     pub(in crate) overall_state: BoardState,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Move {
     bits: u8,
 }
