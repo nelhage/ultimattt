@@ -4,7 +4,7 @@ extern crate ultimattt;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
 use std::collections::hash_map::RandomState;
-use std::hash::{BuildHasher, Hash, Hasher};
+use std::hash;
 use std::mem;
 use ultimattt::game::{Game, Move};
 use ultimattt::minimax::Minimax;
@@ -41,9 +41,9 @@ fn bench_game(c: &mut Criterion) {
         let st = RandomState::new();
 
         b.iter(|| {
-            let mut hasher = st.build_hasher();
-            g.hash(&mut hasher);
-            black_box(hasher.finish());
+            let mut hasher = hash::BuildHasher::build_hasher(&st);
+            hash::Hash::hash(&g, &mut hasher);
+            black_box(hash::Hasher::finish(&hasher));
         });
     });
 }
