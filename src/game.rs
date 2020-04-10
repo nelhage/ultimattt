@@ -685,6 +685,7 @@ impl Hash for Game {
         H: Hasher,
     {
         h.write_u64(self.hash);
+        h.write_u8(self.next_board.unwrap_or(0xff));
     }
 }
 
@@ -744,6 +745,7 @@ impl<'a> Iterator for MoveIterator<'a> {
 #[cfg(test)]
 mod tests {
     use std::collections::hash_map::DefaultHasher;
+    use std::collections::VecDeque;
     use std::hash::{Hash, Hasher};
 
     use super::*;
@@ -955,12 +957,58 @@ mod tests {
             (board(&[(4, 0), (0, 4), (4, 1), (1, 4)]), 1),
             (board(&[(4, 1), (1, 4), (4, 0), (0, 4)]), 1),
             (board(&[(4, 0), (0, 4), (4, 1), (1, 4), (4, 4)]), 2),
+            (board(&[(7, 6), (6, 8), (8, 6), (6, 7)]), 3),
+            (board(&[(8, 6), (6, 7), (7, 6), (6, 8)]), 4),
         ];
         for l in cases.iter() {
             for r in cases.iter() {
                 assert_eq!(l.1 == r.1, l.0 == r.0);
                 assert_eq!(l.1 == r.1, hash_value(&l.0) == hash_value(&r.0));
             }
+        }
+    }
+
+    const TEST_HASH_SAMPLES: usize = 1_000_000;
+
+    #[test]
+    fn test_hash() {
+        let mut positions = Vec::new();
+        let mut queue = VecDeque::new();
+        queue.push_back(Game::new());
+        while positions.len() < TEST_HASH_SAMPLES {
+            let g = queue.pop_front().unwrap();
+            positions.push(g.clone());
+            if let BoardState::InPlay = g.game_state() {
+                for m in g.all_moves() {
+                    let gg = g.make_move(m).expect("all_moves returned illegal move");
+                    queue.push_back(gg);
+                }
+            }
+        }
+
+        positions.sort_by_cached_key(|g: &Game| {
+            let mut out = [0 as u64; 5];
+            out[0] = g.game_states.bits as u64;
+            out[1] = (g.boards.rows[0].x as u64) << 32 | (g.boards.rows[0].o as u64);
+            out[2] = (g.boards.rows[1].x as u64) << 32 | (g.boards.rows[1].o as u64);
+            out[3] = (g.boards.rows[2].x as u64) << 32 | (g.boards.rows[2].o as u64);
+            out[4] = match g.next_board {
+                Some(i) => i as u64,
+                None => 0xff,
+            };
+            out
+        });
+        let mut i = 0;
+        while i < positions.len() - 1 {
+            assert_eq!(
+                positions[i] == positions[i + 1],
+                hash_value(&positions[i]) == hash_value(&positions[i + 1],),
+                "i={} l={:?} r={:?}",
+                i,
+                &positions[i],
+                &positions[i + 1],
+            );
+            i += 1;
         }
     }
 }
