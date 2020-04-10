@@ -745,6 +745,7 @@ impl<'a> Iterator for MoveIterator<'a> {
 #[cfg(test)]
 mod tests {
     use std::collections::hash_map::DefaultHasher;
+    use std::collections::hash_map::HashMap;
     use std::collections::VecDeque;
     use std::hash::{Hash, Hasher};
 
@@ -1009,6 +1010,20 @@ mod tests {
                 &positions[i + 1],
             );
             i += 1;
+        }
+
+        let mut grp: HashMap<u64, Vec<&Game>> = HashMap::new();
+        for p in positions.iter() {
+            grp.entry(hash_value(p))
+                .or_insert_with(|| Vec::new())
+                .push(&p);
+        }
+        for (_h, its) in grp.iter() {
+            for p1 in its.iter() {
+                for p2 in its.iter() {
+                    assert_eq!(p1, p2, "{:?} != {:?} but they hash equal", &p1, &p2);
+                }
+            }
         }
     }
 }
