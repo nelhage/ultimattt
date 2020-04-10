@@ -46,6 +46,14 @@ fn bench_game(c: &mut Criterion) {
             black_box(hash::Hasher::finish(&hasher));
         });
     });
+
+    c.bench_function("Game::zobrist", |b| {
+        let g = Game::new();
+
+        b.iter(|| {
+            black_box(g.zobrist());
+        });
+    });
 }
 
 criterion_group!(game, bench_game,);

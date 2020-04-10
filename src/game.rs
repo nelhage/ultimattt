@@ -392,6 +392,7 @@ struct Zobrist {
     squares: [[[u64; 2]; 9]; 9],
     // boards[board] = [tie, X, O]
     boards: [[u64; 3]; 9],
+    next_board: [u64; 9],
 }
 
 impl Zobrist {
@@ -554,6 +555,17 @@ static ZOBRIST_TABLES: Zobrist = Zobrist {
             14547444142552861968,
         ],
     ],
+    next_board: [
+        16798470787979032810,
+        13172679987797492821,
+        8295043729246619448,
+        471941106522091992,
+        16298057341796429847,
+        7135075252472040655,
+        9733518850052539775,
+        5430438456607159556,
+        7693123149093558032,
+    ],
 };
 
 impl Game {
@@ -677,6 +689,14 @@ impl Game {
     pub fn board_state(&self, board: usize) -> BoardState {
         self.game_states.at(board)
     }
+
+    pub fn zobrist(&self) -> u64 {
+        self.hash
+            ^ self
+                .next_board
+                .map(|b| ZOBRIST_TABLES.next_board[b as usize])
+                .unwrap_or(0)
+    }
 }
 
 impl Hash for Game {
@@ -684,8 +704,7 @@ impl Hash for Game {
     where
         H: Hasher,
     {
-        h.write_u64(self.hash);
-        h.write_u8(self.next_board.unwrap_or(0xff));
+        h.write_u64(self.zobrist());
     }
 }
 
