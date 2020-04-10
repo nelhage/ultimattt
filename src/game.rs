@@ -549,6 +549,9 @@ impl<'a> Iterator for MoveIterator<'a> {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+
     use super::*;
 
     fn board(moves: &[(usize, usize)]) -> Game {
@@ -737,6 +740,32 @@ mod tests {
                 if let Err(e) = board.make_move(m) {
                     panic!("Bad move: {:?}: {:?})", m, e);
                 }
+            }
+        }
+    }
+
+    fn hash_value<H>(v: &H) -> u64
+    where
+        H: Hash,
+    {
+        let mut hasher = DefaultHasher::new();
+        Hash::hash(v, &mut hasher);
+        Hasher::finish(&hasher)
+    }
+
+    #[test]
+    fn test_eq() {
+        let cases = &[
+            (Game::new(), 0),
+            (Game::new(), 0),
+            (board(&[(4, 0), (0, 4), (4, 1), (1, 4)]), 1),
+            (board(&[(4, 1), (1, 4), (4, 0), (0, 4)]), 1),
+            (board(&[(4, 0), (0, 4), (4, 1), (1, 4), (4, 4)]), 2),
+        ];
+        for l in cases.iter() {
+            for r in cases.iter() {
+                assert_eq!(l.1 == r.1, l.0 == r.0);
+                assert_eq!(l.1 == r.1, hash_value(&l.0) == hash_value(&r.0));
             }
         }
     }
