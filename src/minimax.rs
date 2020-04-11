@@ -1,6 +1,8 @@
 extern crate smallvec;
 use crate::game;
 
+mod table;
+
 use rand;
 use smallvec::SmallVec;
 use std::cmp::max;
@@ -59,6 +61,7 @@ pub struct Config {
     pub max_depth: Option<i64>,
     pub timeout: Option<Duration>,
     pub debug: usize,
+    pub table_bytes: usize,
 }
 
 impl Default for Config {
@@ -67,6 +70,7 @@ impl Default for Config {
             max_depth: None,
             timeout: None,
             debug: 0,
+            table_bytes: table::DEFAULT_TABLE_SIZE,
         }
     }
 }
@@ -132,6 +136,7 @@ pub struct Minimax {
     config: Config,
     stats: Stats,
     response: [ResponseTable; 2],
+    table: table::TranspositionTable,
 }
 
 const EVAL_WON: i64 = 1 << 60;
@@ -149,6 +154,7 @@ impl Minimax {
             config: config.clone(),
             stats: Default::default(),
             response: Default::default(),
+            table: table::TranspositionTable::with_memory(config.table_bytes),
         }
     }
 
@@ -253,12 +259,16 @@ impl Minimax {
     fn move_iterator<'a>(
         &mut self,
         g: &'a game::Game,
+        te: Option<&'a table::Entry>,
         pv: game::Move,
         prev: game::Move,
     ) -> impl Iterator<Item = game::Move> + 'a {
         let mut ordered: SmallVec<[game::Move; 2]> = SmallVec::new();
         let all_moves = g.all_moves();
 
+        if let Some(e) = te {
+            ordered.push(e.pv);
+        }
         let refutation = self.response_to(g.player().other(), prev);
         if refutation.is_some() {
             ordered.push(refutation);
@@ -285,7 +295,23 @@ impl Minimax {
         let mut localpv: SmallVec<[game::Move; 10]> =
             SmallVec::from_elem(game::Move::none(), (depth - 1) as usize);
 
-        let moves = self.move_iterator(g, pv[0], prev);
+        let te = self.table.lookup(g.zobrist()).map(|e| e.clone());
+        if let Some(ref e) = te {
+            if e.depth as i64 >= depth {
+                let ok = match e.bound {
+                    table::Bound::Exact => true,
+                    table::Bound::AtLeast => e.value >= beta,
+                    table::Bound::AtMost => e.value <= alpha,
+                };
+                if ok {
+                    pv[0] = e.pv;
+                    return e.value;
+                }
+            }
+        }
+
+        let moves = self.move_iterator(g, te.as_ref(), pv[0], prev);
+        let mut improved = false;
         for m in moves {
             let child = match g.make_move(m) {
                 Ok(g) => g,
@@ -293,6 +319,7 @@ impl Minimax {
             };
             let score = -self.minimax(&child, depth - 1, -beta, -alpha, localpv.as_mut_slice(), m);
             if score > alpha {
+                improved = true;
                 alpha = score;
                 pv[0] = m;
                 pv[1..(depth as usize)].copy_from_slice(&localpv);
@@ -303,6 +330,19 @@ impl Minimax {
                 }
             }
         }
+        self.table.store(&table::Entry {
+            depth: depth as u8,
+            hash: g.zobrist(),
+            pv: pv[0],
+            value: alpha,
+            bound: if !improved {
+                table::Bound::AtMost
+            } else if alpha >= beta {
+                table::Bound::AtLeast
+            } else {
+                table::Bound::Exact
+            },
+        });
         alpha
     }
 
