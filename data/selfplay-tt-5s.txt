@@ -1,0 +1,2034 @@
+    Finished release [optimized + debuginfo] target(s) in 0.02s
+     Running `target/release/ultimattt --timeout 5s --debug 2 play -o minimax -x minimax`
+X to play:
+   |   |        a    b    c
+---+---+---
+   |   |        d    e    f
+---+---+---
+   |   |        g    h    i
+
+.  .  . | .  .  . | .  .  .
+.  .  . | .  .  . | .  .  .
+.  .  . | .  .  . | .  .  .
+--------+---------+--------
+.  .  . | .  .  . | .  .  .
+.  .  . | .  .  . | .  .  .
+.  .  . | .  .  . | .  .  .
+--------+---------+--------
+.  .  . | .  .  . | .  .  .
+.  .  . | .  .  . | .  .  .
+.  .  . | .  .  . | .  .  .
+notation:
+X;.........;........./........./........./........./........./........./........./........./.........
+minimax depth=1 move=ee v=16 t=0.000s(0.000s) m/ms=5905.228 visited=82 cuts=0
+  pv=[ee]
+minimax depth=2 move=ee v=4 t=0.000s(0.000s) m/ms=3819.109 visited=170 cuts=80
+  pv=[ee ea]
+minimax depth=3 move=ee v=16 t=0.000s(0.000s) m/ms=5977.808 visited=918 cuts=87
+  pv=[ee ea ae]
+minimax depth=4 move=ee v=2 t=0.000s(0.000s) m/ms=4694.895 visited=1867 cuts=797
+  pv=[ee ea ab be]
+minimax depth=5 move=ee v=15 t=0.001s(0.002s) m/ms=5619.791 visited=9121 cuts=912
+  pv=[ee ea aa ab be]
+minimax depth=6 move=ee v=2 t=0.003s(0.005s) m/ms=4742.281 visited=17486 cuts=7494
+  pv=[ee ea aa ac cb be]
+minimax depth=7 move=ee v=15 t=0.015s(0.021s) m/ms=5357.366 visited=81978 cuts=8355
+  pv=[ee ea aa ac cc cb be]
+minimax depth=8 move=ee v=2 t=0.027s(0.048s) m/ms=5251.396 visited=145481 cuts=62102
+  pv=[ee ea aa ac cc cg gb be]
+minimax depth=9 move=ee v=15 t=0.137s(0.186s) m/ms=5078.184 visited=699983 cuts=69063
+  pv=[ee ea aa ac cc cg gg gb be]
+minimax depth=10 move=ee v=2 t=0.249s(0.436s) m/ms=5005.197 visited=1248392 cuts=505716
+  pv=[ee ea aa ac cc cg gg gi ib be]
+minimax depth=11 move=ee v=15 t=1.170s(1.606s) m/ms=4920.215 visited=5757150 cuts=574466
+  pv=[ee ea aa ac cc cg gg gi ii ib be]
+minimax depth=12 move=ee v=3 t=1.804s(3.410s) m/ms=4889.314 visited=8820832 cuts=3777258
+  pv=[ee ea aa ac cc cg gg gi ii ib bb be]
+minimax depth=13 move=ee v=15 t=9.628s(13.039s) m/ms=4792.288 visited=46143359 cuts=4749806
+  pv=[ee ea aa ac cc cg gg gi ii ib bb bd de]
+O to play:
+   |   |        a    b    c
+---+---+---
+   |   |        d    e    f
+---+---+---
+   |   |        g    h    i
+
+.  .  . | .  .  . | .  .  .
+.  .  . | .  .  . | .  .  .
+.  .  . | .  .  . | .  .  .
+--------+---------+--------
+.  .  . |[4m [0m[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m[4m [0m| .  .  .
+.  .  . |[4m [0m[4m.[0m[4m  [0m[4mX[0m[4m  [0m[4m.[0m[4m [0m| .  .  .
+.  .  . |[4m [0m[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m[4m [0m| .  .  .
+--------+---------+--------
+.  .  . | .  .  . | .  .  .
+.  .  . | .  .  . | .  .  .
+.  .  . | .  .  . | .  .  .
+notation:
+O;....@....;........./........./........./........./....X..../........./........./........./.........
+minimax depth=1 move=ea v=-4 t=0.000s(0.000s) m/ms=4139.834 visited=9 cuts=0
+  pv=[ea]
+minimax depth=2 move=ea v=-16 t=0.000s(0.000s) m/ms=4710.692 visited=53 cuts=7
+  pv=[ea ae]
+minimax depth=3 move=ea v=-2 t=0.000s(0.000s) m/ms=4964.508 visited=228 cuts=13
+  pv=[ea ab be]
+minimax depth=4 move=ea v=-15 t=0.000s(0.000s) m/ms=4655.760 visited=504 cuts=120
+  pv=[ea aa ab be]
+minimax depth=5 move=ea v=-2 t=0.000s(0.000s) m/ms=5100.078 visited=1617 cuts=206
+  pv=[ea aa ac cb be]
+minimax depth=6 move=ea v=-15 t=0.000s(0.001s) m/ms=4776.673 visited=3541 cuts=922
+  pv=[ea aa ac cc cb be]
+minimax depth=7 move=ea v=-2 t=0.002s(0.003s) m/ms=4974.741 visited=12985 cuts=1783
+  pv=[ea aa ac cc cg gb be]
+minimax depth=8 move=ea v=-15 t=0.006s(0.009s) m/ms=4856.720 visited=29657 cuts=7631
+  pv=[ea aa ac cc cg gg gb be]
+minimax depth=9 move=ea v=-2 t=0.021s(0.031s) m/ms=5045.738 visited=107060 cuts=16036
+  pv=[ea aa ac cc cg gg gi ib be]
+minimax depth=10 move=ea v=-15 t=0.049s(0.080s) m/ms=5093.541 visited=252594 cuts=63853
+  pv=[ea aa ac cc cg gg gi ii ib be]
+minimax depth=11 move=ea v=-3 t=0.206s(0.287s) m/ms=4899.278 visited=1010331 cuts=160397
+  pv=[ea aa ac cc cg gg gi ii ib bb be]
+minimax depth=12 move=ea v=-15 t=0.380s(0.667s) m/ms=4915.453 visited=1867931 cuts=486897
+  pv=[ea aa ac cc cg gg gi ii ib bb bd de]
+minimax depth=13 move=ea v=-3 t=2.314s(2.981s) m/ms=4666.799 visited=10800188 cuts=2021016
+  pv=[ea aa ac cc cg gg gi ii ib bb bd dd de]
+minimax depth=14 move=ea v=-15 t=3.403s(6.384s) m/ms=4925.925 visited=16764894 cuts=4304067
+  pv=[ea aa ac cc cg gg gi ii ib bb bd dd df fe]
+X to play:
+   |   |        a    b    c
+---+---+---
+   |   |        d    e    f
+---+---+---
+   |   |        g    h    i
+
+[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m[4m [0m| .  .  . | .  .  .
+[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m[4m [0m| .  .  . | .  .  .
+[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m[4m [0m| .  .  . | .  .  .
+--------+---------+--------
+.  .  . | O  .  . | .  .  .
+.  .  . | .  X  . | .  .  .
+.  .  . | .  .  . | .  .  .
+--------+---------+--------
+.  .  . | .  .  . | .  .  .
+.  .  . | .  .  . | .  .  .
+.  .  . | .  .  . | .  .  .
+notation:
+X;@........;........./........./........./........./O...X..../........./........./........./.........
+minimax depth=1 move=aa v=15 t=0.000s(0.000s) m/ms=1996.008 visited=1 cuts=0
+  pv=[aa]
+minimax depth=2 move=aa v=15 t=0.000s(0.000s) m/ms=6666.667 visited=1 cuts=0
+  pv=[aa]
+minimax depth=3 move=aa v=15 t=0.000s(0.000s) m/ms=8264.463 visited=1 cuts=0
+  pv=[aa]
+minimax depth=4 move=aa v=15 t=0.000s(0.000s) m/ms=10000.000 visited=1 cuts=0
+  pv=[aa]
+minimax depth=5 move=aa v=15 t=0.000s(0.000s) m/ms=9090.909 visited=1 cuts=0
+  pv=[aa]
+minimax depth=6 move=aa v=15 t=0.000s(0.000s) m/ms=10000.000 visited=1 cuts=0
+  pv=[aa]
+minimax depth=7 move=aa v=15 t=0.000s(0.000s) m/ms=12500.000 visited=1 cuts=0
+  pv=[aa]
+minimax depth=8 move=aa v=15 t=0.000s(0.000s) m/ms=14285.714 visited=1 cuts=0
+  pv=[aa]
+minimax depth=9 move=aa v=15 t=0.000s(0.000s) m/ms=9090.909 visited=1 cuts=0
+  pv=[aa]
+minimax depth=10 move=aa v=15 t=0.000s(0.000s) m/ms=10989.011 visited=1 cuts=0
+  pv=[aa]
+minimax depth=11 move=aa v=15 t=0.000s(0.000s) m/ms=14084.507 visited=1 cuts=0
+  pv=[aa]
+minimax depth=12 move=aa v=3 t=0.471s(0.471s) m/ms=5059.666 visited=2387559 cuts=744238
+  pv=[aa ac cc cg gg gi ii ib bb bd dd de]
+minimax depth=13 move=aa v=15 t=2.032s(2.504s) m/ms=5042.522 visited=10247806 cuts=1450246
+  pv=[aa ac cc cg gg gi ii ib bb bd dd df fe]
+minimax depth=14 move=aa v=3 t=4.687s(7.191s) m/ms=5008.849 visited=23476916 cuts=7355550
+  pv=[aa ac cc cg gg gi ii ib bb bd dd df fd dc]
+O to play:
+   |   |        a    b    c
+---+---+---
+   |   |        d    e    f
+---+---+---
+   |   |        g    h    i
+
+[4mX[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m[4m [0m| .  .  . | .  .  .
+[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m[4m [0m| .  .  . | .  .  .
+[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m[4m [0m| .  .  . | .  .  .
+--------+---------+--------
+.  .  . | O  .  . | .  .  .
+.  .  . | .  X  . | .  .  .
+.  .  . | .  .  . | .  .  .
+--------+---------+--------
+.  .  . | .  .  . | .  .  .
+.  .  . | .  .  . | .  .  .
+.  .  . | .  .  . | .  .  .
+notation:
+O;@........;X......../........./........./........./O...X..../........./........./........./.........
+minimax depth=1 move=ac v=-15 t=0.000s(0.000s) m/ms=1692.047 visited=1 cuts=0
+  pv=[ac]
+minimax depth=2 move=ac v=-15 t=0.000s(0.000s) m/ms=7692.308 visited=1 cuts=0
+  pv=[ac]
+minimax depth=3 move=ac v=-15 t=0.000s(0.000s) m/ms=8333.333 visited=1 cuts=0
+  pv=[ac]
+minimax depth=4 move=ac v=-15 t=0.000s(0.000s) m/ms=10000.000 visited=1 cuts=0
+  pv=[ac]
+minimax depth=5 move=ac v=-15 t=0.000s(0.000s) m/ms=9090.909 visited=1 cuts=0
+  pv=[ac]
+minimax depth=6 move=ac v=-15 t=0.000s(0.000s) m/ms=10000.000 visited=1 cuts=0
+  pv=[ac]
+minimax depth=7 move=ac v=-15 t=0.000s(0.000s) m/ms=9090.909 visited=1 cuts=0
+  pv=[ac]
+minimax depth=8 move=ac v=-15 t=0.000s(0.000s) m/ms=12500.000 visited=1 cuts=0
+  pv=[ac]
+minimax depth=9 move=ac v=-15 t=0.000s(0.000s) m/ms=8333.333 visited=1 cuts=0
+  pv=[ac]
+minimax depth=10 move=ac v=-15 t=0.000s(0.000s) m/ms=9090.909 visited=1 cuts=0
+  pv=[ac]
+minimax depth=11 move=ac v=-15 t=0.000s(0.000s) m/ms=12500.000 visited=1 cuts=0
+  pv=[ac]
+minimax depth=12 move=ac v=-15 t=0.000s(0.000s) m/ms=3984.064 visited=1 cuts=0
+  pv=[ac]
+minimax depth=13 move=ac v=-3 t=2.385s(2.385s) m/ms=4905.293 visited=11699483 cuts=2231733
+  pv=[ac cc cg gg gi ii ib bb bd dd df fd dc]
+minimax depth=14 move=ac v=-15 t=3.451s(5.836s) m/ms=4943.750 visited=17061994 cuts=4696839
+  pv=[ac cc cg gg gi ii ib bb bd dd df fd dc ca]
+X to play:
+   |   |        a    b    c
+---+---+---
+   |   |        d    e    f
+---+---+---
+   |   |        g    h    i
+
+X  .  O | .  .  . |[4m [0m[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m
+.  .  . | .  .  . |[4m [0m[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m
+.  .  . | .  .  . |[4m [0m[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m
+--------+---------+--------
+.  .  . | O  .  . | .  .  .
+.  .  . | .  X  . | .  .  .
+.  .  . | .  .  . | .  .  .
+--------+---------+--------
+.  .  . | .  .  . | .  .  .
+.  .  . | .  .  . | .  .  .
+.  .  . | .  .  . | .  .  .
+notation:
+X;..@......;X.O....../........./........./........./O...X..../........./........./........./.........
+minimax depth=1 move=cc v=3 t=0.000s(0.000s) m/ms=2036.660 visited=1 cuts=0
+  pv=[cc]
+minimax depth=2 move=cc v=3 t=0.000s(0.000s) m/ms=8333.333 visited=1 cuts=0
+  pv=[cc]
+minimax depth=3 move=cc v=3 t=0.000s(0.000s) m/ms=9090.909 visited=1 cuts=0
+  pv=[cc]
+minimax depth=4 move=cc v=3 t=0.000s(0.000s) m/ms=9900.990 visited=1 cuts=0
+  pv=[cc]
+minimax depth=5 move=cc v=3 t=0.000s(0.000s) m/ms=10000.000 visited=1 cuts=0
+  pv=[cc]
+minimax depth=6 move=cc v=3 t=0.000s(0.000s) m/ms=9900.990 visited=1 cuts=0
+  pv=[cc]
+minimax depth=7 move=cc v=3 t=0.000s(0.000s) m/ms=12345.679 visited=1 cuts=0
+  pv=[cc]
+minimax depth=8 move=cc v=3 t=0.000s(0.000s) m/ms=12500.000 visited=1 cuts=0
+  pv=[cc]
+minimax depth=9 move=cc v=3 t=0.000s(0.000s) m/ms=8264.463 visited=1 cuts=0
+  pv=[cc]
+minimax depth=10 move=cc v=3 t=0.000s(0.000s) m/ms=12500.000 visited=1 cuts=0
+  pv=[cc]
+minimax depth=11 move=cc v=3 t=0.000s(0.000s) m/ms=12500.000 visited=1 cuts=0
+  pv=[cc]
+minimax depth=12 move=cc v=3 t=0.000s(0.000s) m/ms=3984.064 visited=1 cuts=0
+  pv=[cc]
+minimax depth=13 move=cc v=15 t=2.282s(2.282s) m/ms=4923.735 visited=11238272 cuts=2041623
+  pv=[cc cg gg gi ii ib bb bd dd df fd dc ca]
+minimax depth=14 move=cg v=3 t=13.136s(15.419s) m/ms=4882.542 visited=64141844 cuts=15034479
+  pv=[cg gg gc ci ii ib bb bf ff fh hd dd dh he]
+O to play:
+   |   |        a    b    c
+---+---+---
+   |   |        d    e    f
+---+---+---
+   |   |        g    h    i
+
+X  .  O | .  .  . | .  .  .
+.  .  . | .  .  . | .  .  .
+.  .  . | .  .  . | X  .  .
+--------+---------+--------
+.  .  . | O  .  . | .  .  .
+.  .  . | .  X  . | .  .  .
+.  .  . | .  .  . | .  .  .
+--------+---------+--------
+[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m[4m [0m| .  .  . | .  .  .
+[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m[4m [0m| .  .  . | .  .  .
+[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m[4m [0m| .  .  . | .  .  .
+notation:
+O;......@..;X.O....../........./......X../........./O...X..../........./........./........./.........
+minimax depth=1 move=ge v=-1 t=0.000s(0.000s) m/ms=4266.212 visited=10 cuts=0
+  pv=[ge]
+minimax depth=2 move=gb v=-3 t=0.000s(0.000s) m/ms=3155.027 visited=22 cuts=4
+  pv=[gb bb]
+minimax depth=3 move=gg v=-2 t=0.000s(0.000s) m/ms=4111.279 visited=90 cuts=9
+  pv=[gg gf fe]
+minimax depth=4 move=gg v=-14 t=0.000s(0.000s) m/ms=4193.831 visited=330 cuts=96
+  pv=[gg gf fb be]
+minimax depth=5 move=gg v=-2 t=0.000s(0.000s) m/ms=4860.762 visited=1720 cuts=204
+  pv=[gg gf fb bb be]
+minimax depth=6 move=gg v=-15 t=0.000s(0.001s) m/ms=4365.350 visited=3090 cuts=1035
+  pv=[gg gc ci ii ib be]
+minimax depth=7 move=gg v=-3 t=0.003s(0.004s) m/ms=4806.117 visited=15236 cuts=2172
+  pv=[gg gc ci ii ib bf fe]
+minimax depth=8 move=gg v=-15 t=0.005s(0.009s) m/ms=4706.784 visited=25427 cuts=8653
+  pv=[gg gc ci ii ib bb bf fe]
+minimax depth=9 move=gg v=-3 t=0.026s(0.035s) m/ms=4561.228 visited=118852 cuts=18379
+  pv=[gg gc ci ii ib bd dd df fe]
+minimax depth=10 move=gg v=-15 t=0.041s(0.077s) m/ms=4164.015 visited=173887 cuts=62523
+  pv=[gg gc ci ii ib bf fd db bh he]
+minimax depth=11 move=gg v=-3 t=0.395s(0.472s) m/ms=4921.966 visited=1944478 cuts=364214
+  pv=[gg gc ci ii ib bf fd dd df fb be]
+minimax depth=12 move=gg v=-15 t=0.378s(0.851s) m/ms=4926.784 visited=1866484 cuts=624219
+  pv=[gg gc ci ii ib bb bf fd dh hd dd de]
+minimax depth=13 move=gg v=-3 t=2.024s(2.875s) m/ms=4881.580 visited=9880963 cuts=1892220
+  pv=[gg gc ci ii ib bb bf ff fh hd dd dh he]
+minimax depth=14 move=gg v=-16 t=6.280s(9.156s) m/ms=4865.078 visited=30554781 cuts=7854348
+  pv=[gg gi ii ic cb bb bd dd df ff fd dg ge ec]
+X to play:
+   |   |        a    b    c
+---+---+---
+   |   |        d    e    f
+---+---+---
+   |   |        g    h    i
+
+X  .  O | .  .  . | .  .  .
+.  .  . | .  .  . | .  .  .
+.  .  . | .  .  . | X  .  .
+--------+---------+--------
+.  .  . | O  .  . | .  .  .
+.  .  . | .  X  . | .  .  .
+.  .  . | .  .  . | .  .  .
+--------+---------+--------
+[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m[4m [0m| .  .  . | .  .  .
+[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m[4m [0m| .  .  . | .  .  .
+[4mO[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m[4m [0m| .  .  . | .  .  .
+notation:
+X;......@..;X.O....../........./......X../........./O...X..../........./......O../........./.........
+minimax depth=1 move=gc v=3 t=0.000s(0.000s) m/ms=1919.386 visited=1 cuts=0
+  pv=[gc]
+minimax depth=2 move=gc v=3 t=0.000s(0.000s) m/ms=6666.667 visited=1 cuts=0
+  pv=[gc]
+minimax depth=3 move=gc v=3 t=0.000s(0.000s) m/ms=6622.517 visited=1 cuts=0
+  pv=[gc]
+minimax depth=4 move=gc v=3 t=0.000s(0.000s) m/ms=9090.909 visited=1 cuts=0
+  pv=[gc]
+minimax depth=5 move=gc v=3 t=0.000s(0.000s) m/ms=8333.333 visited=1 cuts=0
+  pv=[gc]
+minimax depth=6 move=gc v=3 t=0.000s(0.000s) m/ms=10000.000 visited=1 cuts=0
+  pv=[gc]
+minimax depth=7 move=gc v=3 t=0.000s(0.000s) m/ms=12500.000 visited=1 cuts=0
+  pv=[gc]
+minimax depth=8 move=gc v=3 t=0.000s(0.000s) m/ms=12500.000 visited=1 cuts=0
+  pv=[gc]
+minimax depth=9 move=gc v=3 t=0.000s(0.000s) m/ms=8333.333 visited=1 cuts=0
+  pv=[gc]
+minimax depth=10 move=gc v=3 t=0.000s(0.000s) m/ms=9090.909 visited=1 cuts=0
+  pv=[gc]
+minimax depth=11 move=gc v=3 t=0.000s(0.000s) m/ms=12500.000 visited=1 cuts=0
+  pv=[gc]
+minimax depth=12 move=gc v=3 t=0.000s(0.000s) m/ms=3703.704 visited=1 cuts=0
+  pv=[gc]
+minimax depth=13 move=gi v=16 t=3.006s(3.006s) m/ms=4885.832 visited=14690290 cuts=2959609
+  pv=[gi ii ic cb bb bd dh hh hd dd dg ge ec]
+minimax depth=14 move=gc v=3 t=5.621s(8.628s) m/ms=4752.065 visited=26714916 cuts=7131132
+  pv=[gc ci ii ib bb bf ff fd dd db bh hf fg ga]
+O to play:
+   |   |        a    b    c
+---+---+---
+   |   |        d    e    f
+---+---+---
+   |   |        g    h    i
+
+X  .  O | .  .  . |[4m [0m[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m
+.  .  . | .  .  . |[4m [0m[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m
+.  .  . | .  .  . |[4m [0m[4mX[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m
+--------+---------+--------
+.  .  . | O  .  . | .  .  .
+.  .  . | .  X  . | .  .  .
+.  .  . | .  .  . | .  .  .
+--------+---------+--------
+.  .  X | .  .  . | .  .  .
+.  .  . | .  .  . | .  .  .
+O  .  . | .  .  . | .  .  .
+notation:
+O;..@......;X.O....../........./......X../........./O...X..../........./..X...O../........./.........
+minimax depth=1 move=ci v=-15 t=0.000s(0.000s) m/ms=1919.386 visited=1 cuts=0
+  pv=[ci]
+minimax depth=2 move=ci v=-15 t=0.000s(0.000s) m/ms=6666.667 visited=1 cuts=0
+  pv=[ci]
+minimax depth=3 move=ci v=-15 t=0.000s(0.000s) m/ms=7142.857 visited=1 cuts=0
+  pv=[ci]
+minimax depth=4 move=ci v=-15 t=0.000s(0.000s) m/ms=7692.308 visited=1 cuts=0
+  pv=[ci]
+minimax depth=5 move=ci v=-15 t=0.000s(0.000s) m/ms=6666.667 visited=1 cuts=0
+  pv=[ci]
+minimax depth=6 move=ci v=-15 t=0.000s(0.000s) m/ms=7692.308 visited=1 cuts=0
+  pv=[ci]
+minimax depth=7 move=ci v=-15 t=0.000s(0.000s) m/ms=7692.308 visited=1 cuts=0
+  pv=[ci]
+minimax depth=8 move=ci v=-15 t=0.000s(0.000s) m/ms=10000.000 visited=1 cuts=0
+  pv=[ci]
+minimax depth=9 move=ci v=-15 t=0.000s(0.000s) m/ms=7092.199 visited=1 cuts=0
+  pv=[ci]
+minimax depth=10 move=ci v=-15 t=0.000s(0.000s) m/ms=7092.199 visited=1 cuts=0
+  pv=[ci]
+minimax depth=11 move=ci v=-15 t=0.000s(0.000s) m/ms=7692.308 visited=1 cuts=0
+  pv=[ci]
+minimax depth=12 move=ci v=-15 t=0.000s(0.000s) m/ms=3322.259 visited=1 cuts=0
+  pv=[ci]
+minimax depth=13 move=ci v=-3 t=1.276s(1.276s) m/ms=4630.975 visited=5911951 cuts=1102054
+  pv=[ci ii ib bb bf ff fd dd db bh hf fg ga]
+minimax depth=14 move=ci v=-16 t=3.023s(4.300s) m/ms=4665.723 visited=14106514 cuts=3996295
+  pv=[ci ii ib bb bf ff fd dd df fc ce ed dh he]
+minimax depth=15 move=ci v=-3 t=8.515s(12.815s) m/ms=4656.654 visited=39653278 cuts=7247278
+  pv=[ci ii ib bb bf ff fd dd db bh hh hb be ef fa]
+X to play:
+   |   |        a    b    c
+---+---+---
+   |   |        d    e    f
+---+---+---
+   |   |        g    h    i
+
+X  .  O | .  .  . | .  .  .
+.  .  . | .  .  . | .  .  .
+.  .  . | .  .  . | X  .  O
+--------+---------+--------
+.  .  . | O  .  . | .  .  .
+.  .  . | .  X  . | .  .  .
+.  .  . | .  .  . | .  .  .
+--------+---------+--------
+.  .  X | .  .  . |[4m [0m[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m
+.  .  . | .  .  . |[4m [0m[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m
+O  .  . | .  .  . |[4m [0m[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m
+notation:
+X;........@;X.O....../........./......X.O/........./O...X..../........./..X...O../........./.........
+minimax depth=1 move=ii v=3 t=0.000s(0.000s) m/ms=1919.386 visited=1 cuts=0
+  pv=[ii]
+minimax depth=2 move=ii v=3 t=0.000s(0.000s) m/ms=7142.857 visited=1 cuts=0
+  pv=[ii]
+minimax depth=3 move=ii v=3 t=0.000s(0.000s) m/ms=7692.308 visited=1 cuts=0
+  pv=[ii]
+minimax depth=4 move=ii v=3 t=0.000s(0.000s) m/ms=8333.333 visited=1 cuts=0
+  pv=[ii]
+minimax depth=5 move=ii v=3 t=0.000s(0.000s) m/ms=7142.857 visited=1 cuts=0
+  pv=[ii]
+minimax depth=6 move=ii v=3 t=0.000s(0.000s) m/ms=3225.806 visited=1 cuts=0
+  pv=[ii]
+minimax depth=7 move=ii v=3 t=0.000s(0.000s) m/ms=10000.000 visited=1 cuts=0
+  pv=[ii]
+minimax depth=8 move=ii v=3 t=0.000s(0.000s) m/ms=4524.887 visited=1 cuts=0
+  pv=[ii]
+minimax depth=9 move=ii v=3 t=0.000s(0.000s) m/ms=7692.308 visited=1 cuts=0
+  pv=[ii]
+minimax depth=10 move=ii v=3 t=0.000s(0.000s) m/ms=8333.333 visited=1 cuts=0
+  pv=[ii]
+minimax depth=11 move=ii v=3 t=0.000s(0.000s) m/ms=8333.333 visited=1 cuts=0
+  pv=[ii]
+minimax depth=12 move=ii v=3 t=0.000s(0.000s) m/ms=3215.434 visited=1 cuts=0
+  pv=[ii]
+minimax depth=13 move=ii v=16 t=1.188s(1.188s) m/ms=4686.052 visited=5569513 cuts=1020165
+  pv=[ii ib bb bf ff fd dd df fc ce eh hd da]
+minimax depth=14 move=ii v=3 t=2.397s(3.586s) m/ms=4680.618 visited=11221340 cuts=3446164
+  pv=[ii ib bb bf ff fd dd db bh hh hb be eg ga]
+minimax depth=15 move=ii v=16 t=7.811s(11.397s) m/ms=4680.392 visited=36562222 cuts=6523312
+  pv=[ii ib bb bf ff fd dd db bh hf fc ca ae eg ga]
+O to play:
+   |   |        a    b    c
+---+---+---
+   |   |        d    e    f
+---+---+---
+   |   |        g    h    i
+
+X  .  O | .  .  . | .  .  .
+.  .  . | .  .  . | .  .  .
+.  .  . | .  .  . | X  .  O
+--------+---------+--------
+.  .  . | O  .  . | .  .  .
+.  .  . | .  X  . | .  .  .
+.  .  . | .  .  . | .  .  .
+--------+---------+--------
+.  .  X | .  .  . |[4m [0m[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m
+.  .  . | .  .  . |[4m [0m[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m
+O  .  . | .  .  . |[4m [0m[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4mX[0m
+notation:
+O;........@;X.O....../........./......X.O/........./O...X..../........./..X...O../........./........X
+minimax depth=1 move=ib v=-3 t=0.000s(0.000s) m/ms=1956.947 visited=1 cuts=0
+  pv=[ib]
+minimax depth=2 move=ib v=-3 t=0.000s(0.000s) m/ms=7142.857 visited=1 cuts=0
+  pv=[ib]
+minimax depth=3 move=ib v=-3 t=0.000s(0.000s) m/ms=7692.308 visited=1 cuts=0
+  pv=[ib]
+minimax depth=4 move=ib v=-3 t=0.000s(0.000s) m/ms=8333.333 visited=1 cuts=0
+  pv=[ib]
+minimax depth=5 move=ib v=-3 t=0.000s(0.000s) m/ms=9090.909 visited=1 cuts=0
+  pv=[ib]
+minimax depth=6 move=ib v=-3 t=0.000s(0.000s) m/ms=8333.333 visited=1 cuts=0
+  pv=[ib]
+minimax depth=7 move=ib v=-3 t=0.000s(0.000s) m/ms=9090.909 visited=1 cuts=0
+  pv=[ib]
+minimax depth=8 move=ib v=-3 t=0.000s(0.000s) m/ms=14285.714 visited=1 cuts=0
+  pv=[ib]
+minimax depth=9 move=ib v=-3 t=0.000s(0.000s) m/ms=8264.463 visited=1 cuts=0
+  pv=[ib]
+minimax depth=10 move=ib v=-3 t=0.000s(0.000s) m/ms=9090.909 visited=1 cuts=0
+  pv=[ib]
+minimax depth=11 move=ib v=-3 t=0.000s(0.000s) m/ms=10989.011 visited=1 cuts=0
+  pv=[ib]
+minimax depth=12 move=ib v=-3 t=0.000s(0.000s) m/ms=6250.000 visited=1 cuts=0
+  pv=[ib]
+minimax depth=13 move=ib v=-3 t=0.000s(0.000s) m/ms=8333.333 visited=1 cuts=0
+  pv=[ib]
+minimax depth=14 move=ib v=-16 t=2.155s(2.155s) m/ms=4625.314 visited=9968802 cuts=3079650
+  pv=[ib bb bf ff fd dd db bh hf fc ca ae eg ga]
+minimax depth=15 move=ib v=-3 t=9.326s(11.482s) m/ms=4665.742 visited=43516900 cuts=8096399
+  pv=[ib bb bd dd db bh hf fh hh hb be ef fd df fe]
+X to play:
+   |   |        a    b    c
+---+---+---
+   |   |        d    e    f
+---+---+---
+   |   |        g    h    i
+
+X  .  O |[4m [0m[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m[4m [0m| .  .  .
+.  .  . |[4m [0m[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m[4m [0m| .  .  .
+.  .  . |[4m [0m[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m[4m [0m| X  .  O
+--------+---------+--------
+.  .  . | O  .  . | .  .  .
+.  .  . | .  X  . | .  .  .
+.  .  . | .  .  . | .  .  .
+--------+---------+--------
+.  .  X | .  .  . | .  O  .
+.  .  . | .  .  . | .  .  .
+O  .  . | .  .  . | .  .  X
+notation:
+X;.@.......;X.O....../........./......X.O/........./O...X..../........./..X...O../........./.O......X
+minimax depth=1 move=bb v=16 t=0.000s(0.000s) m/ms=2036.660 visited=1 cuts=0
+  pv=[bb]
+minimax depth=2 move=bb v=16 t=0.000s(0.000s) m/ms=5000.000 visited=1 cuts=0
+  pv=[bb]
+minimax depth=3 move=bb v=16 t=0.000s(0.000s) m/ms=3322.259 visited=1 cuts=0
+  pv=[bb]
+minimax depth=4 move=bb v=16 t=0.000s(0.000s) m/ms=7692.308 visited=1 cuts=0
+  pv=[bb]
+minimax depth=5 move=bb v=16 t=0.000s(0.000s) m/ms=8333.333 visited=1 cuts=0
+  pv=[bb]
+minimax depth=6 move=bb v=16 t=0.000s(0.000s) m/ms=9090.909 visited=1 cuts=0
+  pv=[bb]
+minimax depth=7 move=bb v=16 t=0.000s(0.000s) m/ms=8333.333 visited=1 cuts=0
+  pv=[bb]
+minimax depth=8 move=bb v=16 t=0.000s(0.000s) m/ms=11111.111 visited=1 cuts=0
+  pv=[bb]
+minimax depth=9 move=bb v=16 t=0.000s(0.000s) m/ms=8264.463 visited=1 cuts=0
+  pv=[bb]
+minimax depth=10 move=bb v=16 t=0.000s(0.000s) m/ms=8333.333 visited=1 cuts=0
+  pv=[bb]
+minimax depth=11 move=bb v=16 t=0.000s(0.000s) m/ms=10000.000 visited=1 cuts=0
+  pv=[bb]
+minimax depth=12 move=bb v=16 t=0.000s(0.000s) m/ms=5235.602 visited=1 cuts=0
+  pv=[bb]
+minimax depth=13 move=bb v=16 t=0.000s(0.000s) m/ms=7633.588 visited=1 cuts=0
+  pv=[bb]
+minimax depth=14 move=bb v=3 t=2.723s(2.724s) m/ms=4623.340 visited=12593869 cuts=3712001
+  pv=[bb bd dd db bh hf fh hh hb be ef fd df fe]
+minimax depth=15 move=bb v=16 t=14.505s(17.229s) m/ms=4657.804 visited=67562279 cuts=14048367
+  pv=[bb bd dd df fb ba ad dc ce ec cf fh hh hf fa]
+O to play:
+   |   |        a    b    c
+---+---+---
+   |   |        d    e    f
+---+---+---
+   |   |        g    h    i
+
+X  .  O |[4m [0m[4m.[0m[4m  [0m[4mX[0m[4m  [0m[4m.[0m[4m [0m| .  .  .
+.  .  . |[4m [0m[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m[4m [0m| .  .  .
+.  .  . |[4m [0m[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m[4m [0m| X  .  O
+--------+---------+--------
+.  .  . | O  .  . | .  .  .
+.  .  . | .  X  . | .  .  .
+.  .  . | .  .  . | .  .  .
+--------+---------+--------
+.  .  X | .  .  . | .  O  .
+.  .  . | .  .  . | .  .  .
+O  .  . | .  .  . | .  .  X
+notation:
+O;.@.......;X.O....../.X......./......X.O/........./O...X..../........./..X...O../........./.O......X
+minimax depth=1 move=bd v=-3 t=0.000s(0.000s) m/ms=1782.531 visited=1 cuts=0
+  pv=[bd]
+minimax depth=2 move=bd v=-3 t=0.000s(0.000s) m/ms=6250.000 visited=1 cuts=0
+  pv=[bd]
+minimax depth=3 move=bd v=-3 t=0.000s(0.000s) m/ms=7692.308 visited=1 cuts=0
+  pv=[bd]
+minimax depth=4 move=bd v=-3 t=0.000s(0.000s) m/ms=8333.333 visited=1 cuts=0
+  pv=[bd]
+minimax depth=5 move=bd v=-3 t=0.000s(0.000s) m/ms=9090.909 visited=1 cuts=0
+  pv=[bd]
+minimax depth=6 move=bd v=-3 t=0.000s(0.000s) m/ms=10000.000 visited=1 cuts=0
+  pv=[bd]
+minimax depth=7 move=bd v=-3 t=0.000s(0.000s) m/ms=10000.000 visited=1 cuts=0
+  pv=[bd]
+minimax depth=8 move=bd v=-3 t=0.000s(0.000s) m/ms=11111.111 visited=1 cuts=0
+  pv=[bd]
+minimax depth=9 move=bd v=-3 t=0.000s(0.000s) m/ms=8264.463 visited=1 cuts=0
+  pv=[bd]
+minimax depth=10 move=bd v=-3 t=0.000s(0.000s) m/ms=9009.009 visited=1 cuts=0
+  pv=[bd]
+minimax depth=11 move=bd v=-3 t=0.000s(0.000s) m/ms=12345.679 visited=1 cuts=0
+  pv=[bd]
+minimax depth=12 move=bd v=-3 t=0.000s(0.000s) m/ms=4524.887 visited=1 cuts=0
+  pv=[bd]
+minimax depth=13 move=bd v=-3 t=0.000s(0.000s) m/ms=9090.909 visited=1 cuts=0
+  pv=[bd]
+minimax depth=14 move=bd v=-16 t=2.881s(2.881s) m/ms=4625.733 visited=13328002 cuts=3768105
+  pv=[bd dd df fd dc ca af ff fe eh hh hf fb be]
+minimax depth=15 move=bd v=-3 t=8.357s(11.238s) m/ms=4647.161 visited=38837939 cuts=7939749
+  pv=[bd dd df fd dc ca af ff fe eg gh he eb bh ha]
+X to play:
+   |   |        a    b    c
+---+---+---
+   |   |        d    e    f
+---+---+---
+   |   |        g    h    i
+
+X  .  O | .  X  . | .  .  .
+.  .  . | O  .  . | .  .  .
+.  .  . | .  .  . | X  .  O
+--------+---------+--------
+[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m[4m [0m| O  .  . | .  .  .
+[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m[4m [0m| .  X  . | .  .  .
+[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m[4m [0m| .  .  . | .  .  .
+--------+---------+--------
+.  .  X | .  .  . | .  O  .
+.  .  . | .  .  . | .  .  .
+O  .  . | .  .  . | .  .  X
+notation:
+X;...@.....;X.O....../.X.O...../......X.O/........./O...X..../........./..X...O../........./.O......X
+minimax depth=1 move=dd v=16 t=0.000s(0.000s) m/ms=1956.947 visited=1 cuts=0
+  pv=[dd]
+minimax depth=2 move=dd v=16 t=0.000s(0.000s) m/ms=7142.857 visited=1 cuts=0
+  pv=[dd]
+minimax depth=3 move=dd v=16 t=0.000s(0.000s) m/ms=8333.333 visited=1 cuts=0
+  pv=[dd]
+minimax depth=4 move=dd v=16 t=0.000s(0.000s) m/ms=8333.333 visited=1 cuts=0
+  pv=[dd]
+minimax depth=5 move=dd v=16 t=0.000s(0.000s) m/ms=9090.909 visited=1 cuts=0
+  pv=[dd]
+minimax depth=6 move=dd v=16 t=0.000s(0.000s) m/ms=10000.000 visited=1 cuts=0
+  pv=[dd]
+minimax depth=7 move=dd v=16 t=0.000s(0.000s) m/ms=11111.111 visited=1 cuts=0
+  pv=[dd]
+minimax depth=8 move=dd v=16 t=0.000s(0.000s) m/ms=12345.679 visited=1 cuts=0
+  pv=[dd]
+minimax depth=9 move=dd v=16 t=0.000s(0.000s) m/ms=8333.333 visited=1 cuts=0
+  pv=[dd]
+minimax depth=10 move=dd v=16 t=0.000s(0.000s) m/ms=10000.000 visited=1 cuts=0
+  pv=[dd]
+minimax depth=11 move=dd v=16 t=0.000s(0.000s) m/ms=11111.111 visited=1 cuts=0
+  pv=[dd]
+minimax depth=12 move=dd v=16 t=0.000s(0.000s) m/ms=6666.667 visited=1 cuts=0
+  pv=[dd]
+minimax depth=13 move=dd v=16 t=0.000s(0.000s) m/ms=9009.009 visited=1 cuts=0
+  pv=[dd]
+minimax depth=14 move=dd v=3 t=2.114s(2.114s) m/ms=4571.863 visited=9666386 cuts=2932194
+  pv=[dd df fb ba ad dc ce eg gf fh hh hd di ie]
+minimax depth=15 move=dd v=17 t=6.177s(8.291s) m/ms=4592.769 visited=28370774 cuts=5133003
+  pv=[dd df fh hb ba ai if fd dg gh hd da af fa ag]
+O to play:
+   |   |        a    b    c
+---+---+---
+   |   |        d    e    f
+---+---+---
+   |   |        g    h    i
+
+X  .  O | .  X  . | .  .  .
+.  .  . | O  .  . | .  .  .
+.  .  . | .  .  . | X  .  O
+--------+---------+--------
+[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m[4m [0m| O  .  . | .  .  .
+[4mX[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m[4m [0m| .  X  . | .  .  .
+[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m[4m [0m| .  .  . | .  .  .
+--------+---------+--------
+.  .  X | .  .  . | .  O  .
+.  .  . | .  .  . | .  .  .
+O  .  . | .  .  . | .  .  X
+notation:
+O;...@.....;X.O....../.X.O...../......X.O/...X...../O...X..../........./..X...O../........./.O......X
+minimax depth=1 move=df v=-3 t=0.000s(0.000s) m/ms=1636.661 visited=1 cuts=0
+  pv=[df]
+minimax depth=2 move=df v=-3 t=0.000s(0.000s) m/ms=7142.857 visited=1 cuts=0
+  pv=[df]
+minimax depth=3 move=df v=-3 t=0.000s(0.000s) m/ms=8264.463 visited=1 cuts=0
+  pv=[df]
+minimax depth=4 move=df v=-3 t=0.000s(0.000s) m/ms=8333.333 visited=1 cuts=0
+  pv=[df]
+minimax depth=5 move=df v=-3 t=0.000s(0.000s) m/ms=8333.333 visited=1 cuts=0
+  pv=[df]
+minimax depth=6 move=df v=-3 t=0.000s(0.000s) m/ms=9090.909 visited=1 cuts=0
+  pv=[df]
+minimax depth=7 move=df v=-3 t=0.000s(0.000s) m/ms=7092.199 visited=1 cuts=0
+  pv=[df]
+minimax depth=8 move=df v=-3 t=0.000s(0.000s) m/ms=9009.009 visited=1 cuts=0
+  pv=[df]
+minimax depth=9 move=df v=-3 t=0.000s(0.000s) m/ms=6666.667 visited=1 cuts=0
+  pv=[df]
+minimax depth=10 move=df v=-3 t=0.000s(0.000s) m/ms=10000.000 visited=1 cuts=0
+  pv=[df]
+minimax depth=11 move=df v=-3 t=0.000s(0.000s) m/ms=10000.000 visited=1 cuts=0
+  pv=[df]
+minimax depth=12 move=df v=-3 t=0.000s(0.000s) m/ms=7092.199 visited=1 cuts=0
+  pv=[df]
+minimax depth=13 move=df v=-3 t=0.000s(0.000s) m/ms=9009.009 visited=1 cuts=0
+  pv=[df]
+minimax depth=14 move=df v=-17 t=1.439s(1.439s) m/ms=4628.318 visited=6661220 cuts=2136571
+  pv=[df fd dc ca af fh hb bh hh hf fg gi ie eg]
+minimax depth=15 move=df v=-3 t=8.299s(9.739s) m/ms=4652.601 visited=38616318 cuts=7816544
+  pv=[df fd dc ca af fh hb bf fb bh hh hf fg gb be]
+X to play:
+   |   |        a    b    c
+---+---+---
+   |   |        d    e    f
+---+---+---
+   |   |        g    h    i
+
+X  .  O | .  X  . | .  .  .
+.  .  . | O  .  . | .  .  .
+.  .  . | .  .  . | X  .  O
+--------+---------+--------
+.  .  . | O  .  . |[4m [0m[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m
+X  .  O | .  X  . |[4m [0m[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m
+.  .  . | .  .  . |[4m [0m[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m
+--------+---------+--------
+.  .  X | .  .  . | .  O  .
+.  .  . | .  .  . | .  .  .
+O  .  . | .  .  . | .  .  X
+notation:
+X;.....@...;X.O....../.X.O...../......X.O/...X.O.../O...X..../........./..X...O../........./.O......X
+minimax depth=1 move=fh v=17 t=0.000s(0.000s) m/ms=2079.002 visited=1 cuts=0
+  pv=[fh]
+minimax depth=2 move=fh v=17 t=0.000s(0.000s) m/ms=7692.308 visited=1 cuts=0
+  pv=[fh]
+minimax depth=3 move=fh v=17 t=0.000s(0.000s) m/ms=8333.333 visited=1 cuts=0
+  pv=[fh]
+minimax depth=4 move=fh v=17 t=0.000s(0.000s) m/ms=8264.463 visited=1 cuts=0
+  pv=[fh]
+minimax depth=5 move=fh v=17 t=0.000s(0.000s) m/ms=7692.308 visited=1 cuts=0
+  pv=[fh]
+minimax depth=6 move=fh v=17 t=0.000s(0.000s) m/ms=8333.333 visited=1 cuts=0
+  pv=[fh]
+minimax depth=7 move=fh v=17 t=0.000s(0.000s) m/ms=12500.000 visited=1 cuts=0
+  pv=[fh]
+minimax depth=8 move=fh v=17 t=0.000s(0.000s) m/ms=12500.000 visited=1 cuts=0
+  pv=[fh]
+minimax depth=9 move=fh v=17 t=0.000s(0.000s) m/ms=8333.333 visited=1 cuts=0
+  pv=[fh]
+minimax depth=10 move=fh v=17 t=0.000s(0.000s) m/ms=10000.000 visited=1 cuts=0
+  pv=[fh]
+minimax depth=11 move=fh v=17 t=0.000s(0.000s) m/ms=11111.111 visited=1 cuts=0
+  pv=[fh]
+minimax depth=12 move=fh v=17 t=0.000s(0.000s) m/ms=6211.180 visited=1 cuts=0
+  pv=[fh]
+minimax depth=13 move=fh v=17 t=0.000s(0.000s) m/ms=8333.333 visited=1 cuts=0
+  pv=[fh]
+minimax depth=14 move=fh v=3 t=1.803s(1.803s) m/ms=4641.052 visited=8370007 cuts=2488733
+  pv=[fh hb bh hh hd di if ff fe ec cd da ag ga]
+minimax depth=15 move=ff v=18 t=10.159s(11.963s) m/ms=4623.306 visited=46972331 cuts=10464226
+  pv=[ff fd dg ga ae eb bc cf fi ih hh hi ia ah he]
+O to play:
+   |   |        a    b    c
+---+---+---
+   |   |        d    e    f
+---+---+---
+   |   |        g    h    i
+
+X  .  O | .  X  . | .  .  .
+.  .  . | O  .  . | .  .  .
+.  .  . | .  .  . | X  .  O
+--------+---------+--------
+.  .  . | O  .  . |[4m [0m[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m
+X  .  O | .  X  . |[4m [0m[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4mX[0m
+.  .  . | .  .  . |[4m [0m[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m
+--------+---------+--------
+.  .  X | .  .  . | .  O  .
+.  .  . | .  .  . | .  .  .
+O  .  . | .  .  . | .  .  X
+notation:
+O;.....@...;X.O....../.X.O...../......X.O/...X.O.../O...X..../.....X.../..X...O../........./.O......X
+minimax depth=1 move=fe v=-3 t=0.000s(0.000s) m/ms=2879.079 visited=9 cuts=0
+  pv=[fe]
+minimax depth=2 move=fd v=-15 t=0.000s(0.000s) m/ms=3479.990 visited=28 cuts=7
+  pv=[fd dg]
+minimax depth=3 move=fd v=-3 t=0.000s(0.000s) m/ms=3897.998 visited=155 cuts=13
+  pv=[fd dg ga]
+minimax depth=4 move=fd v=-17 t=0.000s(0.000s) m/ms=3862.276 visited=293 cuts=83
+  pv=[fd dg gf fc]
+minimax depth=5 move=fd v=-2 t=0.000s(0.000s) m/ms=4163.349 visited=1004 cuts=166
+  pv=[fd dg ga ae ec]
+minimax depth=6 move=fd v=-14 t=0.000s(0.000s) m/ms=4033.814 visited=1035 cuts=470
+  pv=[fd dg ga ae eg gd]
+minimax depth=7 move=fd v=-3 t=0.001s(0.002s) m/ms=4324.755 visited=7098 cuts=994
+  pv=[fd dg ga ad dc ce eg]
+minimax depth=8 move=fd v=-15 t=0.001s(0.004s) m/ms=4184.347 visited=7802 cuts=3400
+  pv=[fd dg ga ad dc ce eg gd]
+minimax depth=9 move=fd v=-3 t=0.015s(0.019s) m/ms=4362.623 visited=66100 cuts=13033
+  pv=[fd dg ga ad di if fg gh he]
+minimax depth=10 move=fd v=-4 t=0.010s(0.029s) m/ms=4686.908 visited=48051 cuts=22475
+  pv=[fd dh hd db]
+minimax depth=11 move=fd v=-3 t=0.109s(0.139s) m/ms=4550.294 visited=498729 cuts=100375
+  pv=[fd da ai ih hb bf fh hh hc cd dg]
+minimax depth=12 move=fd v=-14 t=0.086s(0.225s) m/ms=4612.754 visited=397712 cuts=176203
+  pv=[fd dh hb bc ce ed di ia ad da af fc]
+minimax depth=13 move=fd v=-2 t=0.754s(0.980s) m/ms=4488.604 visited=3387410 cuts=670159
+  pv=[fd dh hh hf fa ag gh hd db be ec ca ai]
+minimax depth=14 move=fd v=-18 t=3.694s(4.674s) m/ms=4686.616 visited=17316156 cuts=4768072
+  pv=[fd dg ga ae eb bc cf fi ih hh hi ia ah he]
+minimax depth=15 move=fd v=-2 t=6.375s(11.050s) m/ms=4782.574 visited=30489774 cuts=6336318
+  pv=[fd dg ga ae eb bf fg gd dc cb bh hf fc ch he]
+X to play:
+   |   |        a    b    c
+---+---+---
+   |   |        d    e    f
+---+---+---
+   |   |        g    h    i
+
+X  .  O | .  X  . | .  .  .
+.  .  . | O  .  . | .  .  .
+.  .  . | .  .  . | X  .  O
+--------+---------+--------
+[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m[4m [0m| O  .  . | .  .  .
+[4mX[0m[4m  [0m[4m.[0m[4m  [0m[4mO[0m[4m [0m| .  X  . | O  .  X
+[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m[4m [0m| .  .  . | .  .  .
+--------+---------+--------
+.  .  X | .  .  . | .  O  .
+.  .  . | .  .  . | .  .  .
+O  .  . | .  .  . | .  .  X
+notation:
+X;...@.....;X.O....../.X.O...../......X.O/...X.O.../O...X..../...O.X.../..X...O../........./.O......X
+minimax depth=1 move=dg v=18 t=0.000s(0.000s) m/ms=1956.947 visited=1 cuts=0
+  pv=[dg]
+minimax depth=2 move=dg v=18 t=0.000s(0.000s) m/ms=8333.333 visited=1 cuts=0
+  pv=[dg]
+minimax depth=3 move=dg v=18 t=0.000s(0.000s) m/ms=9090.909 visited=1 cuts=0
+  pv=[dg]
+minimax depth=4 move=dg v=18 t=0.000s(0.000s) m/ms=11111.111 visited=1 cuts=0
+  pv=[dg]
+minimax depth=5 move=dg v=18 t=0.000s(0.000s) m/ms=10000.000 visited=1 cuts=0
+  pv=[dg]
+minimax depth=6 move=dg v=18 t=0.000s(0.000s) m/ms=9090.909 visited=1 cuts=0
+  pv=[dg]
+minimax depth=7 move=dg v=18 t=0.000s(0.000s) m/ms=11111.111 visited=1 cuts=0
+  pv=[dg]
+minimax depth=8 move=dg v=18 t=0.000s(0.000s) m/ms=12500.000 visited=1 cuts=0
+  pv=[dg]
+minimax depth=9 move=dg v=18 t=0.000s(0.000s) m/ms=9090.909 visited=1 cuts=0
+  pv=[dg]
+minimax depth=10 move=dg v=18 t=0.000s(0.000s) m/ms=10000.000 visited=1 cuts=0
+  pv=[dg]
+minimax depth=11 move=dg v=18 t=0.000s(0.000s) m/ms=12500.000 visited=1 cuts=0
+  pv=[dg]
+minimax depth=12 move=dg v=18 t=0.000s(0.000s) m/ms=7692.308 visited=1 cuts=0
+  pv=[dg]
+minimax depth=13 move=dg v=18 t=0.000s(0.000s) m/ms=9009.009 visited=1 cuts=0
+  pv=[dg]
+minimax depth=14 move=dg v=2 t=3.157s(3.157s) m/ms=4828.158 visited=15242973 cuts=4596522
+  pv=[dg ga ae eb bf fh hh hf fb bg gf fi ih he]
+minimax depth=15 move=dg v=18 t=5.579s(8.736s) m/ms=4960.633 visited=27678754 cuts=4540088
+  pv=[dg ga ae eb bf fh hb bg gf fb bc cc cd dh he]
+O to play:
+   |   |        a    b    c
+---+---+---
+   |   |        d    e    f
+---+---+---
+   |   |        g    h    i
+
+X  .  O | .  X  . | .  .  .
+.  .  . | O  .  . | .  .  .
+.  .  . | .  .  . | X  .  O
+--------+---------+--------
+.  .  . | O  .  . | .  .  .
+X  .  O | .  X  . | O  .  X
+X  .  . | .  .  . | .  .  .
+--------+---------+--------
+[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4mX[0m[4m [0m| .  .  . | .  O  .
+[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m[4m [0m| .  .  . | .  .  .
+[4mO[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m[4m [0m| .  .  . | .  .  X
+notation:
+O;......@..;X.O....../.X.O...../......X.O/...X.OX../O...X..../...O.X.../..X...O../........./.O......X
+minimax depth=1 move=ga v=-2 t=0.000s(0.000s) m/ms=1848.429 visited=1 cuts=0
+  pv=[ga]
+minimax depth=2 move=ga v=-2 t=0.000s(0.000s) m/ms=7142.857 visited=1 cuts=0
+  pv=[ga]
+minimax depth=3 move=ga v=-2 t=0.000s(0.000s) m/ms=8333.333 visited=1 cuts=0
+  pv=[ga]
+minimax depth=4 move=ga v=-2 t=0.000s(0.000s) m/ms=8264.463 visited=1 cuts=0
+  pv=[ga]
+minimax depth=5 move=ga v=-2 t=0.000s(0.000s) m/ms=9090.909 visited=1 cuts=0
+  pv=[ga]
+minimax depth=6 move=ga v=-2 t=0.000s(0.000s) m/ms=10000.000 visited=1 cuts=0
+  pv=[ga]
+minimax depth=7 move=ga v=-2 t=0.000s(0.000s) m/ms=11111.111 visited=1 cuts=0
+  pv=[ga]
+minimax depth=8 move=ga v=-2 t=0.000s(0.000s) m/ms=11111.111 visited=1 cuts=0
+  pv=[ga]
+minimax depth=9 move=ga v=-2 t=0.000s(0.000s) m/ms=8264.463 visited=1 cuts=0
+  pv=[ga]
+minimax depth=10 move=ga v=-2 t=0.000s(0.000s) m/ms=10000.000 visited=1 cuts=0
+  pv=[ga]
+minimax depth=11 move=ga v=-2 t=0.000s(0.000s) m/ms=12500.000 visited=1 cuts=0
+  pv=[ga]
+minimax depth=12 move=ga v=-2 t=0.000s(0.000s) m/ms=7692.308 visited=1 cuts=0
+  pv=[ga]
+minimax depth=13 move=ga v=-2 t=0.000s(0.000s) m/ms=9090.909 visited=1 cuts=0
+  pv=[ga]
+minimax depth=14 move=ga v=-18 t=1.268s(1.268s) m/ms=4931.455 visited=6254778 cuts=1882846
+  pv=[ga ae eb bf fh hb bc cd di ia af fc cb be]
+minimax depth=15 move=gh v=-2 t=6.267s(7.535s) m/ms=4984.048 visited=31236984 cuts=6905632
+  pv=[gh hb bf fc cc cf fi ih hf fa ae eb bh hd da]
+X to play:
+   |   |        a    b    c
+---+---+---
+   |   |        d    e    f
+---+---+---
+   |   |        g    h    i
+
+X  .  O | .  X  . | .  .  .
+.  .  . | O  .  . | .  .  .
+.  .  . | .  .  . | X  .  O
+--------+---------+--------
+.  .  . | O  .  . | .  .  .
+X  .  O | .  X  . | O  .  X
+X  .  . | .  .  . | .  .  .
+--------+---------+--------
+.  .  X |[4m [0m[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m[4m [0m| .  O  .
+.  .  . |[4m [0m[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m[4m [0m| .  .  .
+O  O  . |[4m [0m[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m[4m [0m| .  .  X
+notation:
+X;.......@.;X.O....../.X.O...../......X.O/...X.OX../O...X..../...O.X.../..X...OO./........./.O......X
+minimax depth=1 move=he v=14 t=0.000s(0.000s) m/ms=3502.627 visited=10 cuts=0
+  pv=[he]
+minimax depth=2 move=hf v=2 t=0.000s(0.000s) m/ms=3453.834 visited=30 cuts=8
+  pv=[hf fa]
+minimax depth=3 move=hf v=17 t=0.000s(0.000s) m/ms=4303.948 visited=58 cuts=4
+  pv=[hf fa ae]
+minimax depth=4 move=hf v=17 t=0.000s(0.000s) m/ms=3460.947 visited=81 cuts=29
+  pv=[hf fa ad da]
+minimax depth=5 move=hf v=17 t=0.000s(0.000s) m/ms=4350.359 visited=336 cuts=33
+  pv=[hf fa ad da]
+minimax depth=6 move=hf v=17 t=0.000s(0.000s) m/ms=4305.295 visited=452 cuts=206
+  pv=[hf fa ad da]
+minimax depth=7 move=hf v=17 t=0.000s(0.000s) m/ms=4479.272 visited=2147 cuts=256
+  pv=[hf fa ae eb bh hh he]
+minimax depth=8 move=hf v=6 t=0.001s(0.002s) m/ms=3996.740 visited=7910 cuts=3642
+  pv=[hf fb bh ha ad dc ce ec]
+minimax depth=9 move=hf v=17 t=0.008s(0.011s) m/ms=4396.457 visited=37514 cuts=7449
+  pv=[hf fa ad da]
+minimax depth=10 move=hf v=14 t=0.010s(0.022s) m/ms=4760.288 visited=51737 cuts=24958
+  pv=[hf fb bh ha ae eb bc cc ca ai]
+minimax depth=11 move=hf v=18 t=0.042s(0.064s) m/ms=4814.128 visited=204010 cuts=38471
+  pv=[hf fa ae eb bh hb bc cc cd dh he]
+minimax depth=12 move=hf v=17 t=0.075s(0.140s) m/ms=4954.922 visited=376315 cuts=178589
+  pv=[hf fc ca ab bc ce eh hh he eg gi ie]
+minimax depth=13 move=hf v=19 t=0.644s(0.785s) m/ms=4834.923 visited=3116556 cuts=572522
+  pv=[hf fa ae eb bh hb bc ce ed dc ca ai ie]
+minimax depth=14 move=hb v=2 t=3.611s(4.396s) m/ms=4905.093 visited=17716220 cuts=5132217
+  pv=[hb bf fc cc cf fi ih hf fa ae eb bh hd da]
+minimax depth=15 move=hf v=20 t=9.024s(13.421s) m/ms=5023.211 visited=45330437 cuts=8958883
+  pv=[hf fh hh hb bh ha ai ih hc cf fa ae ec ca ag]
+O to play:
+   |   |        a    b    c
+---+---+---
+   |   |        d    e    f
+---+---+---
+   |   |        g    h    i
+
+X  .  O | .  X  . | .  .  .
+.  .  . | O  .  . | .  .  .
+.  .  . | .  .  . | X  .  O
+--------+---------+--------
+.  .  . | O  .  . |[4m [0m[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m
+X  .  O | .  X  . |[4m [0m[4mO[0m[4m  [0m[4m.[0m[4m  [0m[4mX[0m
+X  .  . | .  .  . |[4m [0m[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m
+--------+---------+--------
+.  .  X | .  .  . | .  O  .
+.  .  . | .  .  X | .  .  .
+O  O  . | .  .  . | .  .  X
+notation:
+O;.....@...;X.O....../.X.O...../......X.O/...X.OX../O...X..../...O.X.../..X...OO./.....X.../.O......X
+minimax depth=1 move=fh v=-1 t=0.000s(0.000s) m/ms=2123.142 visited=1 cuts=0
+  pv=[fh]
+minimax depth=2 move=fh v=-1 t=0.000s(0.000s) m/ms=7692.308 visited=1 cuts=0
+  pv=[fh]
+minimax depth=3 move=fh v=-1 t=0.000s(0.000s) m/ms=7633.588 visited=1 cuts=0
+  pv=[fh]
+minimax depth=4 move=fh v=-1 t=0.000s(0.000s) m/ms=8333.333 visited=1 cuts=0
+  pv=[fh]
+minimax depth=5 move=fh v=-1 t=0.000s(0.000s) m/ms=10000.000 visited=1 cuts=0
+  pv=[fh]
+minimax depth=6 move=fh v=-1 t=0.000s(0.000s) m/ms=9090.909 visited=1 cuts=0
+  pv=[fh]
+minimax depth=7 move=fh v=-1 t=0.000s(0.000s) m/ms=12500.000 visited=1 cuts=0
+  pv=[fh]
+minimax depth=8 move=fh v=-1 t=0.000s(0.000s) m/ms=12500.000 visited=1 cuts=0
+  pv=[fh]
+minimax depth=9 move=fh v=-1 t=0.000s(0.000s) m/ms=8264.463 visited=1 cuts=0
+  pv=[fh]
+minimax depth=10 move=fh v=-1 t=0.000s(0.000s) m/ms=9090.909 visited=1 cuts=0
+  pv=[fh]
+minimax depth=11 move=fh v=-1 t=0.000s(0.000s) m/ms=12500.000 visited=1 cuts=0
+  pv=[fh]
+minimax depth=12 move=fh v=-1 t=0.000s(0.000s) m/ms=5235.602 visited=1 cuts=0
+  pv=[fh]
+minimax depth=13 move=fh v=-1 t=0.000s(0.000s) m/ms=9090.909 visited=1 cuts=0
+  pv=[fh]
+minimax depth=14 move=fh v=-20 t=1.548s(1.548s) m/ms=4971.853 visited=7696461 cuts=2055188
+  pv=[fh hh hb bh ha ai ih hc cf fa ae ec ca ag]
+minimax depth=15 move=fh v=-1 t=6.020s(7.568s) m/ms=5018.094 visited=30212536 cuts=6945730
+  pv=[fh hb bf fc cc ca ai ih hh hi ig gi ia af fi]
+X to play:
+   |   |        a    b    c
+---+---+---
+   |   |        d    e    f
+---+---+---
+   |   |        g    h    i
+
+X  .  O | .  X  . | .  .  .
+.  .  . | O  .  . | .  .  .
+.  .  . | .  .  . | X  .  O
+--------+---------+--------
+.  .  . | O  .  . | .  .  .
+X  .  O | .  X  . | O  .  X
+X  .  . | .  .  . | .  O  .
+--------+---------+--------
+.  .  X |[4m [0m[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m[4m [0m| .  O  .
+.  .  . |[4m [0m[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4mX[0m[4m [0m| .  .  .
+O  O  . |[4m [0m[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m[4m [0m| .  .  X
+notation:
+X;.......@.;X.O....../.X.O...../......X.O/...X.OX../O...X..../...O.X.O./..X...OO./.....X.../.O......X
+minimax depth=1 move=hh v=20 t=0.000s(0.000s) m/ms=1996.008 visited=1 cuts=0
+  pv=[hh]
+minimax depth=2 move=hh v=20 t=0.000s(0.000s) m/ms=9090.909 visited=1 cuts=0
+  pv=[hh]
+minimax depth=3 move=hh v=20 t=0.000s(0.000s) m/ms=9009.009 visited=1 cuts=0
+  pv=[hh]
+minimax depth=4 move=hh v=20 t=0.000s(0.000s) m/ms=8333.333 visited=1 cuts=0
+  pv=[hh]
+minimax depth=5 move=hh v=20 t=0.000s(0.000s) m/ms=9090.909 visited=1 cuts=0
+  pv=[hh]
+minimax depth=6 move=hh v=20 t=0.000s(0.000s) m/ms=10000.000 visited=1 cuts=0
+  pv=[hh]
+minimax depth=7 move=hh v=20 t=0.000s(0.000s) m/ms=11111.111 visited=1 cuts=0
+  pv=[hh]
+minimax depth=8 move=hh v=20 t=0.000s(0.000s) m/ms=12500.000 visited=1 cuts=0
+  pv=[hh]
+minimax depth=9 move=hh v=20 t=0.000s(0.000s) m/ms=9090.909 visited=1 cuts=0
+  pv=[hh]
+minimax depth=10 move=hh v=20 t=0.000s(0.000s) m/ms=11111.111 visited=1 cuts=0
+  pv=[hh]
+minimax depth=11 move=hh v=20 t=0.000s(0.000s) m/ms=12500.000 visited=1 cuts=0
+  pv=[hh]
+minimax depth=12 move=hh v=20 t=0.000s(0.000s) m/ms=7142.857 visited=1 cuts=0
+  pv=[hh]
+minimax depth=13 move=hh v=20 t=0.000s(0.000s) m/ms=10000.000 visited=1 cuts=0
+  pv=[hh]
+minimax depth=14 move=hb v=1 t=2.119s(2.120s) m/ms=4926.191 visited=10443498 cuts=3313118
+  pv=[hb bf fc cc ca ae eb ba ad di if fg gi ic]
+minimax depth=15 move=hd v=21 t=11.063s(13.183s) m/ms=4999.371 visited=55312409 cuts=12169762
+  pv=[hd dc ca ai if fc cc cb bh he eh hh hc cf fa]
+O to play:
+   |   |        a    b    c
+---+---+---
+   |   |        d    e    f
+---+---+---
+   |   |        g    h    i
+
+X  .  O | .  X  . | .  .  .
+.  .  . | O  .  . | .  .  .
+.  .  . | .  .  . | X  .  O
+--------+---------+--------
+[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m[4m [0m| O  .  . | .  .  .
+[4mX[0m[4m  [0m[4m.[0m[4m  [0m[4mO[0m[4m [0m| .  X  . | O  .  X
+[4mX[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m[4m [0m| .  .  . | .  O  .
+--------+---------+--------
+.  .  X | .  .  . | .  O  .
+.  .  . | X  .  X | .  .  .
+O  O  . | .  .  . | .  .  X
+notation:
+O;...@.....;X.O....../.X.O...../......X.O/...X.OX../O...X..../...O.X.O./..X...OO./...X.X.../.O......X
+minimax depth=1 move=da v=-2 t=0.000s(0.000s) m/ms=3234.750 visited=7 cuts=0
+  pv=[da]
+minimax depth=2 move=da v=-17 t=0.000s(0.000s) m/ms=3528.670 visited=28 cuts=4
+  pv=[da ae]
+minimax depth=3 move=da v=-1 t=0.000s(0.000s) m/ms=3806.697 visited=59 cuts=5
+  pv=[da ad di]
+minimax depth=4 move=da v=-12 t=0.000s(0.000s) m/ms=3937.957 visited=98 cuts=37
+  pv=[da af fb be]
+minimax depth=5 move=da v=-1 t=0.000s(0.000s) m/ms=4184.956 visited=962 cuts=146
+  pv=[da ai ic cd di]
+minimax depth=6 move=da v=-10 t=0.000s(0.000s) m/ms=4113.346 visited=810 cuts=371
+  pv=[da af fb bc cc ca]
+minimax depth=7 move=da v=0 t=0.001s(0.001s) m/ms=4307.940 visited=5366 cuts=1007
+  pv=[da ad di ih hb be ec]
+minimax depth=8 move=da v=-7 t=0.001s(0.002s) m/ms=4213.145 visited=4827 cuts=2297
+  pv=[da ai ic ca ae eb bf fc]
+minimax depth=9 move=da v=0 t=0.008s(0.011s) m/ms=4456.332 visited=39153 cuts=7718
+  pv=[da ad di ih he ef fi ig gi]
+minimax depth=10 move=da v=-12 t=0.007s(0.018s) m/ms=4773.369 visited=34242 cuts=15444
+  pv=[da ae ed db bc ca af fc cd de]
+minimax depth=11 move=da v=-1 t=0.086s(0.105s) m/ms=4792.216 visited=413352 cuts=94999
+  pv=[da ai ic cd db bf fg gi ia ae eg]
+minimax depth=12 move=da v=-10 t=0.043s(0.148s) m/ms=5005.595 visited=216387 cuts=100063
+  pv=[da ae ed db bc ca af fb bf fc cd de]
+minimax depth=13 move=da v=-1 t=0.547s(0.695s) m/ms=4882.835 visited=2672425 cuts=626664
+  pv=[da ad di ih hb bh he ef fg gi ic ce ed]
+minimax depth=14 move=dc v=-21 t=2.394s(3.090s) m/ms=4917.968 visited=11777513 cuts=3149947
+  pv=[dc ca ai if fc cc cb bh he eh hh hc cf fa]
+minimax depth=15 move=dc v=-1 t=4.115s(7.206s) m/ms=5027.036 visited=20688575 cuts=5232399
+  pv=[dc ca ae eb ba ah hb be ed di ih hh ha ad da]
+X to play:
+   |   |        a    b    c
+---+---+---
+   |   |        d    e    f
+---+---+---
+   |   |        g    h    i
+
+X  .  O | .  X  . |[4m [0m[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m
+.  .  . | O  .  . |[4m [0m[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m
+.  .  . | .  .  . |[4m [0m[4mX[0m[4m  [0m[4m.[0m[4m  [0m[4mO[0m
+--------+---------+--------
+.  .  O | O  .  . | .  .  .
+X  .  O | .  X  . | O  .  X
+X  .  . | .  .  . | .  O  .
+--------+---------+--------
+.  .  X | .  .  . | .  O  .
+.  .  . | X  .  X | .  .  .
+O  O  . | .  .  . | .  .  X
+notation:
+X;..@......;X.O....../.X.O...../......X.O/..OX.OX../O...X..../...O.X.O./..X...OO./...X.X.../.O......X
+minimax depth=1 move=ca v=21 t=0.000s(0.000s) m/ms=2123.142 visited=1 cuts=0
+  pv=[ca]
+minimax depth=2 move=ca v=21 t=0.000s(0.000s) m/ms=7692.308 visited=1 cuts=0
+  pv=[ca]
+minimax depth=3 move=ca v=21 t=0.000s(0.000s) m/ms=9009.009 visited=1 cuts=0
+  pv=[ca]
+minimax depth=4 move=ca v=21 t=0.000s(0.000s) m/ms=9090.909 visited=1 cuts=0
+  pv=[ca]
+minimax depth=5 move=ca v=21 t=0.000s(0.000s) m/ms=10000.000 visited=1 cuts=0
+  pv=[ca]
+minimax depth=6 move=ca v=21 t=0.000s(0.000s) m/ms=9900.990 visited=1 cuts=0
+  pv=[ca]
+minimax depth=7 move=ca v=21 t=0.000s(0.000s) m/ms=9900.990 visited=1 cuts=0
+  pv=[ca]
+minimax depth=8 move=ca v=21 t=0.000s(0.000s) m/ms=11111.111 visited=1 cuts=0
+  pv=[ca]
+minimax depth=9 move=ca v=21 t=0.000s(0.000s) m/ms=9090.909 visited=1 cuts=0
+  pv=[ca]
+minimax depth=10 move=ca v=21 t=0.000s(0.000s) m/ms=9900.990 visited=1 cuts=0
+  pv=[ca]
+minimax depth=11 move=ca v=21 t=0.000s(0.000s) m/ms=10000.000 visited=1 cuts=0
+  pv=[ca]
+minimax depth=12 move=ca v=21 t=0.000s(0.000s) m/ms=7692.308 visited=1 cuts=0
+  pv=[ca]
+minimax depth=13 move=ca v=21 t=0.000s(0.000s) m/ms=9009.009 visited=1 cuts=0
+  pv=[ca]
+minimax depth=14 move=ca v=1 t=1.900s(1.900s) m/ms=5055.987 visited=9609928 cuts=2789602
+  pv=[ca ae eb ba ah hb be ed di ih hh ha ad da]
+minimax depth=15 move=ca v=23 t=4.123s(6.024s) m/ms=5115.612 visited=21096751 cuts=4187330
+  pv=[ca ai ih he ef fc cd di ig gi be eh hh ha af]
+O to play:
+   |   |        a    b    c
+---+---+---
+   |   |        d    e    f
+---+---+---
+   |   |        g    h    i
+
+[4mX[0m[4m  [0m[4m.[0m[4m  [0m[4mO[0m[4m [0m| .  X  . | X  .  .
+[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m[4m [0m| O  .  . | .  .  .
+[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m[4m [0m| .  .  . | X  .  O
+--------+---------+--------
+.  .  O | O  .  . | .  .  .
+X  .  O | .  X  . | O  .  X
+X  .  . | .  .  . | .  O  .
+--------+---------+--------
+.  .  X | .  .  . | .  O  .
+.  .  . | X  .  X | .  .  .
+O  O  . | .  .  . | .  .  X
+notation:
+O;@........;X.O....../.X.O...../X.....X.O/..OX.OX../O...X..../...O.X.O./..X...OO./...X.X.../.O......X
+minimax depth=1 move=ae v=-1 t=0.000s(0.000s) m/ms=2079.002 visited=1 cuts=0
+  pv=[ae]
+minimax depth=2 move=ae v=-1 t=0.000s(0.000s) m/ms=7692.308 visited=1 cuts=0
+  pv=[ae]
+minimax depth=3 move=ae v=-1 t=0.000s(0.000s) m/ms=7633.588 visited=1 cuts=0
+  pv=[ae]
+minimax depth=4 move=ae v=-1 t=0.000s(0.000s) m/ms=7692.308 visited=1 cuts=0
+  pv=[ae]
+minimax depth=5 move=ae v=-1 t=0.000s(0.000s) m/ms=8333.333 visited=1 cuts=0
+  pv=[ae]
+minimax depth=6 move=ae v=-1 t=0.000s(0.000s) m/ms=9090.909 visited=1 cuts=0
+  pv=[ae]
+minimax depth=7 move=ae v=-1 t=0.000s(0.000s) m/ms=10000.000 visited=1 cuts=0
+  pv=[ae]
+minimax depth=8 move=ae v=-1 t=0.000s(0.000s) m/ms=14285.714 visited=1 cuts=0
+  pv=[ae]
+minimax depth=9 move=ae v=-1 t=0.000s(0.000s) m/ms=8264.463 visited=1 cuts=0
+  pv=[ae]
+minimax depth=10 move=ae v=-1 t=0.000s(0.000s) m/ms=11111.111 visited=1 cuts=0
+  pv=[ae]
+minimax depth=11 move=ae v=-1 t=0.000s(0.000s) m/ms=14285.714 visited=1 cuts=0
+  pv=[ae]
+minimax depth=12 move=ae v=-1 t=0.000s(0.000s) m/ms=3831.418 visited=1 cuts=0
+  pv=[ae]
+minimax depth=13 move=ae v=-1 t=0.000s(0.000s) m/ms=9090.909 visited=1 cuts=0
+  pv=[ae]
+minimax depth=14 move=ai v=-23 t=2.118s(2.118s) m/ms=5130.464 visited=10869093 cuts=2448157
+  pv=[ai ih he ef fc cd di ig gi be eh hh ha af]
+minimax depth=15 move=ae v=-3 t=4.493s(6.612s) m/ms=5319.718 visited=23903449 cuts=6378508
+  pv=[ae eb ba ag gi if fc cf fb bf fa eh]
+X to play:
+   |   |        a    b    c
+---+---+---
+   |   |        d    e    f
+---+---+---
+   |   |        g    h    i
+
+X  .  O | .  X  . | X  .  .
+.  O  . | O  .  . | .  .  .
+.  .  . | .  .  . | X  .  O
+--------+---------+--------
+.  .  O |[4m [0m[4mO[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m[4m [0m| .  .  .
+X  .  O |[4m [0m[4m.[0m[4m  [0m[4mX[0m[4m  [0m[4m.[0m[4m [0m| O  .  X
+X  .  . |[4m [0m[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m[4m [0m| .  O  .
+--------+---------+--------
+.  .  X | .  .  . | .  O  .
+.  .  . | X  .  X | .  .  .
+O  O  . | .  .  . | .  .  X
+notation:
+X;....@....;X.O.O..../.X.O...../X.....X.O/..OX.OX../O...X..../...O.X.O./..X...OO./...X.X.../.O......X
+minimax depth=1 move=eb v=30 t=0.000s(0.000s) m/ms=1996.008 visited=1 cuts=0
+  pv=[eb]
+minimax depth=2 move=eb v=30 t=0.000s(0.000s) m/ms=7633.588 visited=1 cuts=0
+  pv=[eb]
+minimax depth=3 move=eb v=30 t=0.000s(0.000s) m/ms=8333.333 visited=1 cuts=0
+  pv=[eb]
+minimax depth=4 move=eb v=30 t=0.000s(0.000s) m/ms=8333.333 visited=1 cuts=0
+  pv=[eb]
+minimax depth=5 move=eb v=30 t=0.000s(0.000s) m/ms=9090.909 visited=1 cuts=0
+  pv=[eb]
+minimax depth=6 move=eb v=30 t=0.000s(0.000s) m/ms=9090.909 visited=1 cuts=0
+  pv=[eb]
+minimax depth=7 move=eb v=30 t=0.000s(0.000s) m/ms=9090.909 visited=1 cuts=0
+  pv=[eb]
+minimax depth=8 move=eb v=30 t=0.000s(0.000s) m/ms=12500.000 visited=1 cuts=0
+  pv=[eb]
+minimax depth=9 move=eb v=30 t=0.000s(0.000s) m/ms=8333.333 visited=1 cuts=0
+  pv=[eb]
+minimax depth=10 move=eb v=30 t=0.000s(0.000s) m/ms=11111.111 visited=1 cuts=0
+  pv=[eb]
+minimax depth=11 move=eb v=30 t=0.000s(0.000s) m/ms=11111.111 visited=1 cuts=0
+  pv=[eb]
+minimax depth=12 move=eb v=30 t=0.000s(0.000s) m/ms=7692.308 visited=1 cuts=0
+  pv=[eb]
+minimax depth=13 move=eb v=30 t=0.000s(0.000s) m/ms=8333.333 visited=1 cuts=0
+  pv=[eb]
+minimax depth=14 move=eb v=3 t=1.266s(1.266s) m/ms=5354.900 visited=6780666 cuts=1931055
+  pv=[eb ba ag gi if fc cf fb bf fa eh]
+minimax depth=15 move=eb v=33 t=3.454s(4.721s) m/ms=5341.869 visited=18454616 cuts=3667047
+  pv=[eb ba ag gi ic cf fi if fc cc eh hi ih hb be]
+minimax depth=16 move=eb v=16 t=7.917s(12.638s) m/ms=5539.915 visited=43864410 cuts=12295542
+  pv=[eb ba ag gi ic cd da af fi if fc cc cb bc ch he]
+O to play:
+   |   |        a    b    c
+---+---+---
+   |   |        d    e    f
+---+---+---
+   |   |        g    h    i
+
+X  .  O |[4m [0m[4m.[0m[4m  [0m[4mX[0m[4m  [0m[4m.[0m[4m [0m| X  .  .
+.  O  . |[4m [0m[4mO[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m[4m [0m| .  .  .
+.  .  . |[4m [0m[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m[4m [0m| X  .  O
+--------+---------+--------
+.  .  O | O  X  . | .  .  .
+X  .  O | .  X  . | O  .  X
+X  .  . | .  .  . | .  O  .
+--------+---------+--------
+.  .  X | .  .  . | .  O  .
+.  .  . | X  .  X | .  .  .
+O  O  . | .  .  . | .  .  X
+notation:
+O;.@.......;X.O.O..../.X.O...../X.....X.O/..OX.OX../OX..X..../...O.X.O./..X...OO./...X.X.../.O......X
+minimax depth=1 move=ba v=-3 t=0.000s(0.000s) m/ms=1883.239 visited=1 cuts=0
+  pv=[ba]
+minimax depth=2 move=ba v=-3 t=0.000s(0.000s) m/ms=6666.667 visited=1 cuts=0
+  pv=[ba]
+minimax depth=3 move=ba v=-3 t=0.000s(0.000s) m/ms=7692.308 visited=1 cuts=0
+  pv=[ba]
+minimax depth=4 move=ba v=-3 t=0.000s(0.000s) m/ms=10000.000 visited=1 cuts=0
+  pv=[ba]
+minimax depth=5 move=ba v=-3 t=0.000s(0.000s) m/ms=9090.909 visited=1 cuts=0
+  pv=[ba]
+minimax depth=6 move=ba v=-3 t=0.000s(0.000s) m/ms=10000.000 visited=1 cuts=0
+  pv=[ba]
+minimax depth=7 move=ba v=-3 t=0.000s(0.000s) m/ms=11111.111 visited=1 cuts=0
+  pv=[ba]
+minimax depth=8 move=ba v=-3 t=0.000s(0.000s) m/ms=12345.679 visited=1 cuts=0
+  pv=[ba]
+minimax depth=9 move=ba v=-3 t=0.000s(0.000s) m/ms=8333.333 visited=1 cuts=0
+  pv=[ba]
+minimax depth=10 move=ba v=-3 t=0.000s(0.000s) m/ms=9900.990 visited=1 cuts=0
+  pv=[ba]
+minimax depth=11 move=ba v=-3 t=0.000s(0.000s) m/ms=9900.990 visited=1 cuts=0
+  pv=[ba]
+minimax depth=12 move=ba v=-3 t=0.000s(0.000s) m/ms=7692.308 visited=1 cuts=0
+  pv=[ba]
+minimax depth=13 move=ba v=-3 t=0.000s(0.000s) m/ms=9090.909 visited=1 cuts=0
+  pv=[ba]
+minimax depth=14 move=ba v=-33 t=0.834s(0.834s) m/ms=5359.656 visited=4474796 cuts=1608057
+  pv=[ba ag gi ic cf fi if fc cc eh hi ih hb be]
+minimax depth=15 move=ba v=-16 t=4.509s(5.344s) m/ms=5593.346 visited=25221310 cuts=4653000
+  pv=[ba ag gi ic cd da af fi if fc cc cb bc ch he]
+X to play:
+   |   |        a    b    c
+---+---+---
+   |   |        d    e    f
+---+---+---
+   |   |        g    h    i
+
+[4mX[0m[4m  [0m[4m.[0m[4m  [0m[4mO[0m[4m [0m| O  X  . | X  .  .
+[4m.[0m[4m  [0m[4mO[0m[4m  [0m[4m.[0m[4m [0m| O  .  . | .  .  .
+[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m[4m [0m| .  .  . | X  .  O
+--------+---------+--------
+.  .  O | O  X  . | .  .  .
+X  .  O | .  X  . | O  .  X
+X  .  . | .  .  . | .  O  .
+--------+---------+--------
+.  .  X | .  .  . | .  O  .
+.  .  . | X  .  X | .  .  .
+O  O  . | .  .  . | .  .  X
+notation:
+X;@........;X.O.O..../OX.O...../X.....X.O/..OX.OX../OX..X..../...O.X.O./..X...OO./...X.X.../.O......X
+minimax depth=1 move=ag v=16 t=0.000s(0.000s) m/ms=1883.239 visited=1 cuts=0
+  pv=[ag]
+minimax depth=2 move=ag v=16 t=0.000s(0.000s) m/ms=7092.199 visited=1 cuts=0
+  pv=[ag]
+minimax depth=3 move=ag v=16 t=0.000s(0.000s) m/ms=7142.857 visited=1 cuts=0
+  pv=[ag]
+minimax depth=4 move=ag v=16 t=0.000s(0.000s) m/ms=7692.308 visited=1 cuts=0
+  pv=[ag]
+minimax depth=5 move=ag v=16 t=0.000s(0.000s) m/ms=7142.857 visited=1 cuts=0
+  pv=[ag]
+minimax depth=6 move=ag v=16 t=0.000s(0.000s) m/ms=6666.667 visited=1 cuts=0
+  pv=[ag]
+minimax depth=7 move=ag v=16 t=0.000s(0.000s) m/ms=9090.909 visited=1 cuts=0
+  pv=[ag]
+minimax depth=8 move=ag v=16 t=0.000s(0.000s) m/ms=11111.111 visited=1 cuts=0
+  pv=[ag]
+minimax depth=9 move=ag v=16 t=0.000s(0.000s) m/ms=6622.517 visited=1 cuts=0
+  pv=[ag]
+minimax depth=10 move=ag v=16 t=0.000s(0.000s) m/ms=9090.909 visited=1 cuts=0
+  pv=[ag]
+minimax depth=11 move=ag v=16 t=0.000s(0.000s) m/ms=8333.333 visited=1 cuts=0
+  pv=[ag]
+minimax depth=12 move=ag v=16 t=0.000s(0.000s) m/ms=6666.667 visited=1 cuts=0
+  pv=[ag]
+minimax depth=13 move=ag v=16 t=0.000s(0.000s) m/ms=7692.308 visited=1 cuts=0
+  pv=[ag]
+minimax depth=14 move=ag v=16 t=0.000s(0.000s) m/ms=9090.909 visited=1 cuts=0
+  pv=[ag]
+minimax depth=15 move=ag v=43 t=2.834s(2.834s) m/ms=5402.066 visited=15311644 cuts=4065408
+  pv=[ag gi ic cd da af fb bf fa ab bh hh he ec cc]
+minimax depth=16 move=ag v=23 t=6.275s(9.109s) m/ms=5557.625 visited=34875568 cuts=7729434
+  pv=[ag gi ic cd da af fb bc cb bf fa ab bh hh he eg]
+O to play:
+   |   |        a    b    c
+---+---+---
+   |   |        d    e    f
+---+---+---
+   |   |        g    h    i
+
+X  .  O | O  X  . | X  .  .
+.  O  . | O  .  . | .  .  .
+X  .  . | .  .  . | X  .  O
+--------+---------+--------
+.  .  O | O  X  . | .  .  .
+X  .  O | .  X  . | O  .  X
+X  .  . | .  .  . | .  O  .
+--------+---------+--------
+[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4mX[0m[4m [0m| .  .  . | .  O  .
+[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m[4m [0m| X  .  X | .  .  .
+[4mO[0m[4m  [0m[4mO[0m[4m  [0m[4m.[0m[4m [0m| .  .  . | .  .  X
+notation:
+O;......@..;X.O.O.X../OX.O...../X.....X.O/..OX.OX../OX..X..../...O.X.O./..X...OO./...X.X.../.O......X
+minimax depth=1 move=gi v=-16 t=0.000s(0.000s) m/ms=2079.002 visited=1 cuts=0
+  pv=[gi]
+minimax depth=2 move=gi v=-16 t=0.000s(0.000s) m/ms=6211.180 visited=1 cuts=0
+  pv=[gi]
+minimax depth=3 move=gi v=-16 t=0.000s(0.000s) m/ms=8333.333 visited=1 cuts=0
+  pv=[gi]
+minimax depth=4 move=gi v=-16 t=0.000s(0.000s) m/ms=8333.333 visited=1 cuts=0
+  pv=[gi]
+minimax depth=5 move=gi v=-16 t=0.000s(0.000s) m/ms=9090.909 visited=1 cuts=0
+  pv=[gi]
+minimax depth=6 move=gi v=-16 t=0.000s(0.000s) m/ms=9009.009 visited=1 cuts=0
+  pv=[gi]
+minimax depth=7 move=gi v=-16 t=0.000s(0.000s) m/ms=10000.000 visited=1 cuts=0
+  pv=[gi]
+minimax depth=8 move=gi v=-16 t=0.000s(0.000s) m/ms=11111.111 visited=1 cuts=0
+  pv=[gi]
+minimax depth=9 move=gi v=-16 t=0.000s(0.000s) m/ms=8264.463 visited=1 cuts=0
+  pv=[gi]
+minimax depth=10 move=gi v=-16 t=0.000s(0.000s) m/ms=10000.000 visited=1 cuts=0
+  pv=[gi]
+minimax depth=11 move=gi v=-16 t=0.000s(0.000s) m/ms=14285.714 visited=1 cuts=0
+  pv=[gi]
+minimax depth=12 move=gi v=-16 t=0.000s(0.000s) m/ms=7142.857 visited=1 cuts=0
+  pv=[gi]
+minimax depth=13 move=gi v=-16 t=0.000s(0.000s) m/ms=9090.909 visited=1 cuts=0
+  pv=[gi]
+minimax depth=14 move=gi v=-43 t=0.752s(0.752s) m/ms=5496.947 visited=4137501 cuts=1414575
+  pv=[gi ic cd da af fb bf fa ab bh hh he ec cc]
+minimax depth=15 move=gi v=-23 t=3.909s(4.662s) m/ms=5619.699 visited=21969922 cuts=3822420
+  pv=[gi ic cd da af fb bc cb bf fa ab bh hh he eg]
+minimax depth=16 move=gi v=-51 t=10.202s(14.864s) m/ms=5845.158 visited=59634772 cuts=19888908
+  pv=[gi ih hh he ed di id da ab bc cc cf fi ig eg cd]
+X to play:
+   |   |        a    b    c
+---+---+---
+   |   |        d    e    f
+---+---+---
+ O |   |        g    h    i
+
+X  .  O | O  X  . | X  .  .
+.  O  . | O  .  . | .  .  .
+X  .  . | .  .  . | X  .  O
+--------+---------+--------
+.  .  O | O  X  . | .  .  .
+X  .  O | .  X  . | O  .  X
+X  .  . | .  .  . | .  O  .
+--------+---------+--------
+.  .  X | .  .  . |[4m [0m[4m.[0m[4m  [0m[4mO[0m[4m  [0m[4m.[0m
+.  .  . | X  .  X |[4m [0m[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m
+O  O  O | .  .  . |[4m [0m[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4mX[0m
+notation:
+X;......O.@;X.O.O.X../OX.O...../X.....X.O/..OX.OX../OX..X..../...O.X.O./..X...OOO/...X.X.../.O......X
+minimax depth=1 move=ic v=23 t=0.000s(0.000s) m/ms=2123.142 visited=1 cuts=0
+  pv=[ic]
+minimax depth=2 move=ic v=23 t=0.000s(0.000s) m/ms=6666.667 visited=1 cuts=0
+  pv=[ic]
+minimax depth=3 move=ic v=23 t=0.000s(0.000s) m/ms=8333.333 visited=1 cuts=0
+  pv=[ic]
+minimax depth=4 move=ic v=23 t=0.000s(0.000s) m/ms=8333.333 visited=1 cuts=0
+  pv=[ic]
+minimax depth=5 move=ic v=23 t=0.000s(0.000s) m/ms=8333.333 visited=1 cuts=0
+  pv=[ic]
+minimax depth=6 move=ic v=23 t=0.000s(0.000s) m/ms=9090.909 visited=1 cuts=0
+  pv=[ic]
+minimax depth=7 move=ic v=23 t=0.000s(0.000s) m/ms=9090.909 visited=1 cuts=0
+  pv=[ic]
+minimax depth=8 move=ic v=23 t=0.000s(0.000s) m/ms=10000.000 visited=1 cuts=0
+  pv=[ic]
+minimax depth=9 move=ic v=23 t=0.000s(0.000s) m/ms=8333.333 visited=1 cuts=0
+  pv=[ic]
+minimax depth=10 move=ic v=23 t=0.000s(0.000s) m/ms=10000.000 visited=1 cuts=0
+  pv=[ic]
+minimax depth=11 move=ic v=23 t=0.000s(0.000s) m/ms=10000.000 visited=1 cuts=0
+  pv=[ic]
+minimax depth=12 move=ic v=23 t=0.000s(0.000s) m/ms=4347.826 visited=1 cuts=0
+  pv=[ic]
+minimax depth=13 move=ic v=23 t=0.000s(0.000s) m/ms=9090.909 visited=1 cuts=0
+  pv=[ic]
+minimax depth=14 move=ic v=23 t=0.000s(0.000s) m/ms=9090.909 visited=1 cuts=0
+  pv=[ic]
+minimax depth=15 move=ih v=51 t=5.642s(5.642s) m/ms=5982.736 visited=33759544 cuts=8536033
+  pv=[ih hh he ed di id da ab bc cc cf fi ig eg cd]
+O to play:
+   |   |        a    b    c
+---+---+---
+   |   |        d    e    f
+---+---+---
+ O |   |        g    h    i
+
+X  .  O | O  X  . | X  .  .
+.  O  . | O  .  . | .  .  .
+X  .  . | .  .  . | X  .  O
+--------+---------+--------
+.  .  O | O  X  . | .  .  .
+X  .  O | .  X  . | O  .  X
+X  .  . | .  .  . | .  O  .
+--------+---------+--------
+.  .  X |[4m [0m[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m[4m [0m| .  O  .
+.  .  . |[4m [0m[4mX[0m[4m  [0m[4m.[0m[4m  [0m[4mX[0m[4m [0m| .  .  .
+O  O  O |[4m [0m[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m[4m [0m| .  X  X
+notation:
+O;......O@.;X.O.O.X../OX.O...../X.....X.O/..OX.OX../OX..X..../...O.X.O./..X...OOO/...X.X.../.O.....XX
+minimax depth=1 move=hh v=-51 t=0.000s(0.000s) m/ms=2079.002 visited=1 cuts=0
+  pv=[hh]
+minimax depth=2 move=hh v=-51 t=0.000s(0.000s) m/ms=7633.588 visited=1 cuts=0
+  pv=[hh]
+minimax depth=3 move=hh v=-51 t=0.000s(0.000s) m/ms=8333.333 visited=1 cuts=0
+  pv=[hh]
+minimax depth=4 move=hh v=-51 t=0.000s(0.000s) m/ms=12500.000 visited=1 cuts=0
+  pv=[hh]
+minimax depth=5 move=hh v=-51 t=0.000s(0.000s) m/ms=9090.909 visited=1 cuts=0
+  pv=[hh]
+minimax depth=6 move=hh v=-51 t=0.000s(0.000s) m/ms=11111.111 visited=1 cuts=0
+  pv=[hh]
+minimax depth=7 move=hh v=-51 t=0.000s(0.000s) m/ms=12500.000 visited=1 cuts=0
+  pv=[hh]
+minimax depth=8 move=hh v=-51 t=0.000s(0.000s) m/ms=14285.714 visited=1 cuts=0
+  pv=[hh]
+minimax depth=9 move=hh v=-51 t=0.000s(0.000s) m/ms=9090.909 visited=1 cuts=0
+  pv=[hh]
+minimax depth=10 move=hh v=-51 t=0.000s(0.000s) m/ms=12500.000 visited=1 cuts=0
+  pv=[hh]
+minimax depth=11 move=hh v=-51 t=0.000s(0.000s) m/ms=12500.000 visited=1 cuts=0
+  pv=[hh]
+minimax depth=12 move=hh v=-51 t=0.000s(0.000s) m/ms=3690.037 visited=1 cuts=0
+  pv=[hh]
+minimax depth=13 move=hh v=-51 t=0.000s(0.000s) m/ms=9090.909 visited=1 cuts=0
+  pv=[hh]
+minimax depth=14 move=hh v=-51 t=0.000s(0.000s) m/ms=8333.333 visited=1 cuts=0
+  pv=[hh]
+minimax depth=15 move=hc v=-20 t=5.672s(5.672s) m/ms=6271.878 visited=35577275 cuts=7620008
+  pv=[hc cc cb bi ic ce ed da ab bh ha ad bf fi ia]
+X to play:
+   |   |        a    b    c
+---+---+---
+   |   |        d    e    f
+---+---+---
+ O |   |        g    h    i
+
+X  .  O | O  X  . |[4m [0m[4mX[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m
+.  O  . | O  .  . |[4m [0m[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m
+X  .  . | .  .  . |[4m [0m[4mX[0m[4m  [0m[4m.[0m[4m  [0m[4mO[0m
+--------+---------+--------
+.  .  O | O  X  . | .  .  .
+X  .  O | .  X  . | O  .  X
+X  .  . | .  .  . | .  O  .
+--------+---------+--------
+.  .  X | .  .  O | .  O  .
+.  .  . | X  .  X | .  .  .
+O  O  O | .  .  . | .  X  X
+notation:
+X;..@...O..;X.O.O.X../OX.O...../X.....X.O/..OX.OX../OX..X..../...O.X.O./..X...OOO/..OX.X.../.O.....XX
+minimax depth=1 move=cc v=55 t=0.000s(0.000s) m/ms=2169.197 visited=1 cuts=0
+  pv=[cc]
+minimax depth=2 move=cc v=55 t=0.000s(0.000s) m/ms=7692.308 visited=1 cuts=0
+  pv=[cc]
+minimax depth=3 move=cc v=55 t=0.000s(0.000s) m/ms=9090.909 visited=1 cuts=0
+  pv=[cc]
+minimax depth=4 move=cc v=55 t=0.000s(0.000s) m/ms=10000.000 visited=1 cuts=0
+  pv=[cc]
+minimax depth=5 move=cc v=55 t=0.000s(0.000s) m/ms=8333.333 visited=1 cuts=0
+  pv=[cc]
+minimax depth=6 move=cc v=55 t=0.000s(0.000s) m/ms=9900.990 visited=1 cuts=0
+  pv=[cc]
+minimax depth=7 move=cc v=55 t=0.000s(0.000s) m/ms=9900.990 visited=1 cuts=0
+  pv=[cc]
+minimax depth=8 move=cc v=55 t=0.000s(0.000s) m/ms=11111.111 visited=1 cuts=0
+  pv=[cc]
+minimax depth=9 move=cc v=55 t=0.000s(0.000s) m/ms=8333.333 visited=1 cuts=0
+  pv=[cc]
+minimax depth=10 move=cc v=55 t=0.000s(0.000s) m/ms=10000.000 visited=1 cuts=0
+  pv=[cc]
+minimax depth=11 move=cc v=55 t=0.000s(0.000s) m/ms=11111.111 visited=1 cuts=0
+  pv=[cc]
+minimax depth=12 move=cc v=55 t=0.000s(0.000s) m/ms=3448.276 visited=1 cuts=0
+  pv=[cc]
+minimax depth=13 move=cc v=55 t=0.000s(0.000s) m/ms=10000.000 visited=1 cuts=0
+  pv=[cc]
+minimax depth=14 move=cc v=20 t=1.101s(1.101s) m/ms=6055.683 visited=6669026 cuts=1625359
+  pv=[cc cb bi ic ce ed da ab bh ha ad bf fi ia]
+minimax depth=15 move=cc v=56 t=2.939s(4.041s) m/ms=6207.621 visited=18248669 cuts=4342648
+  pv=[cc ch hh hi if fc cb bi ic af fa ah he ef fe]
+minimax depth=16 move=cc v=28 t=3.933s(7.974s) m/ms=6266.815 visited=24651939 cuts=7829284
+  pv=[cc cb bh he eh hh hb bf fc ch hi if fi ic cd di]
+O to play:
+   |   |        a    b    c
+---+---+---
+   |   |        d    e    f
+---+---+---
+ O |   |        g    h    i
+
+X  .  O | O  X  . |[4m [0m[4mX[0m[4m  [0m[4m.[0m[4m  [0m[4mX[0m
+.  O  . | O  .  . |[4m [0m[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m
+X  .  . | .  .  . |[4m [0m[4mX[0m[4m  [0m[4m.[0m[4m  [0m[4mO[0m
+--------+---------+--------
+.  .  O | O  X  . | .  .  .
+X  .  O | .  X  . | O  .  X
+X  .  . | .  .  . | .  O  .
+--------+---------+--------
+.  .  X | .  .  O | .  O  .
+.  .  . | X  .  X | .  .  .
+O  O  O | .  .  . | .  X  X
+notation:
+O;..@...O..;X.O.O.X../OX.O...../X.X...X.O/..OX.OX../OX..X..../...O.X.O./..X...OOO/..OX.X.../.O.....XX
+minimax depth=1 move=cb v=-20 t=0.000s(0.000s) m/ms=2036.660 visited=1 cuts=0
+  pv=[cb]
+minimax depth=2 move=cb v=-20 t=0.000s(0.000s) m/ms=7142.857 visited=1 cuts=0
+  pv=[cb]
+minimax depth=3 move=cb v=-20 t=0.000s(0.000s) m/ms=9090.909 visited=1 cuts=0
+  pv=[cb]
+minimax depth=4 move=cb v=-20 t=0.000s(0.000s) m/ms=7692.308 visited=1 cuts=0
+  pv=[cb]
+minimax depth=5 move=cb v=-20 t=0.000s(0.000s) m/ms=9090.909 visited=1 cuts=0
+  pv=[cb]
+minimax depth=6 move=cb v=-20 t=0.000s(0.000s) m/ms=10000.000 visited=1 cuts=0
+  pv=[cb]
+minimax depth=7 move=cb v=-20 t=0.000s(0.000s) m/ms=10000.000 visited=1 cuts=0
+  pv=[cb]
+minimax depth=8 move=cb v=-20 t=0.000s(0.000s) m/ms=12500.000 visited=1 cuts=0
+  pv=[cb]
+minimax depth=9 move=cb v=-20 t=0.000s(0.000s) m/ms=9090.909 visited=1 cuts=0
+  pv=[cb]
+minimax depth=10 move=cb v=-20 t=0.000s(0.000s) m/ms=10000.000 visited=1 cuts=0
+  pv=[cb]
+minimax depth=11 move=cb v=-20 t=0.000s(0.000s) m/ms=10000.000 visited=1 cuts=0
+  pv=[cb]
+minimax depth=12 move=cb v=-20 t=0.000s(0.000s) m/ms=7692.308 visited=1 cuts=0
+  pv=[cb]
+minimax depth=13 move=cb v=-20 t=0.000s(0.000s) m/ms=9090.909 visited=1 cuts=0
+  pv=[cb]
+minimax depth=14 move=ch v=-56 t=1.358s(1.358s) m/ms=6172.841 visited=8387506 cuts=2549593
+  pv=[ch hh hi if fc cb bi ic af fa ah he ef fe]
+minimax depth=15 move=cb v=-28 t=1.964s(3.322s) m/ms=6437.340 visited=12643177 cuts=2396309
+  pv=[cb bh he eh hh hb bf fc ch hi if fi ic cd di]
+minimax depth=16 move=ch v=-70 t=8.520s(11.843s) m/ms=6650.993 visited=56672720 cuts=15762917
+  pv=[ch hh hb bh hi ic cb be eh he ef fe ec cd di if]
+X to play:
+   |   |        a    b    c
+---+---+---
+   |   |        d    e    f
+---+---+---
+ O |   |        g    h    i
+
+X  .  O | O  X  . | X  .  X
+.  O  . | O  .  . | .  .  .
+X  .  . | .  .  . | X  O  O
+--------+---------+--------
+.  .  O | O  X  . | .  .  .
+X  .  O | .  X  . | O  .  X
+X  .  . | .  .  . | .  O  .
+--------+---------+--------
+.  .  X |[4m [0m[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4mO[0m[4m [0m| .  O  .
+.  .  . |[4m [0m[4mX[0m[4m  [0m[4m.[0m[4m  [0m[4mX[0m[4m [0m| .  .  .
+O  O  O |[4m [0m[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m[4m [0m| .  X  X
+notation:
+X;......O@.;X.O.O.X../OX.O...../X.X...XOO/..OX.OX../OX..X..../...O.X.O./..X...OOO/..OX.X.../.O.....XX
+minimax depth=1 move=hh v=33 t=0.000s(0.000s) m/ms=1404.494 visited=1 cuts=0
+  pv=[hh]
+minimax depth=2 move=hh v=33 t=0.000s(0.000s) m/ms=7142.857 visited=1 cuts=0
+  pv=[hh]
+minimax depth=3 move=hh v=33 t=0.000s(0.000s) m/ms=8333.333 visited=1 cuts=0
+  pv=[hh]
+minimax depth=4 move=hh v=33 t=0.000s(0.000s) m/ms=9090.909 visited=1 cuts=0
+  pv=[hh]
+minimax depth=5 move=hh v=33 t=0.000s(0.000s) m/ms=7692.308 visited=1 cuts=0
+  pv=[hh]
+minimax depth=6 move=hh v=33 t=0.000s(0.000s) m/ms=10000.000 visited=1 cuts=0
+  pv=[hh]
+minimax depth=7 move=hh v=33 t=0.000s(0.000s) m/ms=9090.909 visited=1 cuts=0
+  pv=[hh]
+minimax depth=8 move=hh v=33 t=0.000s(0.000s) m/ms=11111.111 visited=1 cuts=0
+  pv=[hh]
+minimax depth=9 move=hh v=33 t=0.000s(0.000s) m/ms=9090.909 visited=1 cuts=0
+  pv=[hh]
+minimax depth=10 move=hh v=33 t=0.000s(0.000s) m/ms=10000.000 visited=1 cuts=0
+  pv=[hh]
+minimax depth=11 move=hh v=33 t=0.000s(0.000s) m/ms=12500.000 visited=1 cuts=0
+  pv=[hh]
+minimax depth=12 move=hh v=33 t=0.000s(0.000s) m/ms=8333.333 visited=1 cuts=0
+  pv=[hh]
+minimax depth=13 move=hh v=33 t=0.000s(0.000s) m/ms=9090.909 visited=1 cuts=0
+  pv=[hh]
+minimax depth=14 move=hh v=33 t=0.000s(0.000s) m/ms=8333.333 visited=1 cuts=0
+  pv=[hh]
+minimax depth=15 move=hh v=70 t=1.379s(1.379s) m/ms=6341.548 visited=8750832 cuts=1989987
+  pv=[hh hb bh hi ic cb be eh he ef fe ec cd di if]
+minimax depth=16 move=hh v=43 t=8.060s(9.440s) m/ms=6271.380 visited=50548392 cuts=16228319
+  pv=[hh ha ad di if fc cb bi ic eh hb bf fe ef fa be]
+O to play:
+   |   |        a    b    c
+---+---+---
+   |   |        d    e    f
+---+---+---
+ O |   |        g    h    i
+
+X  .  O | O  X  . | X  .  X
+.  O  . | O  .  . | .  .  .
+X  .  . | .  .  . | X  O  O
+--------+---------+--------
+.  .  O | O  X  . | .  .  .
+X  .  O | .  X  . | O  .  X
+X  .  . | .  .  . | .  O  .
+--------+---------+--------
+.  .  X |[4m [0m[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4mO[0m[4m [0m| .  O  .
+.  .  . |[4m [0m[4mX[0m[4m  [0m[4m.[0m[4m  [0m[4mX[0m[4m [0m| .  .  .
+O  O  O |[4m [0m[4m.[0m[4m  [0m[4mX[0m[4m  [0m[4m.[0m[4m [0m| .  X  X
+notation:
+O;......O@.;X.O.O.X../OX.O...../X.X...XOO/..OX.OX../OX..X..../...O.X.O./..X...OOO/..OX.X.X./.O.....XX
+minimax depth=1 move=hb v=-70 t=0.000s(0.000s) m/ms=1295.337 visited=1 cuts=0
+  pv=[hb]
+minimax depth=2 move=hb v=-70 t=0.000s(0.000s) m/ms=6666.667 visited=1 cuts=0
+  pv=[hb]
+minimax depth=3 move=hb v=-70 t=0.000s(0.000s) m/ms=7633.588 visited=1 cuts=0
+  pv=[hb]
+minimax depth=4 move=hb v=-70 t=0.000s(0.000s) m/ms=9090.909 visited=1 cuts=0
+  pv=[hb]
+minimax depth=5 move=hb v=-70 t=0.000s(0.000s) m/ms=9090.909 visited=1 cuts=0
+  pv=[hb]
+minimax depth=6 move=hb v=-70 t=0.000s(0.000s) m/ms=10000.000 visited=1 cuts=0
+  pv=[hb]
+minimax depth=7 move=hb v=-70 t=0.000s(0.000s) m/ms=11111.111 visited=1 cuts=0
+  pv=[hb]
+minimax depth=8 move=hb v=-70 t=0.000s(0.000s) m/ms=12345.679 visited=1 cuts=0
+  pv=[hb]
+minimax depth=9 move=hb v=-70 t=0.000s(0.000s) m/ms=8333.333 visited=1 cuts=0
+  pv=[hb]
+minimax depth=10 move=hb v=-70 t=0.000s(0.000s) m/ms=10000.000 visited=1 cuts=0
+  pv=[hb]
+minimax depth=11 move=hb v=-70 t=0.000s(0.000s) m/ms=10989.011 visited=1 cuts=0
+  pv=[hb]
+minimax depth=12 move=hb v=-70 t=0.000s(0.000s) m/ms=7142.857 visited=1 cuts=0
+  pv=[hb]
+minimax depth=13 move=hb v=-70 t=0.000s(0.000s) m/ms=8333.333 visited=1 cuts=0
+  pv=[hb]
+minimax depth=14 move=hb v=-70 t=0.000s(0.000s) m/ms=9009.009 visited=1 cuts=0
+  pv=[hb]
+minimax depth=15 move=ha v=-43 t=7.190s(7.190s) m/ms=6303.178 visited=45324908 cuts=14355790
+  pv=[ha ad di if fc cb bi ic eh hb bf fe ef fa bc]
+X to play:
+   |   |        a    b    c
+---+---+---
+   |   |        d    e    f
+---+---+---
+ O |   |        g    h    i
+
+[4mX[0m[4m  [0m[4m.[0m[4m  [0m[4mO[0m[4m [0m| O  X  . | X  .  X
+[4m.[0m[4m  [0m[4mO[0m[4m  [0m[4m.[0m[4m [0m| O  .  . | .  .  .
+[4mX[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m[4m [0m| .  .  . | X  O  O
+--------+---------+--------
+.  .  O | O  X  . | .  .  .
+X  .  O | .  X  . | O  .  X
+X  .  . | .  .  . | .  O  .
+--------+---------+--------
+.  .  X | O  .  O | .  O  .
+.  .  . | X  .  X | .  .  .
+O  O  O | .  X  . | .  X  X
+notation:
+X;@.....O..;X.O.O.X../OX.O...../X.X...XOO/..OX.OX../OX..X..../...O.X.O./..X...OOO/O.OX.X.X./.O.....XX
+minimax depth=1 move=ad v=43 t=0.000s(0.000s) m/ms=1919.386 visited=1 cuts=0
+  pv=[ad]
+minimax depth=2 move=ad v=43 t=0.000s(0.000s) m/ms=8333.333 visited=1 cuts=0
+  pv=[ad]
+minimax depth=3 move=ad v=43 t=0.000s(0.000s) m/ms=8333.333 visited=1 cuts=0
+  pv=[ad]
+minimax depth=4 move=ad v=43 t=0.000s(0.000s) m/ms=9900.990 visited=1 cuts=0
+  pv=[ad]
+minimax depth=5 move=ad v=43 t=0.000s(0.000s) m/ms=8333.333 visited=1 cuts=0
+  pv=[ad]
+minimax depth=6 move=ad v=43 t=0.000s(0.000s) m/ms=9009.009 visited=1 cuts=0
+  pv=[ad]
+minimax depth=7 move=ad v=43 t=0.000s(0.000s) m/ms=9900.990 visited=1 cuts=0
+  pv=[ad]
+minimax depth=8 move=ad v=43 t=0.000s(0.000s) m/ms=11111.111 visited=1 cuts=0
+  pv=[ad]
+minimax depth=9 move=ad v=43 t=0.000s(0.000s) m/ms=9090.909 visited=1 cuts=0
+  pv=[ad]
+minimax depth=10 move=ad v=43 t=0.000s(0.000s) m/ms=11111.111 visited=1 cuts=0
+  pv=[ad]
+minimax depth=11 move=ad v=43 t=0.000s(0.000s) m/ms=12500.000 visited=1 cuts=0
+  pv=[ad]
+minimax depth=12 move=ad v=43 t=0.000s(0.000s) m/ms=7142.857 visited=1 cuts=0
+  pv=[ad]
+minimax depth=13 move=ad v=43 t=0.000s(0.000s) m/ms=8333.333 visited=1 cuts=0
+  pv=[ad]
+minimax depth=14 move=ad v=43 t=0.000s(0.000s) m/ms=7692.308 visited=1 cuts=0
+  pv=[ad]
+minimax depth=15 move=ad v=76 t=4.930s(4.930s) m/ms=6641.335 visited=32742732 cuts=7157724
+  pv=[ad dh hb bh he ed di id db bi if fb bf fi ic]
+minimax depth=16 move=ad v=42 t=2.424s(7.355s) m/ms=6344.558 visited=15384724 cuts=5201080
+  pv=[ad dh hb bh hi if fc cd da eh he ei ig eg cb bg]
+O to play:
+ X |   |        a    b    c
+---+---+---
+   |   |        d    e    f
+---+---+---
+ O |   |        g    h    i
+
+X  .  O | O  X  . | X  .  X
+X  O  . | O  .  . | .  .  .
+X  .  . | .  .  . | X  O  O
+--------+---------+--------
+[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4mO[0m[4m [0m| O  X  . | .  .  .
+[4mX[0m[4m  [0m[4m.[0m[4m  [0m[4mO[0m[4m [0m| .  X  . | O  .  X
+[4mX[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m[4m [0m| .  .  . | .  O  .
+--------+---------+--------
+.  .  X | O  .  O | .  O  .
+.  .  . | X  .  X | .  .  .
+O  O  O | .  X  . | .  X  X
+notation:
+O;X..@..O..;X.OXO.X../OX.O...../X.X...XOO/..OX.OX../OX..X..../...O.X.O./..X...OOO/O.OX.X.X./.O.....XX
+minimax depth=1 move=di v=-43 t=0.000s(0.000s) m/ms=2036.660 visited=1 cuts=0
+  pv=[di]
+minimax depth=2 move=di v=-43 t=0.000s(0.000s) m/ms=7092.199 visited=1 cuts=0
+  pv=[di]
+minimax depth=3 move=di v=-43 t=0.000s(0.000s) m/ms=7692.308 visited=1 cuts=0
+  pv=[di]
+minimax depth=4 move=di v=-43 t=0.000s(0.000s) m/ms=9090.909 visited=1 cuts=0
+  pv=[di]
+minimax depth=5 move=di v=-43 t=0.000s(0.000s) m/ms=9009.009 visited=1 cuts=0
+  pv=[di]
+minimax depth=6 move=di v=-43 t=0.000s(0.000s) m/ms=10000.000 visited=1 cuts=0
+  pv=[di]
+minimax depth=7 move=di v=-43 t=0.000s(0.000s) m/ms=11111.111 visited=1 cuts=0
+  pv=[di]
+minimax depth=8 move=di v=-43 t=0.000s(0.000s) m/ms=12500.000 visited=1 cuts=0
+  pv=[di]
+minimax depth=9 move=di v=-43 t=0.000s(0.000s) m/ms=8264.463 visited=1 cuts=0
+  pv=[di]
+minimax depth=10 move=di v=-43 t=0.000s(0.000s) m/ms=9900.990 visited=1 cuts=0
+  pv=[di]
+minimax depth=11 move=di v=-43 t=0.000s(0.000s) m/ms=11111.111 visited=1 cuts=0
+  pv=[di]
+minimax depth=12 move=di v=-43 t=0.000s(0.000s) m/ms=5263.158 visited=1 cuts=0
+  pv=[di]
+minimax depth=13 move=di v=-43 t=0.000s(0.000s) m/ms=9009.009 visited=1 cuts=0
+  pv=[di]
+minimax depth=14 move=dh v=-76 t=1.101s(1.101s) m/ms=6978.842 visited=7687835 cuts=1690343
+  pv=[dh hb bh he ed di id db bi if fb bf fi ic]
+minimax depth=15 move=dh v=-42 t=2.291s(3.392s) m/ms=6471.541 visited=14826562 cuts=4691615
+  pv=[dh hb bh hi if fc cd da eh he ei ig eg cb bg]
+minimax depth=16 move=dh v=-1152921504606846976 t=12.617s(16.010s) m/ms=7267.581 visited=91700284 cuts=20692993
+  pv=[dh hb bh hi if fc cd da eh he ei ig eg cb bg]
+X to play:
+ X |   |        a    b    c
+---+---+---
+   |   |        d    e    f
+---+---+---
+ O |   |        g    h    i
+
+X  .  O | O  X  . | X  .  X
+X  O  . | O  .  . | .  .  .
+X  .  . | .  .  . | X  O  O
+--------+---------+--------
+.  .  O | O  X  . | .  .  .
+X  .  O | .  X  . | O  .  X
+X  O  . | .  .  . | .  O  .
+--------+---------+--------
+.  .  X |[4m [0m[4mO[0m[4m  [0m[4m.[0m[4m  [0m[4mO[0m[4m [0m| .  O  .
+.  .  . |[4m [0m[4mX[0m[4m  [0m[4m.[0m[4m  [0m[4mX[0m[4m [0m| .  .  .
+O  O  O |[4m [0m[4m.[0m[4m  [0m[4mX[0m[4m  [0m[4m.[0m[4m [0m| .  X  X
+notation:
+X;X.....O@.;X.OXO.X../OX.O...../X.X...XOO/..OX.OXO./OX..X..../...O.X.O./..X...OOO/O.OX.X.X./.O.....XX
+minimax depth=1 move=hb v=42 t=0.000s(0.000s) m/ms=1233.046 visited=1 cuts=0
+  pv=[hb]
+minimax depth=2 move=hb v=42 t=0.000s(0.000s) m/ms=7142.857 visited=1 cuts=0
+  pv=[hb]
+minimax depth=3 move=hb v=42 t=0.000s(0.000s) m/ms=9090.909 visited=1 cuts=0
+  pv=[hb]
+minimax depth=4 move=hb v=42 t=0.000s(0.000s) m/ms=9009.009 visited=1 cuts=0
+  pv=[hb]
+minimax depth=5 move=hb v=42 t=0.000s(0.000s) m/ms=8264.463 visited=1 cuts=0
+  pv=[hb]
+minimax depth=6 move=hb v=42 t=0.000s(0.000s) m/ms=10000.000 visited=1 cuts=0
+  pv=[hb]
+minimax depth=7 move=hb v=42 t=0.000s(0.000s) m/ms=10000.000 visited=1 cuts=0
+  pv=[hb]
+minimax depth=8 move=hb v=42 t=0.000s(0.000s) m/ms=10989.011 visited=1 cuts=0
+  pv=[hb]
+minimax depth=9 move=hb v=42 t=0.000s(0.000s) m/ms=9009.009 visited=1 cuts=0
+  pv=[hb]
+minimax depth=10 move=hb v=42 t=0.000s(0.000s) m/ms=10000.000 visited=1 cuts=0
+  pv=[hb]
+minimax depth=11 move=hb v=42 t=0.000s(0.000s) m/ms=12500.000 visited=1 cuts=0
+  pv=[hb]
+minimax depth=12 move=hb v=42 t=0.000s(0.000s) m/ms=7633.588 visited=1 cuts=0
+  pv=[hb]
+minimax depth=13 move=hb v=42 t=0.000s(0.000s) m/ms=9090.909 visited=1 cuts=0
+  pv=[hb]
+minimax depth=14 move=hb v=42 t=0.000s(0.000s) m/ms=9009.009 visited=1 cuts=0
+  pv=[hb]
+minimax depth=15 move=he v=1152921504606846976 t=7.885s(7.885s) m/ms=7370.709 visited=58123712 cuts=12975739
+  pv=[he bh hi ic cf fc cb bi if fi ig ed db bf fg]
+O to play:
+ X |   |        a    b    c
+---+---+---
+   |   |        d    e    f
+---+---+---
+ O | X |        g    h    i
+
+X  .  O | O  X  . | X  .  X
+X  O  . | O  .  . | .  .  .
+X  .  . | .  .  . | X  O  O
+--------+---------+--------
+.  .  O |[4m [0m[4mO[0m[4m  [0m[4mX[0m[4m  [0m[4m.[0m[4m [0m| .  .  .
+X  .  O |[4m [0m[4m.[0m[4m  [0m[4mX[0m[4m  [0m[4m.[0m[4m [0m| O  .  X
+X  O  . |[4m [0m[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m[4m [0m| .  O  .
+--------+---------+--------
+.  .  X | O  .  O | .  O  .
+.  .  . | X  X  X | .  .  .
+O  O  O | .  X  . | .  X  X
+notation:
+O;X...@.OX.;X.OXO.X../OX.O...../X.X...XOO/..OX.OXO./OX..X..../...O.X.O./..X...OOO/O.OXXX.X./.O.....XX
+minimax depth=1 move=eg v=-58 t=0.000s(0.000s) m/ms=3311.258 visited=7 cuts=0
+  pv=[eg]
+minimax depth=2 move=eg v=-1152921504606846976 t=0.000s(0.000s) m/ms=2687.140 visited=7 cuts=0
+  pv=[eg]
+X to play:
+ X |   |        a    b    c
+---+---+---
+   |   |        d    e    f
+---+---+---
+ O | X |        g    h    i
+
+X  .  O | O  X  . | X  .  X
+X  O  . | O  .  . | .  .  .
+X  .  . | .  .  . | X  O  O
+--------+---------+--------
+.  .  O | O  X  . | .  .  .
+X  .  O | .  X  . | O  .  X
+X  O  . | O  .  . | .  O  .
+--------+---------+--------
+.  .  X | O  .  O | .  O  .
+.  .  . | X  X  X | .  .  .
+O  O  O | .  X  . | .  X  X
+notation:
+X;X.....OX.;X.OXO.X../OX.O...../X.X...XOO/..OX.OXO./OX..X.O../...O.X.O./..X...OOO/O.OXXX.X./.O.....XX
+minimax depth=1 move=eh v=1152921504606846976 t=0.000s(0.000s) m/ms=4149.378 visited=1 cuts=0
+  pv=[eh]
+O to play:
+ X |   |        a    b    c
+---+---+---
+   | X |        d    e    f
+---+---+---
+ O | X |        g    h    i
+
+X  .  O | O  X  . | X  .  X
+X  O  . | O  .  . | .  .  .
+X  .  . | .  .  . | X  O  O
+--------+---------+--------
+.  .  O | O  X  . | .  .  .
+X  .  O | .  X  . | O  .  X
+X  O  . | O  X  . | .  O  .
+--------+---------+--------
+.  .  X | O  .  O | .  O  .
+.  .  . | X  X  X | .  .  .
+O  O  O | .  X  . | .  X  X
+notation:
+O;X...X.OX.;X.OXO.X../OX.O...../X.X...XOO/..OX.OXO./OX..X.OX./...O.X.O./..X...OOO/O.OXXX.X./.O.....XX
+minimax depth=1 move=bg v=-70 t=0.000s(0.000s) m/ms=4981.550 visited=27 cuts=0
+  pv=[bg]
+minimax depth=2 move=bg v=-1152921504606846976 t=0.000s(0.000s) m/ms=2784.079 visited=27 cuts=0
+  pv=[bg]
+X to play:
+ X | O |        a    b    c
+---+---+---
+   | X |        d    e    f
+---+---+---
+ O | X |        g    h    i
+
+X  .  O | O  X  . | X  .  X
+X  O  . | O  .  . | .  .  .
+X  .  . | O  .  . | X  O  O
+--------+---------+--------
+.  .  O | O  X  . | .  .  .
+X  .  O | .  X  . | O  .  X
+X  O  . | O  X  . | .  O  .
+--------+---------+--------
+.  .  X | O  .  O | .  O  .
+.  .  . | X  X  X | .  .  .
+O  O  O | .  X  . | .  X  X
+notation:
+X;XO..X.OX.;X.OXO.X../OX.O..O../X.X...XOO/..OX.OXO./OX..X.OX./...O.X.O./..X...OOO/O.OXXX.X./.O.....XX
+minimax depth=1 move=cb v=1152921504606846976 t=0.000s(0.000s) m/ms=5000.000 visited=1 cuts=0
+  pv=[cb]
+O to play:
+ X | O | X      a    b    c
+---+---+---
+   | X |        d    e    f
+---+---+---
+ O | X |        g    h    i
+
+X  .  O | O  X  . | X  X  X
+X  O  . | O  .  . | .  .  .
+X  .  . | O  .  . | X  O  O
+--------+---------+--------
+.  .  O | O  X  . | .  .  .
+X  .  O | .  X  . | O  .  X
+X  O  . | O  X  . | .  O  .
+--------+---------+--------
+.  .  X | O  .  O | .  O  .
+.  .  . | X  X  X | .  .  .
+O  O  O | .  X  . | .  X  X
+notation:
+O;XOX.X.OX.;X.OXO.X../OX.O..O../XXX...XOO/..OX.OXO./OX..X.OX./...O.X.O./..X...OOO/O.OXXX.X./.O.....XX
+minimax depth=1 move=ic v=-1152921504606846976 t=0.000s(0.000s) m/ms=3436.426 visited=1 cuts=0
+  pv=[ic]
+X to play:
+ X | O | X      a    b    c
+---+---+---
+   | X |        d    e    f
+---+---+---
+ O | X |        g    h    i
+
+X  .  O | O  X  . | X  X  X
+X  O  . | O  .  . | .  .  .
+X  .  . | O  .  . | X  O  O
+--------+---------+--------
+.  .  O | O  X  . | .  .  .
+X  .  O | .  X  . | O  .  X
+X  O  . | O  X  . | .  O  .
+--------+---------+--------
+.  .  X | O  .  O | .  O  O
+.  .  . | X  X  X | .  .  .
+O  O  O | .  X  . | .  X  X
+notation:
+X;XOX.X.OX.;X.OXO.X../OX.O..O../XXX...XOO/..OX.OXO./OX..X.OX./...O.X.O./..X...OOO/O.OXXX.X./.OO....XX
+minimax depth=1 move=ia v=1152921504606846976 t=0.000s(0.000s) m/ms=5555.556 visited=1 cuts=0
+  pv=[ia]
+O to play:
+ X | O | X      a    b    c
+---+---+---
+   | X |        d    e    f
+---+---+---
+ O | X |        g    h    i
+
+X  .  O | O  X  . | X  X  X
+X  O  . | O  .  . | .  .  .
+X  .  . | O  .  . | X  O  O
+--------+---------+--------
+.  .  O | O  X  . | .  .  .
+X  .  O | .  X  . | O  .  X
+X  O  . | O  X  . | .  O  .
+--------+---------+--------
+.  .  X | O  .  O | X  O  O
+.  .  . | X  X  X | .  .  .
+O  O  O | .  X  . | .  X  X
+notation:
+O;XOX.X.OX.;X.OXO.X../OX.O..O../XXX...XOO/..OX.OXO./OX..X.OX./...O.X.O./..X...OOO/O.OXXX.X./XOO....XX
+minimax depth=1 move=di v=-70 t=0.000s(0.000s) m/ms=5628.518 visited=15 cuts=0
+  pv=[di]
+minimax depth=2 move=di v=-1152921504606846976 t=0.000s(0.000s) m/ms=2678.571 visited=15 cuts=0
+  pv=[di]
+X to play:
+ X | O | X      a    b    c
+---+---+---
+ O | X |        d    e    f
+---+---+---
+ O | X |        g    h    i
+
+X  .  O | O  X  . | X  X  X
+X  O  . | O  .  . | .  .  .
+X  .  . | O  .  . | X  O  O
+--------+---------+--------
+.  .  O | O  X  . | .  .  .
+X  .  O | .  X  . | O  .  X
+X  O  O | O  X  . | .  O  .
+--------+---------+--------
+.  .  X | O  .  O |[4m [0m[4mX[0m[4m  [0m[4mO[0m[4m  [0m[4mO[0m
+.  .  . | X  X  X |[4m [0m[4m.[0m[4m  [0m[4m.[0m[4m  [0m[4m.[0m
+O  O  O | .  X  . |[4m [0m[4m.[0m[4m  [0m[4mX[0m[4m  [0m[4mX[0m
+notation:
+X;XOXOX.OX@;X.OXO.X../OX.O..O../XXX...XOO/..OX.OXOO/OX..X.OX./...O.X.O./..X...OOO/O.OXXX.X./XOO....XX
+minimax depth=1 move=ig v=1152921504606846976 t=0.000s(0.000s) m/ms=3333.333 visited=1 cuts=0
+  pv=[ig]
