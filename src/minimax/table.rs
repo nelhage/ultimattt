@@ -57,6 +57,10 @@ where
         let base = ent.hash() as usize;
         for j in 0..N::to_usize() {
             let i = (base + j) % self.entries.len();
+            if self.entries[i].hash() == ent.hash() {
+                worst = Some(i);
+                break;
+            }
             if let Some(w) = worst {
                 if self.entries[w].better_than(&self.entries[i]) {
                     worst = Some(i);
