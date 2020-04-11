@@ -28,6 +28,8 @@ pub struct Stats {
     visited: i64,
     terminal: i64,
     cuts: i64,
+    tt_hit: i64,
+    tt_suffice: i64,
 }
 
 impl Default for Stats {
@@ -38,6 +40,8 @@ impl Default for Stats {
             terminal: 0,
             cuts: 0,
             score: 0,
+            tt_hit: 0,
+            tt_suffice: 0,
         }
     }
 }
@@ -54,6 +58,8 @@ impl Stats {
             } else {
                 other.score
             },
+            tt_hit: self.tt_hit + other.tt_hit,
+            tt_suffice: self.tt_suffice + other.tt_suffice,
         }
     }
 }
@@ -332,6 +338,7 @@ impl Minimax {
 
         let te = self.table.lookup(g.zobrist()).map(|e| e.clone());
         if let Some(ref e) = te {
+            self.stats.tt_hit += 1;
             if e.depth as i64 >= depth {
                 let ok = match e.bound {
                     Bound::Exact => true,
@@ -339,6 +346,7 @@ impl Minimax {
                     Bound::AtMost => e.value <= alpha,
                 };
                 if ok {
+                    self.stats.tt_suffice += 1;
                     pv[0] = e.pv;
                     return e.value;
                 }
@@ -451,6 +459,12 @@ impl Minimax {
                     self.stats.cuts,
                 );
                 if self.config.debug > 1 {
+                    eprintln!(
+                        "  terminal={} tt={}/{}",
+                        self.stats.terminal, self.stats.tt_suffice, self.stats.tt_hit
+                    );
+                }
+                if self.config.debug > 2 {
                     eprintln!("  pv={}", self.format_pv(&pv),);
                 }
             }
