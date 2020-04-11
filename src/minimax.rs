@@ -148,10 +148,10 @@ pub enum Bound {
 #[derive(Clone, Debug)]
 pub struct Entry {
     pub hash: u64,
+    pub value: i64,
     pub bound: Bound,
     pub depth: u8,
     pub pv: game::Move,
-    pub value: i64,
 }
 
 impl table::Entry for Entry {
@@ -161,6 +161,10 @@ impl table::Entry for Entry {
 
     fn better_than(&self, other: &Self) -> bool {
         self.depth > other.depth
+    }
+
+    fn valid(&self) -> bool {
+        self.depth > 0
     }
 }
 
