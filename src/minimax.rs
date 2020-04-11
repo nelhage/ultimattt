@@ -1,4 +1,5 @@
 extern crate smallvec;
+extern crate typenum;
 use crate::game;
 
 mod table;
@@ -6,6 +7,7 @@ mod table;
 use rand;
 use smallvec::SmallVec;
 use std::cmp::max;
+use std::mem::MaybeUninit;
 use std::time::{Duration, Instant};
 use std::vec::Vec;
 
@@ -129,6 +131,39 @@ where
     }
 }
 
+#[repr(u8)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum Bound {
+    Exact,
+    AtLeast,
+    AtMost,
+}
+
+#[derive(Clone, Debug)]
+pub struct Entry {
+    pub hash: u64,
+    pub bound: Bound,
+    pub depth: u8,
+    pub pv: game::Move,
+    pub value: i64,
+}
+
+impl table::Entry for Entry {
+    fn hash(&self) -> u64 {
+        self.hash
+    }
+
+    fn better_than(&self, other: &Self) -> bool {
+        self.depth > other.depth
+    }
+}
+
+impl Default for Entry {
+    fn default() -> Self {
+        unsafe { MaybeUninit::zeroed().assume_init() }
+    }
+}
+
 #[allow(dead_code)]
 pub struct Minimax {
     rng: rand::rngs::ThreadRng,
@@ -136,7 +171,7 @@ pub struct Minimax {
     config: Config,
     stats: Stats,
     response: [ResponseTable; 2],
-    table: table::TranspositionTable,
+    table: table::TranspositionTable<Entry, typenum::U1>,
 }
 
 const EVAL_WON: i64 = 1 << 60;
@@ -259,7 +294,7 @@ impl Minimax {
     fn move_iterator<'a>(
         &mut self,
         g: &'a game::Game,
-        te: Option<&'a table::Entry>,
+        te: Option<&'a Entry>,
         pv: game::Move,
         prev: game::Move,
     ) -> impl Iterator<Item = game::Move> + 'a {
@@ -299,9 +334,9 @@ impl Minimax {
         if let Some(ref e) = te {
             if e.depth as i64 >= depth {
                 let ok = match e.bound {
-                    table::Bound::Exact => true,
-                    table::Bound::AtLeast => e.value >= beta,
-                    table::Bound::AtMost => e.value <= alpha,
+                    Bound::Exact => true,
+                    Bound::AtLeast => e.value >= beta,
+                    Bound::AtMost => e.value <= alpha,
                 };
                 if ok {
                     pv[0] = e.pv;
@@ -330,17 +365,17 @@ impl Minimax {
                 }
             }
         }
-        self.table.store(&table::Entry {
+        self.table.store(&Entry {
             depth: depth as u8,
             hash: g.zobrist(),
             pv: pv[0],
             value: alpha,
             bound: if !improved {
-                table::Bound::AtMost
+                Bound::AtMost
             } else if alpha >= beta {
-                table::Bound::AtLeast
+                Bound::AtLeast
             } else {
-                table::Bound::Exact
+                Bound::Exact
             },
         });
         alpha
