@@ -304,10 +304,8 @@ impl Minimax {
                     table::Bound::AtMost => e.value <= alpha,
                 };
                 if ok {
-                    if let Ok(_) = g.make_move(e.pv) {
-                        pv[0] = e.pv;
-                        return e.value;
-                    }
+                    pv[0] = e.pv;
+                    return e.value;
                 }
             }
         }
@@ -395,8 +393,8 @@ impl Minimax {
             self.stats.score = self.minimax(
                 g,
                 depth,
-                EVAL_LOST,
-                EVAL_WON,
+                EVAL_LOST - 1,
+                EVAL_WON + 1,
                 pv.as_mut_slice(),
                 game::Move::none(),
             );
