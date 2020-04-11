@@ -304,8 +304,10 @@ impl Minimax {
                     table::Bound::AtMost => e.value <= alpha,
                 };
                 if ok {
-                    pv[0] = e.pv;
-                    return e.value;
+                    if let Ok(_) = g.make_move(e.pv) {
+                        pv[0] = e.pv;
+                        return e.value;
+                    }
                 }
             }
         }
