@@ -97,6 +97,10 @@ static CHARS: &[char] = &['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'];
 
 impl fmt::Display for super::Move {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}{}", CHARS[self.board()], CHARS[self.square()])
+        if self.is_none() {
+            write!(f, "<none>")
+        } else {
+            write!(f, "{}{}", CHARS[self.board()], CHARS[self.square()])
+        }
     }
 }
