@@ -1,4 +1,5 @@
 extern crate ansi_term;
+extern crate bytesize;
 extern crate rand;
 extern crate regex;
 extern crate serde_json;
@@ -173,6 +174,35 @@ fn parse_duration(arg: &str) -> Result<Duration, io::Error> {
     }
 }
 
+fn parse_bytesize(arg: &str) -> Result<bytesize::ByteSize, io::Error> {
+    let pat = Regex::new(r"^([0-9]+)([KMGTPE]?i?)B?$").unwrap();
+    match pat.captures(arg) {
+        None => Err(io::Error::new(
+            io::ErrorKind::Other,
+            format!("Unable to parse bytesize: '{}'", arg),
+        )),
+        Some(captures) => {
+            let num = captures.get(1).unwrap().as_str().parse::<u64>().unwrap();
+            let unit = captures.get(2).unwrap().as_str();
+            match unit {
+                "" => Ok(bytesize::ByteSize::b(num)),
+                "K" => Ok(bytesize::ByteSize::kb(num)),
+                "Ki" => Ok(bytesize::ByteSize::kib(num)),
+                "M" => Ok(bytesize::ByteSize::mb(num)),
+                "Mi" => Ok(bytesize::ByteSize::mib(num)),
+                "G" => Ok(bytesize::ByteSize::gb(num)),
+                "Gi" => Ok(bytesize::ByteSize::gib(num)),
+                "T" => Ok(bytesize::ByteSize::tb(num)),
+                "Ti" => Ok(bytesize::ByteSize::tib(num)),
+                _ => Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("Unsupported unite: '{}'", unit),
+                )),
+            }
+        }
+    }
+}
+
 #[derive(Debug, StructOpt)]
 #[structopt(name = "ultimatett", about = "Ultimate Tic Tac Toe")]
 pub struct Opt {
@@ -180,6 +210,8 @@ pub struct Opt {
     timeout: Duration,
     #[structopt(long)]
     depth: Option<i64>,
+    #[structopt(long, default_value = "1G", parse(try_from_str=parse_bytesize))]
+    table_mem: bytesize::ByteSize,
     #[structopt(long, default_value = "1")]
     debug: usize,
     #[structopt(subcommand)]
@@ -222,6 +254,7 @@ fn ai_config(opt: &Opt) -> minimax::Config {
         timeout: Some(opt.timeout),
         max_depth: opt.depth,
         debug: opt.debug,
+        table_bytes: opt.table_mem.as_u64() as usize,
         ..Default::default()
     }
 }
