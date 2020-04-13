@@ -10,7 +10,7 @@ path = "src/main/main.rs"
 
 [lib]
 name = "ultimattt"
-path = "src/lib.rs"
+path = "src/lib/lib.rs"
 
 [[bench]]
 name = "bench_ultimatett"

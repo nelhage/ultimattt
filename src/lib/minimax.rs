@@ -1,8 +1,7 @@
 extern crate smallvec;
 extern crate typenum;
 use crate::game;
-
-mod table;
+use crate::table;
 
 use rand;
 use smallvec::SmallVec;

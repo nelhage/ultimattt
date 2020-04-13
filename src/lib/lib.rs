@@ -8,3 +8,4 @@ pub mod minimax;
 pub mod protocol;
 #[allow(dead_code)]
 pub mod prove;
+pub mod table;
