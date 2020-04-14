@@ -219,11 +219,17 @@ impl DFPN {
                 hash: g.zobrist(),
                 work: 0,
             });
+            let state = g.game_state();
             children.push(Child {
                 position: g,
                 r#move: m,
                 entry: data,
             });
+            if let game::BoardState::Won(p) = state {
+                if p == pos.player() {
+                    break;
+                }
+            }
         }
 
         // recurse
