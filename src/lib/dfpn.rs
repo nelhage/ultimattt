@@ -128,7 +128,7 @@ impl DFPN {
             stats: Default::default(),
             stack: Vec::new(),
         };
-        let result = prover.mid(
+        let (result, work) = prover.mid(
             Bounds {
                 phi: INFINITY / 2,
                 delta: INFINITY / 2,
@@ -143,18 +143,14 @@ impl DFPN {
             } else {
                 prove::Evaluation::Unknown
             },
-            work: prover
-                .table
-                .lookup(g.zobrist())
-                .map(|e| e.work)
-                .unwrap_or(0),
+            work: work,
             bounds: result.bounds,
             stats: prover.stats.clone(),
             duration: Instant::now().duration_since(prover.start),
         }
     }
 
-    fn mid(&mut self, bounds: Bounds, pos: &game::Game) -> Entry {
+    fn mid(&mut self, bounds: Bounds, pos: &game::Game) -> (Entry, u64) {
         if self.cfg.debug > 4 {
             eprintln!(
                 "mid[{}]: m={} d={} bounds=({}, {})",
@@ -179,7 +175,7 @@ impl DFPN {
             work: 0,
         });
         if (data.bounds.phi >= bounds.phi) || (data.bounds.delta >= bounds.delta) {
-            return data;
+            return (data, 0);
         }
         let terminal = match pos.game_state() {
             game::BoardState::InPlay => None,
@@ -197,10 +193,10 @@ impl DFPN {
             if self.table.store(&data) {
                 self.stats.ttstore += 1;
             }
-            return data;
+            return (data, 1);
         }
 
-        data.work += 1;
+        let mut local_work = 1;
 
         let mut children = Vec::new();
         for m in pos.all_moves() {
@@ -231,16 +227,17 @@ impl DFPN {
                 delta: min(bounds.phi, delta_2 + 1),
             };
             self.stack.push(children[best_idx].r#move);
-            let prev_child_work = children[best_idx].entry.work;
-            children[best_idx].entry = self.mid(child_bounds, &child.position);
+            let (child_entry, child_work) = self.mid(child_bounds, &child.position);
+            children[best_idx].entry = child_entry;
             self.stack.pop();
-            data.work += children[best_idx].entry.work - prev_child_work;
+            local_work += child_work;
         }
 
+        data.work += local_work;
         if self.table.store(&data) {
             self.stats.ttstore += 1;
         }
-        data
+        (data, local_work)
     }
 
     fn compute_bounds(&self, children: &Vec<Child>) -> Bounds {
