@@ -97,9 +97,11 @@ pub struct ProveResult {
 
 pub struct DFPN {
     start: Instant,
+    tick: Instant,
     cfg: Config,
     table: table::TranspositionTable<Entry, typenum::U4>,
     stats: Stats,
+    root: game::Game,
     stack: Vec<game::Move>,
 }
 
@@ -109,10 +111,16 @@ struct Child {
     entry: Entry,
 }
 
+const CHECK_TICK_INTERVAL: usize = 1 << 12;
+static TICK_TIME: Duration = Duration::from_millis(500);
+
 impl DFPN {
     pub fn prove(cfg: &Config, g: &game::Game) -> ProveResult {
+        let start = Instant::now();
         let mut prover = DFPN {
-            start: Instant::now(),
+            root: g.clone(),
+            start: start,
+            tick: start,
             cfg: cfg.clone(),
             table: table::TranspositionTable::with_memory(cfg.table_size),
             stats: Default::default(),
@@ -160,6 +168,20 @@ impl DFPN {
             );
         }
         self.stats.mid += 1;
+        if self.stats.mid % CHECK_TICK_INTERVAL == 0
+            && self.cfg.debug > 0
+            && Instant::now() > self.tick
+        {
+            self.tick += TICK_TIME;
+            let elapsed = Instant::now().duration_since(self.start);
+            eprintln!(
+                "t={}.{:03}s mid={} mid/ms={:.1}",
+                elapsed.as_secs(),
+                elapsed.subsec_millis(),
+                self.stats.mid,
+                (self.stats.mid as f64) / (elapsed.as_millis() as f64),
+            );
+        }
         if (data.bounds.phi >= bounds.phi) || (data.bounds.delta >= bounds.delta) {
             return (data, 0);
         }
