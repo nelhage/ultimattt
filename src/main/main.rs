@@ -404,7 +404,7 @@ fn main() -> Result<(), std::io::Error> {
                     &game,
                 );
                 println!(
-                    "result={:?} time={}.{:03}s work={} pn={} dpn={}  mid={} tthit={} ttstore={}",
+                    "result={:?} time={}.{:03}s work={} pn={} dpn={}  mid={} tthit={}/{} ({:.1}%) ttstore={}",
                     result.value,
                     result.duration.as_secs(),
                     result.duration.subsec_millis(),
@@ -413,6 +413,8 @@ fn main() -> Result<(), std::io::Error> {
                     result.bounds.delta,
                     result.stats.mid,
                     result.stats.tthit,
+                    result.stats.ttlookup,
+                    100.0 * (result.stats.tthit as f64 / result.stats.ttlookup as f64),
                     result.stats.ttstore,
                 );
             } else {

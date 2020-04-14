@@ -5,23 +5,13 @@ use std::cmp::min;
 use std::time::{Duration, Instant};
 use typenum;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Stats {
     pub mid: usize,
+    pub ttlookup: usize,
     pub tthit: usize,
     pub ttstore: usize,
     pub terminal: usize,
-}
-
-impl Default for Stats {
-    fn default() -> Self {
-        Stats {
-            mid: 0,
-            terminal: 0,
-            tthit: 0,
-            ttstore: 0,
-        }
-    }
 }
 
 const INFINITY: u32 = 1 << 31;
@@ -197,6 +187,7 @@ impl DFPN {
         let mut children = Vec::new();
         for m in pos.all_moves() {
             let g = pos.make_move(m).expect("all_moves returned illegal move");
+            self.stats.ttlookup += 1;
             let te = self.table.lookup(g.zobrist()).cloned();
             if let Some(_) = te {
                 self.stats.tthit += 1;
