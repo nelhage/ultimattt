@@ -200,6 +200,8 @@ impl DFPN {
             return data;
         }
 
+        data.work += 1;
+
         let mut children = Vec::new();
         for m in pos.all_moves() {
             let g = pos.make_move(m).expect("all_moves returned illegal move");
@@ -229,9 +231,10 @@ impl DFPN {
                 delta: min(bounds.phi, delta_2 + 1),
             };
             self.stack.push(children[best_idx].r#move);
+            let prev_child_work = children[best_idx].entry.work;
             children[best_idx].entry = self.mid(child_bounds, &child.position);
             self.stack.pop();
-            data.work += children[best_idx].entry.work;
+            data.work += children[best_idx].entry.work - prev_child_work;
         }
 
         if self.table.store(&data) {
