@@ -1,4 +1,5 @@
 use crate::game;
+use crate::prove;
 use crate::table;
 use std::cmp::min;
 use std::time::{Duration, Instant};
@@ -97,9 +98,11 @@ pub struct Config {
 }
 
 pub struct ProveResult {
+    pub value: prove::Evaluation,
     pub bounds: Bounds,
     pub stats: Stats,
     pub duration: Duration,
+    pub work: u64,
 }
 
 pub struct DFPN {
@@ -133,6 +136,18 @@ impl DFPN {
             g,
         );
         ProveResult {
+            value: if result.bounds.phi == 0 {
+                prove::Evaluation::True
+            } else if result.bounds.delta == 0 {
+                prove::Evaluation::False
+            } else {
+                prove::Evaluation::Unknown
+            },
+            work: prover
+                .table
+                .lookup(g.zobrist())
+                .map(|e| e.work)
+                .unwrap_or(0),
             bounds: result.bounds,
             stats: prover.stats.clone(),
             duration: Instant::now().duration_since(prover.start),
@@ -232,8 +247,9 @@ impl DFPN {
         };
         for ch in children.iter() {
             out.phi = min(out.phi, ch.entry.bounds.delta);
-            out.delta += ch.entry.bounds.phi;
+            out.delta = out.delta.saturating_add(ch.entry.bounds.phi);
         }
+        out.delta = min(out.delta, INFINITY);
         return out;
     }
 
