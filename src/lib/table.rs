@@ -9,7 +9,8 @@ where
     E: Entry + Default + Clone,
     N: typenum::Unsigned,
 {
-    pub entries: Box<[E]>,
+    index: Box<[u8]>,
+    entries: Box<[E]>,
     n: PhantomData<N>,
 }
 
@@ -21,6 +22,17 @@ pub trait Entry {
 
 pub const DEFAULT_TABLE_SIZE: usize = 1 << 30;
 
+fn new_default_slice<T>(len: usize) -> Box<[T]>
+where
+    T: Default,
+{
+    let mut slice = Box::new_uninit_slice(len);
+    for e in slice.iter_mut() {
+        *e = MaybeUninit::new(Default::default());
+    }
+    unsafe { slice.assume_init() }
+}
+
 impl<E, N> TranspositionTable<E, N>
 where
     E: Entry + Default + Clone,
@@ -31,13 +43,11 @@ where
     }
 
     pub fn with_memory(bytes: usize) -> Self {
-        let mut entries = Box::new_uninit_slice(bytes / mem::size_of::<E>());
-        for e in entries.iter_mut() {
-            *e = MaybeUninit::new(Default::default());
-        }
+        let len = bytes / (1 + mem::size_of::<E>());
 
         TranspositionTable::<E, N> {
-            entries: unsafe { entries.assume_init() },
+            index: new_default_slice(len),
+            entries: new_default_slice(len),
             n: PhantomData,
         }
     }
@@ -46,6 +56,9 @@ where
         let base = h as usize;
         for j in 0..N::to_usize() {
             let i = (base + j) % self.entries.len();
+            if self.index[i] != (h & 0xff) as u8 {
+                continue;
+            }
             if self.entries[i].valid() && self.entries[i].hash() == h {
                 return Some(&self.entries[i]);
             }
@@ -72,6 +85,7 @@ where
         }
         let idx = worst.unwrap();
         if !self.entries[idx].valid() || ent.better_than(&self.entries[idx]) {
+            self.index[idx] = (ent.hash() & 0xff) as u8;
             self.entries[idx] = ent.clone();
             true
         } else {
