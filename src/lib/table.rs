@@ -71,7 +71,7 @@ where
             }
         }
         let idx = worst.unwrap();
-        if ent.better_than(&self.entries[idx]) {
+        if !self.entries[idx].valid() || ent.better_than(&self.entries[idx]) {
             self.entries[idx] = ent.clone();
             true
         } else {
