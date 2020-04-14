@@ -1,7 +1,7 @@
 use crate::game;
 use crate::prove;
 use crate::table;
-use std::cmp::min;
+use std::cmp::{max, min};
 use std::time::{Duration, Instant};
 use typenum;
 
@@ -85,6 +85,18 @@ pub struct Config {
     pub table_size: usize,
     pub timeout: Option<Duration>,
     pub debug: usize,
+    pub epsilon: f64,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Config {
+            table_size: table::DEFAULT_TABLE_SIZE,
+            timeout: None,
+            debug: 0,
+            epsilon: 1.0 / 8.0,
+        }
+    }
 }
 
 pub struct ProveResult {
@@ -243,7 +255,13 @@ impl DFPN {
             let child = &children[best_idx];
             let child_bounds = Bounds {
                 phi: bounds.delta + child.entry.bounds.phi - data.bounds.delta,
-                delta: min(bounds.phi, delta_2 + 1),
+                delta: min(
+                    bounds.phi,
+                    max(
+                        delta_2 + 1,
+                        (delta_2 as f64 * (1.0 + self.cfg.epsilon)) as u32,
+                    ),
+                ),
             };
             self.stack.push(children[best_idx].r#move);
             let (child_entry, child_work) = self.mid(

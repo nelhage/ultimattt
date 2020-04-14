@@ -232,6 +232,19 @@ struct SelfplayParameters {
 }
 
 #[derive(Debug, StructOpt)]
+struct AnalyzeParameters {
+    #[structopt(long)]
+    prove: bool,
+    #[structopt(long)]
+    dfpn: bool,
+    #[structopt(long)]
+    max_nodes: Option<usize>,
+    #[structopt(long, default_value = "0.125")]
+    epsilon: f64,
+    position: String,
+}
+
+#[derive(Debug, StructOpt)]
 enum Command {
     Play {
         #[structopt(short = "x", long, default_value = "human")]
@@ -239,15 +252,7 @@ enum Command {
         #[structopt(short = "o", long, default_value = "minimax")]
         playero: String,
     },
-    Analyze {
-        #[structopt(long)]
-        prove: bool,
-        #[structopt(long)]
-        dfpn: bool,
-        #[structopt(long)]
-        max_nodes: Option<usize>,
-        position: String,
-    },
+    Analyze(AnalyzeParameters),
     Selfplay(SelfplayParameters),
     Worker {},
 }
@@ -358,29 +363,24 @@ fn main() -> Result<(), std::io::Error> {
                 }
             }
         }
-        Command::Analyze {
-            prove,
-            dfpn: df,
-            max_nodes,
-            ref position,
-        } => {
-            let game = match game::notation::parse(position) {
+        Command::Analyze(ref analyze) => {
+            let game = match game::notation::parse(&analyze.position) {
                 Ok(g) => g,
                 Err(e) => {
                     println!("Parsing position: {:?}", e);
                     exit(1)
                 }
             };
-            if prove && df {
+            if analyze.prove && analyze.dfpn {
                 println!("--prove and --dpfn are incompatible");
                 exit(1);
             }
-            if prove {
+            if analyze.prove {
                 let result = prove::Prover::prove(
                     &prove::Config {
                         debug: opt.debug,
                         timeout: Some(opt.timeout),
-                        max_nodes: max_nodes,
+                        max_nodes: analyze.max_nodes,
                         ..Default::default()
                     },
                     &game,
@@ -394,12 +394,14 @@ fn main() -> Result<(), std::io::Error> {
                     result.disproof,
                     result.allocated,
                 );
-            } else if df {
+            } else if analyze.dfpn {
                 let result = dfpn::DFPN::prove(
                     &dfpn::Config {
                         table_size: opt.table_mem.as_u64() as usize,
                         timeout: Some(opt.timeout),
                         debug: opt.debug,
+                        epsilon: analyze.epsilon,
+                        ..Default::default()
                     },
                     &game,
                 );
