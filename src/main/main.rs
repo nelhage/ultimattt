@@ -17,6 +17,7 @@ use std::io::Write;
 use std::process::exit;
 use std::time::Duration;
 use structopt::StructOpt;
+use ultimattt::dfpn;
 use ultimattt::game;
 use ultimattt::minimax;
 use ultimattt::minimax::AI;
@@ -242,6 +243,8 @@ enum Command {
         #[structopt(long)]
         prove: bool,
         #[structopt(long)]
+        dfpn: bool,
+        #[structopt(long)]
         max_nodes: Option<usize>,
         position: String,
     },
@@ -357,6 +360,7 @@ fn main() -> Result<(), std::io::Error> {
         }
         Command::Analyze {
             prove,
+            dfpn: df,
             max_nodes,
             ref position,
         } => {
@@ -367,6 +371,10 @@ fn main() -> Result<(), std::io::Error> {
                     exit(1)
                 }
             };
+            if prove && df {
+                println!("--prove and --dpfn are incompatible");
+                exit(1);
+            }
             if prove {
                 let result = prove::Prover::prove(
                     &prove::Config {
@@ -385,6 +393,23 @@ fn main() -> Result<(), std::io::Error> {
                     result.proof,
                     result.disproof,
                     result.allocated,
+                );
+            } else if df {
+                let result = dfpn::DFPN::prove(
+                    &dfpn::Config {
+                        table_size: opt.table_mem.as_u64() as usize,
+                        timeout: Some(opt.timeout),
+                        debug: opt.debug,
+                    },
+                    &game,
+                );
+                println!(
+                    "result={}/{} time={}.{:03}s mid={}",
+                    result.bounds.phi,
+                    result.bounds.delta,
+                    result.duration.as_secs(),
+                    result.duration.subsec_millis(),
+                    result.stats.mid,
                 );
             } else {
                 let mut ai = make_ai(&opt);

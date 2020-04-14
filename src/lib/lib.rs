@@ -1,6 +1,8 @@
 #![feature(new_uninit)]
 
 #[allow(dead_code)]
+pub mod dfpn;
+#[allow(dead_code)]
 pub mod game;
 #[allow(dead_code)]
 pub mod minimax;
@@ -8,4 +10,5 @@ pub mod minimax;
 pub mod protocol;
 #[allow(dead_code)]
 pub mod prove;
+
 pub mod table;
