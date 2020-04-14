@@ -133,6 +133,11 @@ impl DFPN {
                 phi: INFINITY / 2,
                 delta: INFINITY / 2,
             },
+            Entry {
+                bounds: Bounds::unity(),
+                hash: g.zobrist(),
+                work: 0,
+            },
             g,
         );
         ProveResult {
@@ -150,7 +155,7 @@ impl DFPN {
         }
     }
 
-    fn mid(&mut self, bounds: Bounds, pos: &game::Game) -> (Entry, u64) {
+    fn mid(&mut self, bounds: Bounds, mut data: Entry, pos: &game::Game) -> (Entry, u64) {
         if self.cfg.debug > 4 {
             eprintln!(
                 "mid[{}]: m={} d={} bounds=({}, {})",
@@ -165,15 +170,6 @@ impl DFPN {
             );
         }
         self.stats.mid += 1;
-        let entry = self.table.lookup(pos.zobrist()).cloned();
-        if let Some(_) = entry {
-            self.stats.tthit += 1;
-        }
-        let mut data = entry.unwrap_or(Entry {
-            bounds: Bounds::unity(),
-            hash: pos.zobrist(),
-            work: 0,
-        });
         if (data.bounds.phi >= bounds.phi) || (data.bounds.delta >= bounds.delta) {
             return (data, 0);
         }
@@ -201,7 +197,11 @@ impl DFPN {
         let mut children = Vec::new();
         for m in pos.all_moves() {
             let g = pos.make_move(m).expect("all_moves returned illegal move");
-            let data = self.table.lookup(g.zobrist()).cloned().unwrap_or(Entry {
+            let te = self.table.lookup(g.zobrist()).cloned();
+            if let Some(_) = te {
+                self.stats.tthit += 1;
+            }
+            let data = te.unwrap_or(Entry {
                 bounds: Bounds::unity(),
                 hash: g.zobrist(),
                 work: 0,
@@ -227,7 +227,11 @@ impl DFPN {
                 delta: min(bounds.phi, delta_2 + 1),
             };
             self.stack.push(children[best_idx].r#move);
-            let (child_entry, child_work) = self.mid(child_bounds, &child.position);
+            let (child_entry, child_work) = self.mid(
+                child_bounds,
+                children[best_idx].entry.clone(),
+                &child.position,
+            );
             children[best_idx].entry = child_entry;
             self.stack.pop();
             local_work += child_work;
