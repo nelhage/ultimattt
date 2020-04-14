@@ -7,6 +7,8 @@ use typenum;
 #[derive(Clone, Debug)]
 pub struct Stats {
     pub mid: usize,
+    pub tthit: usize,
+    pub ttstore: usize,
     pub terminal: usize,
 }
 
@@ -15,6 +17,8 @@ impl Default for Stats {
         Stats {
             mid: 0,
             terminal: 0,
+            tthit: 0,
+            ttstore: 0,
         }
     }
 }
@@ -150,7 +154,11 @@ impl DFPN {
             );
         }
         self.stats.mid += 1;
-        let mut data = self.table.lookup(pos.zobrist()).cloned().unwrap_or(Entry {
+        let entry = self.table.lookup(pos.zobrist()).cloned();
+        if let Some(_) = entry {
+            self.stats.tthit += 1;
+        }
+        let mut data = entry.unwrap_or(Entry {
             bounds: Bounds::unity(),
             hash: pos.zobrist(),
             work: 0,
@@ -171,7 +179,9 @@ impl DFPN {
             }
             self.stats.terminal += 1;
             data.work = 1;
-            self.table.store(&data);
+            if self.table.store(&data) {
+                self.stats.ttstore += 1;
+            }
             return data;
         }
 
@@ -209,7 +219,9 @@ impl DFPN {
             data.work += children[best_idx].entry.work;
         }
 
-        self.table.store(&data);
+        if self.table.store(&data) {
+            self.stats.ttstore += 1;
+        }
         data
     }
 

@@ -53,7 +53,8 @@ where
         None
     }
 
-    pub fn store(&mut self, ent: &E) {
+    pub fn store(&mut self, ent: &E) -> bool {
+        debug_assert!(ent.valid());
         let mut worst: Option<usize> = None;
         let base = ent.hash() as usize;
         for j in 0..N::to_usize() {
@@ -72,6 +73,9 @@ where
         let idx = worst.unwrap();
         if ent.better_than(&self.entries[idx]) {
             self.entries[idx] = ent.clone();
+            true
+        } else {
+            false
         }
     }
 }
