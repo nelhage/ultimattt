@@ -406,11 +406,10 @@ fn main() -> Result<(), std::io::Error> {
                     &game,
                 );
                 println!(
-                    "result={:?} time={}.{:03}s work={} pn={} dpn={} mid={} tthit={}/{} ({:.1}%) ttstore={}",
+                    "result={:?} time={}.{:03}s pn={} dpn={} mid={} tthit={}/{} ({:.1}%) ttstore={}",
                     result.value,
                     result.duration.as_secs(),
                     result.duration.subsec_millis(),
-                    result.work,
                     result.bounds.phi,
                     result.bounds.delta,
                     result.stats.mid,
