@@ -12,8 +12,8 @@ mod worker;
 
 use ansi_term::Style;
 use regex::Regex;
+use std::fmt::Write;
 use std::io;
-use std::io::Write;
 use std::process::exit;
 use std::time::Duration;
 use structopt::StructOpt;
@@ -418,6 +418,11 @@ fn main() -> Result<(), std::io::Error> {
                     100.0 * (result.stats.tthit as f64 / result.stats.ttlookup as f64),
                     result.stats.ttstore,
                 );
+                let mut pv = String::new();
+                for m in result.pv.iter() {
+                    write!(&mut pv, "{} ", m).unwrap();
+                }
+                println!(" pv={}", pv.trim_end());
             } else {
                 let mut ai = make_ai(&opt);
                 let m = ai.select_move(&game).map_err(|e| {

@@ -54,6 +54,7 @@ struct Entry {
     bounds: Bounds,
     hash: u64,
     work: u64,
+    pv: game::Move,
 }
 
 impl table::Entry for Entry {
@@ -76,6 +77,7 @@ impl Default for Entry {
             bounds: Bounds { phi: 0, delta: 0 },
             hash: 0,
             work: std::u64::MAX,
+            pv: game::Move::none(),
         }
     }
 }
@@ -105,6 +107,7 @@ pub struct ProveResult {
     pub stats: Stats,
     pub duration: Duration,
     pub work: u64,
+    pub pv: Vec<game::Move>,
 }
 
 pub struct DFPN {
@@ -147,6 +150,7 @@ impl DFPN {
                 bounds: Bounds::unity(),
                 hash: g.zobrist(),
                 work: 0,
+                pv: game::Move::none(),
             },
             g,
         );
@@ -162,7 +166,39 @@ impl DFPN {
             bounds: result.bounds,
             stats: prover.stats.clone(),
             duration: Instant::now().duration_since(prover.start),
+            pv: prover.extract_pv(),
         }
+    }
+
+    fn extract_pv(&self) -> Vec<game::Move> {
+        let mut pv = Vec::new();
+        let mut g = self.root.clone();
+        loop {
+            match g.game_state() {
+                game::BoardState::InPlay => (),
+                _ => break,
+            };
+            if let Some(ent) = self.table.lookup(g.zobrist()) {
+                if ent.bounds.phi != 0 && ent.bounds.delta != 0 {
+                    assert!(
+                        pv.len() == 0,
+                        "PV contains unproven positions d={} bounds=({}, {}) work={}",
+                        pv.len(),
+                        ent.bounds.phi,
+                        ent.bounds.delta,
+                        ent.work,
+                    );
+                    break;
+                }
+                pv.push(ent.pv);
+                g = g.make_move(ent.pv).unwrap_or_else(|_| {
+                    panic!("PV contained illegal move depth={} m={}", pv.len(), ent.pv)
+                });
+            } else {
+                break;
+            }
+        }
+        pv
     }
 
     fn mid(&mut self, bounds: Bounds, mut data: Entry, pos: &game::Game) -> (Entry, u64) {
@@ -230,6 +266,7 @@ impl DFPN {
                 bounds: Bounds::unity(),
                 hash: g.zobrist(),
                 work: 0,
+                pv: game::Move::none(),
             });
             let state = g.game_state();
             children.push(Child {
@@ -275,6 +312,23 @@ impl DFPN {
         }
 
         data.work += local_work;
+        // If the position is solved, store the PV. For winning moves,
+        // find the shortest path to victory; for losing, the
+        // most-delaying
+        if data.bounds.phi == 0 {
+            data.pv = children
+                .iter()
+                .filter(|e| e.entry.bounds.delta == 0)
+                .min_by_key(|e| e.entry.work)
+                .map(|e| e.r#move)
+                .unwrap_or(game::Move::none());
+        } else if data.bounds.delta == 0 {
+            data.pv = children
+                .iter()
+                .max_by_key(|e| e.entry.work)
+                .map(|e| e.r#move)
+                .unwrap_or(game::Move::none());
+        }
         if self.table.store(&data) {
             self.stats.ttstore += 1;
         }
