@@ -321,13 +321,13 @@ impl DFPN {
                 .filter(|e| e.entry.bounds.delta == 0)
                 .min_by_key(|e| e.entry.work)
                 .map(|e| e.r#move)
-                .unwrap_or(game::Move::none());
+                .expect("won node, no winning move");
         } else if data.bounds.delta == 0 {
             data.pv = children
                 .iter()
                 .max_by_key(|e| e.entry.work)
                 .map(|e| e.r#move)
-                .unwrap_or(game::Move::none());
+                .expect("lost node, no move");
         }
         if self.table.store(&data) {
             self.stats.ttstore += 1;
