@@ -262,22 +262,33 @@ impl DFPN {
             if let Some(_) = te {
                 self.stats.tthit += 1;
             }
-            let data = te.unwrap_or(Entry {
-                bounds: Bounds::unity(),
-                hash: g.zobrist(),
-                work: 0,
-                pv: game::Move::none(),
+            let data = te.unwrap_or_else(|| {
+                let bounds = match g.game_state() {
+                    game::BoardState::Won(p) => {
+                        if p == g.player() {
+                            Bounds::winning()
+                        } else {
+                            Bounds::losing()
+                        }
+                    }
+                    game::BoardState::Drawn => Bounds::losing(),
+                    game::BoardState::InPlay => Bounds::unity(),
+                };
+                Entry {
+                    bounds: bounds,
+                    hash: g.zobrist(),
+                    work: 0,
+                    pv: game::Move::none(),
+                }
             });
-            let state = g.game_state();
+            let bounds = data.bounds;
             children.push(Child {
                 position: g,
                 r#move: m,
                 entry: data,
             });
-            if let game::BoardState::Won(p) = state {
-                if p == pos.player() {
-                    break;
-                }
+            if bounds.delta == 0 {
+                break;
             }
         }
 
