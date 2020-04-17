@@ -2,7 +2,6 @@ use crate::game;
 use crate::prove;
 use crate::table;
 use std::cmp::{max, min};
-use std::sync::RwLock;
 use std::time::{Duration, Instant};
 use typenum;
 
@@ -129,14 +128,14 @@ pub struct DFPN {
     start: Instant,
     tick: Instant,
     cfg: Config,
-    table: RwLock<table::TranspositionTable<Entry, typenum::U4>>,
+    table: table::ConcurrentTranspositionTable<Entry, typenum::U4>,
     stats: Stats,
     root: game::Game,
 }
 
 struct Worker<'a> {
     cfg: &'a Config,
-    table: &'a RwLock<table::TranspositionTable<Entry, typenum::U4>>,
+    table: &'a table::ConcurrentTranspositionTable<Entry, typenum::U4>,
     stats: Stats,
     stack: Vec<game::Move>,
 }
@@ -158,7 +157,7 @@ impl DFPN {
             start: start,
             tick: start,
             cfg: cfg.clone(),
-            table: RwLock::new(table::TranspositionTable::with_memory(cfg.table_size)),
+            table: table::ConcurrentTranspositionTable::with_memory(cfg.table_size),
             stats: Default::default(),
         };
         let mut worker = Worker {
@@ -199,7 +198,6 @@ impl DFPN {
     }
 
     fn extract_pv(&self) -> Vec<game::Move> {
-        let table = self.table.read().unwrap();
         let mut pv = Vec::new();
         let mut g = self.root.clone();
         loop {
@@ -207,7 +205,7 @@ impl DFPN {
                 game::BoardState::InPlay => (),
                 _ => break,
             };
-            if let Some(ent) = table.lookup(g.zobrist()) {
+            if let Some(ent) = self.table.lookup(g.zobrist()) {
                 if ent.bounds.phi != 0 && ent.bounds.delta != 0 {
                     assert!(
                         pv.len() == 0,
@@ -298,7 +296,7 @@ impl Worker<'_> {
             }
             self.stats.terminal += 1;
             data.work = 1;
-            if self.table.write().unwrap().store(&data) {
+            if self.table.store(&data) {
                 self.stats.ttstore += 1;
             }
             return (data, 1);
@@ -310,7 +308,7 @@ impl Worker<'_> {
         for m in pos.all_moves() {
             let g = pos.make_move(m).expect("all_moves returned illegal move");
             self.stats.ttlookup += 1;
-            let te = self.table.read().unwrap().lookup(g.zobrist()).cloned();
+            let te = self.table.lookup(g.zobrist());
             if let Some(_) = te {
                 self.stats.tthit += 1;
             }
@@ -396,7 +394,7 @@ impl Worker<'_> {
                 .map(|e| e.r#move)
                 .expect("lost node, no move");
         }
-        if self.table.write().unwrap().store(&data) {
+        if self.table.store(&data) {
             self.stats.ttstore += 1;
         }
         (data, local_work)

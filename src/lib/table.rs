@@ -3,6 +3,7 @@ use typenum;
 use std::marker::PhantomData;
 use std::mem;
 use std::mem::MaybeUninit;
+use std::sync::RwLock;
 
 pub struct TranspositionTable<E, N>
 where
@@ -52,7 +53,7 @@ where
         }
     }
 
-    pub fn lookup(&self, h: u64) -> Option<&E> {
+    pub fn lookup(&self, h: u64) -> Option<E> {
         let base = h as usize;
         for j in 0..N::to_usize() {
             let i = (base + j) % self.entries.len();
@@ -60,7 +61,7 @@ where
                 continue;
             }
             if self.entries[i].valid() && self.entries[i].hash() == h {
-                return Some(&self.entries[i]);
+                return Some(self.entries[i].clone());
             }
         }
         None
@@ -91,5 +92,32 @@ where
         } else {
             false
         }
+    }
+}
+
+pub struct ConcurrentTranspositionTable<E, N>(RwLock<TranspositionTable<E, N>>)
+where
+    E: Entry + Default + Clone,
+    N: typenum::Unsigned;
+
+impl<E, N> ConcurrentTranspositionTable<E, N>
+where
+    E: Entry + Default + Clone,
+    N: typenum::Unsigned,
+{
+    pub fn new() -> Self {
+        Self::with_memory(DEFAULT_TABLE_SIZE)
+    }
+
+    pub fn with_memory(bytes: usize) -> Self {
+        Self(RwLock::new(TranspositionTable::with_memory(bytes)))
+    }
+
+    pub fn lookup(&self, hash: u64) -> Option<E> {
+        self.0.read().unwrap().lookup(hash)
+    }
+
+    pub fn store(&self, ent: &E) -> bool {
+        self.0.write().unwrap().store(ent)
     }
 }
