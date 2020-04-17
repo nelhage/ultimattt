@@ -146,6 +146,7 @@ impl DFPN {
                 phi: INFINITY / 2,
                 delta: INFINITY / 2,
             },
+            std::u64::MAX,
             Entry {
                 bounds: Bounds::unity(),
                 hash: g.zobrist(),
@@ -201,7 +202,13 @@ impl DFPN {
         pv
     }
 
-    fn mid(&mut self, bounds: Bounds, mut data: Entry, pos: &game::Game) -> (Entry, u64) {
+    fn mid(
+        &mut self,
+        bounds: Bounds,
+        max_work: u64,
+        mut data: Entry,
+        pos: &game::Game,
+    ) -> (Entry, u64) {
         if self.cfg.debug > 4 {
             eprintln!(
                 "mid[{}]: m={} d={} bounds=({}, {})",
@@ -296,7 +303,10 @@ impl DFPN {
 
         loop {
             data.bounds = self.compute_bounds(&children);
-            if data.bounds.phi >= bounds.phi || data.bounds.delta >= bounds.delta {
+            if local_work >= max_work
+                || data.bounds.phi >= bounds.phi
+                || data.bounds.delta >= bounds.delta
+            {
                 break;
             }
             let (best_idx, delta_2) = self.select_child(&children);
@@ -314,6 +324,7 @@ impl DFPN {
             self.stack.push(children[best_idx].r#move);
             let (child_entry, child_work) = self.mid(
                 child_bounds,
+                max_work - local_work,
                 children[best_idx].entry.clone(),
                 &child.position,
             );
