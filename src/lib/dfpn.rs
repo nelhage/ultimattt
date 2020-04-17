@@ -302,14 +302,14 @@ impl DFPN {
         // recurse
 
         loop {
-            data.bounds = self.compute_bounds(&children);
+            data.bounds = DFPN::compute_bounds(&children);
             if local_work >= max_work
                 || data.bounds.phi >= bounds.phi
                 || data.bounds.delta >= bounds.delta
             {
                 break;
             }
-            let (best_idx, delta_2) = self.select_child(&children);
+            let (best_idx, delta_2) = DFPN::select_child(&children);
             let child = &children[best_idx];
             let child_bounds = Bounds {
                 phi: bounds.delta + child.entry.bounds.phi - data.bounds.delta,
@@ -357,7 +357,7 @@ impl DFPN {
         (data, local_work)
     }
 
-    fn compute_bounds(&self, children: &Vec<Child>) -> Bounds {
+    fn compute_bounds(children: &Vec<Child>) -> Bounds {
         let mut out = Bounds {
             phi: INFINITY,
             delta: 0,
@@ -371,7 +371,7 @@ impl DFPN {
     }
 
     // returns (child index, delta_2)
-    fn select_child(&self, children: &Vec<Child>) -> (usize, u32) {
+    fn select_child(children: &Vec<Child>) -> (usize, u32) {
         let (mut delta_1, mut delta_2) = (INFINITY, INFINITY);
         let mut idx = children.len();
         for (i, ch) in children.iter().enumerate() {
