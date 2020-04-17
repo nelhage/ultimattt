@@ -2,6 +2,7 @@ use crate::game;
 use crate::prove;
 use crate::table;
 use std::cmp::{max, min};
+use std::sync::RwLock;
 use std::time::{Duration, Instant};
 use typenum;
 
@@ -12,6 +13,18 @@ pub struct Stats {
     pub tthit: usize,
     pub ttstore: usize,
     pub terminal: usize,
+}
+
+impl Stats {
+    fn merge(&self, other: &Stats) -> Stats {
+        Stats {
+            mid: self.mid + other.mid,
+            ttlookup: self.ttlookup + other.ttlookup,
+            tthit: self.tthit + other.tthit,
+            ttstore: self.ttstore + other.ttstore,
+            terminal: self.terminal + other.terminal,
+        }
+    }
 }
 
 const INFINITY: u32 = 1 << 31;
@@ -88,6 +101,7 @@ pub struct Config {
     pub timeout: Option<Duration>,
     pub debug: usize,
     pub epsilon: f64,
+    pub max_work_per_job: u64,
 }
 
 impl Default for Config {
@@ -97,6 +111,7 @@ impl Default for Config {
             timeout: None,
             debug: 0,
             epsilon: 1.0 / 8.0,
+            max_work_per_job: 10_000,
         }
     }
 }
@@ -114,9 +129,15 @@ pub struct DFPN {
     start: Instant,
     tick: Instant,
     cfg: Config,
-    table: table::TranspositionTable<Entry, typenum::U4>,
+    table: RwLock<table::TranspositionTable<Entry, typenum::U4>>,
     stats: Stats,
     root: game::Game,
+}
+
+struct Worker<'a> {
+    cfg: &'a Config,
+    table: &'a RwLock<table::TranspositionTable<Entry, typenum::U4>>,
+    stats: Stats,
     stack: Vec<game::Move>,
 }
 
@@ -137,11 +158,16 @@ impl DFPN {
             start: start,
             tick: start,
             cfg: cfg.clone(),
-            table: table::TranspositionTable::with_memory(cfg.table_size),
+            table: RwLock::new(table::TranspositionTable::with_memory(cfg.table_size)),
+            stats: Default::default(),
+        };
+        let mut worker = Worker {
+            cfg: &prover.cfg,
+            table: &prover.table,
             stats: Default::default(),
             stack: Vec::new(),
         };
-        let (result, work) = prover.mid(
+        let (result, work) = worker.mid(
             Bounds {
                 phi: INFINITY / 2,
                 delta: INFINITY / 2,
@@ -155,6 +181,7 @@ impl DFPN {
             },
             g,
         );
+        prover.stats = prover.stats.merge(&worker.stats);
         ProveResult {
             value: if result.bounds.phi == 0 {
                 prove::Evaluation::True
@@ -172,6 +199,7 @@ impl DFPN {
     }
 
     fn extract_pv(&self) -> Vec<game::Move> {
+        let table = self.table.read().unwrap();
         let mut pv = Vec::new();
         let mut g = self.root.clone();
         loop {
@@ -179,7 +207,7 @@ impl DFPN {
                 game::BoardState::InPlay => (),
                 _ => break,
             };
-            if let Some(ent) = self.table.lookup(g.zobrist()) {
+            if let Some(ent) = table.lookup(g.zobrist()) {
                 if ent.bounds.phi != 0 && ent.bounds.delta != 0 {
                     assert!(
                         pv.len() == 0,
@@ -202,6 +230,37 @@ impl DFPN {
         pv
     }
 
+    fn compute_bounds(children: &Vec<Child>) -> Bounds {
+        let mut out = Bounds {
+            phi: INFINITY,
+            delta: 0,
+        };
+        for ch in children.iter() {
+            out.phi = min(out.phi, ch.entry.bounds.delta);
+            out.delta = out.delta.saturating_add(ch.entry.bounds.phi);
+        }
+        out.delta = min(out.delta, INFINITY);
+        return out;
+    }
+
+    // returns (child index, delta_2)
+    fn select_child(children: &Vec<Child>) -> (usize, u32) {
+        let (mut delta_1, mut delta_2) = (INFINITY, INFINITY);
+        let mut idx = children.len();
+        for (i, ch) in children.iter().enumerate() {
+            if ch.entry.bounds.delta < delta_1 {
+                delta_2 = delta_1;
+                delta_1 = ch.entry.bounds.delta;
+                idx = i;
+            } else if ch.entry.bounds.delta < delta_2 {
+                delta_2 = ch.entry.bounds.delta;
+            }
+        }
+        (idx, delta_2)
+    }
+}
+
+impl Worker<'_> {
     fn mid(
         &mut self,
         bounds: Bounds,
@@ -223,20 +282,6 @@ impl DFPN {
             );
         }
         self.stats.mid += 1;
-        if self.stats.mid % CHECK_TICK_INTERVAL == 0
-            && self.cfg.debug > 0
-            && Instant::now() > self.tick
-        {
-            self.tick += TICK_TIME;
-            let elapsed = Instant::now().duration_since(self.start);
-            eprintln!(
-                "t={}.{:03}s mid={} mid/ms={:.1}",
-                elapsed.as_secs(),
-                elapsed.subsec_millis(),
-                self.stats.mid,
-                (self.stats.mid as f64) / (elapsed.as_millis() as f64),
-            );
-        }
         if (data.bounds.phi >= bounds.phi) || (data.bounds.delta >= bounds.delta) {
             return (data, 0);
         }
@@ -253,7 +298,7 @@ impl DFPN {
             }
             self.stats.terminal += 1;
             data.work = 1;
-            if self.table.store(&data) {
+            if self.table.write().unwrap().store(&data) {
                 self.stats.ttstore += 1;
             }
             return (data, 1);
@@ -265,7 +310,7 @@ impl DFPN {
         for m in pos.all_moves() {
             let g = pos.make_move(m).expect("all_moves returned illegal move");
             self.stats.ttlookup += 1;
-            let te = self.table.lookup(g.zobrist()).cloned();
+            let te = self.table.read().unwrap().lookup(g.zobrist()).cloned();
             if let Some(_) = te {
                 self.stats.tthit += 1;
             }
@@ -351,38 +396,9 @@ impl DFPN {
                 .map(|e| e.r#move)
                 .expect("lost node, no move");
         }
-        if self.table.store(&data) {
+        if self.table.write().unwrap().store(&data) {
             self.stats.ttstore += 1;
         }
         (data, local_work)
-    }
-
-    fn compute_bounds(children: &Vec<Child>) -> Bounds {
-        let mut out = Bounds {
-            phi: INFINITY,
-            delta: 0,
-        };
-        for ch in children.iter() {
-            out.phi = min(out.phi, ch.entry.bounds.delta);
-            out.delta = out.delta.saturating_add(ch.entry.bounds.phi);
-        }
-        out.delta = min(out.delta, INFINITY);
-        return out;
-    }
-
-    // returns (child index, delta_2)
-    fn select_child(children: &Vec<Child>) -> (usize, u32) {
-        let (mut delta_1, mut delta_2) = (INFINITY, INFINITY);
-        let mut idx = children.len();
-        for (i, ch) in children.iter().enumerate() {
-            if ch.entry.bounds.delta < delta_1 {
-                delta_2 = delta_1;
-                delta_1 = ch.entry.bounds.delta;
-                idx = i;
-            } else if ch.entry.bounds.delta < delta_2 {
-                delta_2 = ch.entry.bounds.delta;
-            }
-        }
-        (idx, delta_2)
     }
 }
