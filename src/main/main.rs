@@ -413,10 +413,10 @@ fn main() -> Result<(), std::io::Error> {
                     result.bounds.phi,
                     result.bounds.delta,
                     result.stats.mid,
-                    result.stats.tthit,
-                    result.stats.ttlookup,
-                    100.0 * (result.stats.tthit as f64 / result.stats.ttlookup as f64),
-                    result.stats.ttstore,
+                    result.ttstats.hits,
+                    result.ttstats.lookups,
+                    100.0 * (result.ttstats.hits as f64 / result.ttstats.lookups as f64),
+                    result.ttstats.stores,
                 );
                 let mut pv = String::new();
                 for m in result.pv.iter() {

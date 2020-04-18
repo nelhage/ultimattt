@@ -3,7 +3,31 @@ use typenum;
 use std::marker::PhantomData;
 use std::mem;
 use std::mem::MaybeUninit;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::RwLock;
+
+#[derive(Default)]
+struct AtomicStats {
+    lookups: AtomicUsize,
+    hits: AtomicUsize,
+    stores: AtomicUsize,
+}
+
+impl AtomicStats {
+    fn load(&self) -> Stats {
+        Stats {
+            lookups: self.lookups.load(Ordering::SeqCst),
+            hits: self.hits.load(Ordering::SeqCst),
+            stores: self.stores.load(Ordering::SeqCst),
+        }
+    }
+}
+
+pub struct Stats {
+    pub lookups: usize,
+    pub hits: usize,
+    pub stores: usize,
+}
 
 pub struct TranspositionTable<E, N>
 where
@@ -12,6 +36,7 @@ where
 {
     index: Box<[u8]>,
     entries: Box<[E]>,
+    stats: AtomicStats,
     n: PhantomData<N>,
 }
 
@@ -49,11 +74,13 @@ where
         TranspositionTable::<E, N> {
             index: new_default_slice(len),
             entries: new_default_slice(len),
+            stats: Default::default(),
             n: PhantomData,
         }
     }
 
     pub fn lookup(&self, h: u64) -> Option<E> {
+        self.stats.lookups.fetch_add(1, Ordering::Relaxed);
         let base = h as usize;
         for j in 0..N::to_usize() {
             let i = (base + j) % self.entries.len();
@@ -61,6 +88,7 @@ where
                 continue;
             }
             if self.entries[i].valid() && self.entries[i].hash() == h {
+                self.stats.hits.fetch_add(1, Ordering::Relaxed);
                 return Some(self.entries[i].clone());
             }
         }
@@ -88,10 +116,15 @@ where
         if !self.entries[idx].valid() || ent.better_than(&self.entries[idx]) {
             self.index[idx] = (ent.hash() & 0xff) as u8;
             self.entries[idx] = ent.clone();
+            self.stats.stores.fetch_add(1, Ordering::Relaxed);
             true
         } else {
             false
         }
+    }
+
+    pub fn stats(&self) -> Stats {
+        self.stats.load()
     }
 }
 
@@ -119,5 +152,9 @@ where
 
     pub fn store(&self, ent: &E) -> bool {
         self.0.write().unwrap().store(ent)
+    }
+
+    pub fn stats(&self) -> Stats {
+        self.0.read().unwrap().stats()
     }
 }

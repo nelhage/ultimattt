@@ -8,9 +8,6 @@ use typenum;
 #[derive(Clone, Debug, Default)]
 pub struct Stats {
     pub mid: usize,
-    pub ttlookup: usize,
-    pub tthit: usize,
-    pub ttstore: usize,
     pub terminal: usize,
 }
 
@@ -18,9 +15,6 @@ impl Stats {
     fn merge(&self, other: &Stats) -> Stats {
         Stats {
             mid: self.mid + other.mid,
-            ttlookup: self.ttlookup + other.ttlookup,
-            tthit: self.tthit + other.tthit,
-            ttstore: self.ttstore + other.ttstore,
             terminal: self.terminal + other.terminal,
         }
     }
@@ -119,6 +113,7 @@ pub struct ProveResult {
     pub value: prove::Evaluation,
     pub bounds: Bounds,
     pub stats: Stats,
+    pub ttstats: table::Stats,
     pub duration: Duration,
     pub work: u64,
     pub pv: Vec<game::Move>,
@@ -192,6 +187,7 @@ impl DFPN {
             work: work,
             bounds: result.bounds,
             stats: prover.stats.clone(),
+            ttstats: prover.table.stats(),
             duration: Instant::now().duration_since(prover.start),
             pv: prover.extract_pv(),
         }
@@ -296,9 +292,7 @@ impl Worker<'_> {
             }
             self.stats.terminal += 1;
             data.work = 1;
-            if self.table.store(&data) {
-                self.stats.ttstore += 1;
-            }
+            self.table.store(&data);
             return (data, 1);
         }
 
@@ -307,11 +301,7 @@ impl Worker<'_> {
         let mut children = Vec::new();
         for m in pos.all_moves() {
             let g = pos.make_move(m).expect("all_moves returned illegal move");
-            self.stats.ttlookup += 1;
             let te = self.table.lookup(g.zobrist());
-            if let Some(_) = te {
-                self.stats.tthit += 1;
-            }
             let data = te.unwrap_or_else(|| {
                 let bounds = match g.game_state() {
                     game::BoardState::Won(p) => {
@@ -394,9 +384,7 @@ impl Worker<'_> {
                 .map(|e| e.r#move)
                 .expect("lost node, no move");
         }
-        if self.table.store(&data) {
-            self.stats.ttstore += 1;
-        }
+        self.table.store(&data);
         (data, local_work)
     }
 }
