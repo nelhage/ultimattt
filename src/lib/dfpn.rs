@@ -10,6 +10,7 @@ use typenum;
 pub struct Stats {
     pub mid: usize,
     pub terminal: usize,
+    pub jobs: usize,
 }
 
 impl Stats {
@@ -17,6 +18,7 @@ impl Stats {
         Stats {
             mid: self.mid + other.mid,
             terminal: self.terminal + other.terminal,
+            jobs: self.jobs + other.jobs,
         }
     }
 }
@@ -143,6 +145,7 @@ struct Child {
     position: game::Game,
     r#move: game::Move,
     entry: Entry,
+    r#virtual: bool,
 }
 
 const CHECK_TICK_INTERVAL: usize = 1 << 12;
@@ -192,6 +195,7 @@ impl DFPN {
             if !did_job {
                 panic!("single-threaded could not find job");
             }
+            debug_assert!(worker.vtable.is_empty(), "Leaking VEntry's");
             root = result;
             work += this_work;
             if root.bounds.solved() {
@@ -266,7 +270,7 @@ impl Worker<'_> {
     ) -> (Entry, u64) {
         if self.cfg.debug > 4 {
             eprintln!(
-                "mid[{}]: m={} d={} bounds=({}, {})",
+                "mid[{}]: m={} d={} bounds=({}, {}) max_work={}",
                 self.stack
                     .last()
                     .map(|&m| game::notation::render_move(m))
@@ -274,7 +278,8 @@ impl Worker<'_> {
                 self.stats.mid,
                 self.stack.len(),
                 bounds.phi,
-                bounds.delta
+                bounds.delta,
+                max_work,
             );
         }
         self.stats.mid += 1;
@@ -308,6 +313,7 @@ impl Worker<'_> {
                 position: g,
                 r#move: m,
                 entry: data,
+                r#virtual: false,
             });
             if bounds.delta == 0 {
                 break;
@@ -353,17 +359,24 @@ impl Worker<'_> {
             !vdata.entry.bounds.exceeded(bounds),
             "inconsistent select_next_job call"
         );
+        if self.cfg.debug > 4 {
+            eprintln!(
+                "try_run_job: d={} bounds=({}, {}) node=({}, {}) vnode=({}, {}) w={}",
+                vdata.depth(),
+                bounds.phi,
+                bounds.delta,
+                data.bounds.phi,
+                data.bounds.delta,
+                vdata.entry.bounds.phi,
+                vdata.entry.bounds.delta,
+                data.work,
+            );
+        }
 
         let mut local_work = 0;
 
         if data.work < self.cfg.max_work_per_job {
-            let vnode = self.vtable.entry(pos.zobrist()).or_insert(VEntry {
-                entry: vdata.entry.clone(),
-                saved: Vec::new(),
-                count: 0,
-            });
-            vnode.saved.push(vnode.entry.bounds);
-            vnode.count += 1;
+            let vnode = self.vadd(&vdata.entry);
             if data.bounds.phi < data.bounds.delta {
                 // TODO: does < / <= matter here?
                 vnode.entry.bounds = Bounds::winning();
@@ -372,12 +385,23 @@ impl Worker<'_> {
             }
 
             self.update_parents(vdata.parent);
+            self.stats.jobs += 1;
+            if self.cfg.debug > 3 {
+                eprintln!(
+                    "try_run_job: mid[d={}]({}, {})",
+                    vdata.depth(),
+                    bounds.phi,
+                    bounds.delta,
+                );
+            }
             let (result, local_work) = self.mid(bounds, self.cfg.max_work_per_job, data, pos);
+            self.vremove(pos.zobrist());
             return (result, local_work, true);
         }
 
         // build children
         let mut children = Vec::new();
+        vdata.children.clear();
         for m in pos.all_moves() {
             let g = pos.make_move(m).expect("all_moves returned illegal move");
             let entry = ttlookup_or_default(&self.table, &g);
@@ -385,20 +409,23 @@ impl Worker<'_> {
                 position: g,
                 r#move: m,
                 entry: entry,
+                r#virtual: false,
             };
-            let ventry = self
+            let vchild = self
                 .vtable
                 .get(&child.entry.hash)
-                .map(|ve| ve.entry.clone())
-                .unwrap_or_else(|| child.entry.clone());
+                .map(|ve| Child {
+                    entry: ve.entry.clone(),
+                    r#move: m,
+                    position: child.position.clone(),
+                    r#virtual: true,
+                })
+                .unwrap_or_else(|| child.clone());
 
-            vdata.children.push(Child {
-                position: child.position.clone(),
-                r#move: m,
-                entry: ventry,
-            });
+            vdata.children.push(vchild);
             children.push(child);
         }
+        debug_assert_eq!(vdata.children.len(), children.len());
         // recurse
         let mut did_job = false;
         loop {
@@ -427,17 +454,14 @@ impl Worker<'_> {
 
             local_work += child_work;
             data.work += child_work;
+            if !vdata.children[idx].r#virtual {
+                vdata.children[idx].entry = child_entry.clone();
+            }
             children[idx].entry = child_entry;
         }
 
         if did_job {
-            let entry = self.vtable.get_mut(&data.hash).unwrap();
-            entry.count -= 1;
-            entry.entry.bounds = entry.saved.pop().unwrap();
-            let del = entry.count == 0;
-            if del {
-                self.vtable.remove(&data.hash);
-            }
+            self.vremove(data.hash);
         }
 
         populate_pv(&mut data, &children);
@@ -446,13 +470,31 @@ impl Worker<'_> {
         (data, local_work, did_job)
     }
 
+    fn vadd(&mut self, entry: &Entry) -> &mut VEntry {
+        let vnode = self.vtable.entry(entry.hash).or_insert(VEntry {
+            entry: entry.clone(),
+            saved: Vec::new(),
+            count: 0,
+        });
+        vnode.saved.push(vnode.entry.bounds);
+        vnode.count += 1;
+        vnode
+    }
+
+    fn vremove(&mut self, hash: u64) {
+        let entry = self.vtable.get_mut(&hash).unwrap();
+        entry.count -= 1;
+        entry.entry.bounds = entry.saved.pop().unwrap();
+        let del = entry.count == 0;
+        if del {
+            self.vtable.remove(&hash);
+        }
+    }
+
     fn update_parents(&mut self, mut node: Option<*mut VPath>) {
         while let Some(ptr) = node {
             let v = unsafe { ptr.as_mut().unwrap() };
-            let ref mut vnode = self.vtable.get_mut(&v.entry.hash).unwrap();
-            vnode.saved.push(vnode.entry.bounds);
-            vnode.count += 1;
-            vnode.entry.bounds = compute_bounds(&v.children);
+            self.vadd(&v.entry).entry.bounds = compute_bounds(&v.children);
             node = v.parent;
         }
     }
@@ -468,6 +510,18 @@ struct VPath {
     parent: Option<*mut VPath>,
     entry: Entry,
     children: Vec<Child>,
+}
+
+impl VPath {
+    fn depth(&self) -> usize {
+        let mut d = 0;
+        let mut n = self as *const VPath;
+        while let Some(p) = unsafe { (*n).parent } {
+            d += 1;
+            n = p;
+        }
+        d
+    }
 }
 
 fn compute_bounds(children: &Vec<Child>) -> Bounds {
