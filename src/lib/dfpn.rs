@@ -3,6 +3,8 @@ use crate::prove;
 use crate::table;
 use std::cmp::{max, min};
 use std::collections::hash_map::HashMap;
+use std::ops::{Deref, DerefMut};
+use std::sync::{Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 use typenum;
 
@@ -115,7 +117,7 @@ impl Default for Config {
             timeout: None,
             debug: 0,
             epsilon: 1.0 / 8.0,
-            max_work_per_job: 10_000,
+            max_work_per_job: 500,
         }
     }
 }
@@ -137,7 +139,7 @@ pub struct DFPN {
     table: table::ConcurrentTranspositionTable<Entry, typenum::U4>,
     stats: Stats,
     root: game::Game,
-    vtable: HashMap<u64, VEntry>,
+    vtable: Mutex<HashMap<u64, VEntry>>,
 }
 
 #[derive(Clone)]
@@ -161,11 +163,11 @@ impl DFPN {
             cfg: cfg.clone(),
             table: table::ConcurrentTranspositionTable::with_memory(cfg.table_size),
             stats: Default::default(),
-            vtable: HashMap::new(),
+            vtable: Mutex::new(HashMap::new()),
         };
         let mut worker = Worker {
             cfg: &prover.cfg,
-            vtable: &mut prover.vtable,
+            guard: YieldableGuard::new(&prover.vtable),
             table: &prover.table,
             stats: Default::default(),
             stack: Vec::new(),
@@ -195,7 +197,7 @@ impl DFPN {
             if !did_job {
                 panic!("single-threaded could not find job");
             }
-            debug_assert!(worker.vtable.is_empty(), "Leaking VEntry's");
+            debug_assert!(worker.guard.is_empty(), "Leaking VEntry's");
             root = result;
             work += this_work;
             if root.bounds.solved() {
@@ -252,9 +254,48 @@ impl DFPN {
     }
 }
 
+struct YieldableGuard<'a, T> {
+    lock: &'a Mutex<T>,
+    guard: Option<MutexGuard<'a, T>>,
+}
+
+impl<'a, T> YieldableGuard<'a, T> {
+    fn new(lk: &'a Mutex<T>) -> Self {
+        YieldableGuard {
+            lock: lk,
+            guard: Some(lk.lock().unwrap()),
+        }
+    }
+
+    fn drop_lock(&mut self) {
+        debug_assert!(self.guard.is_some());
+
+        self.guard = None;
+    }
+
+    fn acquire_lock(&mut self) {
+        debug_assert!(self.guard.is_none());
+        self.guard = Some(self.lock.lock().unwrap());
+    }
+}
+
+impl<'a, T> Deref for YieldableGuard<'a, T> {
+    type Target = T;
+
+    fn deref(&self) -> &T {
+        self.guard.as_ref().unwrap().deref()
+    }
+}
+
+impl<'a, T> DerefMut for YieldableGuard<'a, T> {
+    fn deref_mut(&mut self) -> &mut T {
+        self.guard.as_mut().unwrap().deref_mut()
+    }
+}
+
 struct Worker<'a> {
     cfg: &'a Config,
-    vtable: &'a mut HashMap<u64, VEntry>,
+    guard: YieldableGuard<'a, HashMap<u64, VEntry>>,
     table: &'a table::ConcurrentTranspositionTable<Entry, typenum::U4>,
     stats: Stats,
     stack: Vec<game::Move>,
@@ -394,7 +435,10 @@ impl Worker<'_> {
                     bounds.delta,
                 );
             }
+            self.guard.drop_lock();
             let (result, local_work) = self.mid(bounds, self.cfg.max_work_per_job, data, pos);
+            self.guard.acquire_lock();
+
             self.vremove(pos.zobrist());
             return (result, local_work, true);
         }
@@ -412,7 +456,7 @@ impl Worker<'_> {
                 r#virtual: false,
             };
             let vchild = self
-                .vtable
+                .guard
                 .get(&child.entry.hash)
                 .map(|ve| Child {
                     entry: ve.entry.clone(),
@@ -434,7 +478,7 @@ impl Worker<'_> {
                     if let Some(e) = self.table.lookup(child.position.zobrist()) {
                         child.entry = e;
                     }
-                    if let Some(v) = self.vtable.get(&child.position.zobrist()) {
+                    if let Some(v) = self.guard.get(&child.position.zobrist()) {
                         vdata.children[i].entry = v.entry.clone();
                     }
                 }
@@ -479,7 +523,7 @@ impl Worker<'_> {
     }
 
     fn vadd(&mut self, entry: &Entry) -> &mut VEntry {
-        let vnode = self.vtable.entry(entry.hash).or_insert(VEntry {
+        let vnode = self.guard.entry(entry.hash).or_insert(VEntry {
             entry: entry.clone(),
             saved: Vec::new(),
             count: 0,
@@ -490,12 +534,12 @@ impl Worker<'_> {
     }
 
     fn vremove(&mut self, hash: u64) {
-        let entry = self.vtable.get_mut(&hash).unwrap();
+        let entry = self.guard.get_mut(&hash).unwrap();
         entry.count -= 1;
         entry.entry.bounds = entry.saved.pop().unwrap();
         let del = entry.count == 0;
         if del {
-            self.vtable.remove(&hash);
+            self.guard.remove(&hash);
         }
     }
 
