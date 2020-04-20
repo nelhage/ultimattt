@@ -239,6 +239,8 @@ struct AnalyzeParameters {
     dfpn: bool,
     #[structopt(long)]
     max_nodes: Option<usize>,
+    #[structopt(long)]
+    max_work_per_job: Option<u64>,
     #[structopt(long, default_value = "0.125")]
     epsilon: f64,
     position: String,
@@ -395,16 +397,17 @@ fn main() -> Result<(), std::io::Error> {
                     result.allocated,
                 );
             } else if analyze.dfpn {
-                let result = dfpn::DFPN::prove(
-                    &dfpn::Config {
-                        table_size: opt.table_mem.as_u64() as usize,
-                        timeout: Some(opt.timeout),
-                        debug: opt.debug,
-                        epsilon: analyze.epsilon,
-                        ..Default::default()
-                    },
-                    &game,
-                );
+                let mut cfg = dfpn::Config {
+                    table_size: opt.table_mem.as_u64() as usize,
+                    timeout: Some(opt.timeout),
+                    debug: opt.debug,
+                    epsilon: analyze.epsilon,
+                    ..Default::default()
+                };
+                if let Some(m) = analyze.max_work_per_job {
+                    cfg.max_work_per_job = m;
+                }
+                let result = dfpn::DFPN::prove(&cfg, &game);
                 println!(
                     "result={:?} time={}.{:03}s pn={} dpn={} mid={} jobs={} tthit={}/{} ({:.1}%) ttstore={}",
                     result.value,
