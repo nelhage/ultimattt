@@ -311,9 +311,10 @@ impl Worker<'_> {
         mut data: Entry,
         pos: &game::Game,
     ) -> (Entry, u64) {
-        if self.cfg.debug > 5 {
+        if self.cfg.debug > 6 {
             eprintln!(
-                "mid[{}]: m={} d={} bounds=({}, {}) max_work={}",
+                "{:2$}mid[{}]: m={} d={} bounds=({}, {}) max_work={}",
+                "",
                 self.stack
                     .last()
                     .map(|&m| game::notation::render_move(m))
@@ -500,6 +501,20 @@ impl Worker<'_> {
             data.bounds = compute_bounds(&children);
             vdata.entry.bounds = compute_bounds(&vdata.children);
             populate_pv(&mut data, &children);
+
+            if self.cfg.debug > 5 {
+                eprintln!(
+                    "{0:1$}try_run_job[loop]: node=({2}, {3}) vnode=({4}, {5}) w={6}",
+                    "",
+                    self.stack.len(),
+                    data.bounds.phi,
+                    data.bounds.delta,
+                    vdata.entry.bounds.phi,
+                    vdata.entry.bounds.delta,
+                    data.work,
+                );
+            }
+
             self.table.store(&data);
             if vdata.entry.bounds.exceeded(bounds) || did_job {
                 break;
