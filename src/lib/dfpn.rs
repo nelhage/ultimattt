@@ -429,9 +429,20 @@ impl Worker<'_> {
         // recurse
         let mut did_job = false;
         loop {
+            if did_job {
+                for (i, child) in children.iter_mut().enumerate() {
+                    if let Some(e) = self.table.lookup(child.position.zobrist()) {
+                        child.entry = e;
+                    }
+                    if let Some(v) = self.vtable.get(&child.position.zobrist()) {
+                        vdata.children[i].entry = v.entry.clone();
+                    }
+                }
+            }
             data.bounds = compute_bounds(&children);
             vdata.entry.bounds = compute_bounds(&vdata.children);
-            // ttwrite(data)?
+            populate_pv(&mut data, &children);
+            self.table.store(&data);
             if vdata.entry.bounds.exceeded(bounds) || did_job {
                 break;
             }
@@ -463,9 +474,6 @@ impl Worker<'_> {
         if did_job {
             self.vremove(data.hash);
         }
-
-        populate_pv(&mut data, &children);
-        self.table.store(&data);
 
         (data, local_work, did_job)
     }
