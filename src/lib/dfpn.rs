@@ -196,14 +196,14 @@ impl DFPN {
                 root,
                 &mut vroot,
             );
-            if !did_job {
-                panic!("single-threaded could not find job");
-            }
             debug_assert!(worker.guard.is_empty(), "Leaking VEntry's");
             root = result;
             work += this_work;
             if root.bounds.solved() {
                 break;
+            }
+            if !did_job {
+                panic!("single-threaded could not find job");
             }
         }
         prover.stats = prover.stats.merge(&worker.stats);
