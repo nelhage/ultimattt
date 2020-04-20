@@ -74,6 +74,7 @@ struct Entry {
     hash: u64,
     work: u64,
     pv: game::Move,
+    child: u8,
 }
 
 impl table::Entry for Entry {
@@ -97,6 +98,7 @@ impl Default for Entry {
             hash: 0,
             work: std::u64::MAX,
             pv: game::Move::none(),
+            child: std::u8::MAX,
         }
     }
 }
@@ -176,7 +178,7 @@ impl DFPN {
             bounds: Bounds::unity(),
             hash: g.zobrist(),
             work: 0,
-            pv: game::Move::none(),
+            ..Default::default()
         };
         let mut vroot = VPath {
             parent: None,
@@ -309,7 +311,7 @@ impl Worker<'_> {
         mut data: Entry,
         pos: &game::Game,
     ) -> (Entry, u64) {
-        if self.cfg.debug > 4 {
+        if self.cfg.debug > 5 {
             eprintln!(
                 "mid[{}]: m={} d={} bounds=({}, {}) max_work={}",
                 self.stack
@@ -324,7 +326,16 @@ impl Worker<'_> {
             );
         }
         self.stats.mid += 1;
-        debug_assert!(!data.bounds.exceeded(bounds), "inconsistent mid call");
+        debug_assert!(
+            !data.bounds.exceeded(bounds),
+            "inconsistent mid call d={}, bounds=({}, {}) me=({}, {}) w={}",
+            self.stack.len(),
+            bounds.phi,
+            bounds.delta,
+            data.bounds.phi,
+            data.bounds.delta,
+            data.work,
+        );
 
         let terminal = match pos.game_state() {
             game::BoardState::InPlay => None,
@@ -368,7 +379,8 @@ impl Worker<'_> {
             if local_work >= max_work || data.bounds.exceeded(bounds) {
                 break;
             }
-            let (best_idx, child_bounds) = select_child(&children, bounds, &data, self.cfg.epsilon);
+            let (best_idx, child_bounds) =
+                select_child(&children, bounds, &mut data, self.cfg.epsilon);
             let child = &children[best_idx];
             self.stack.push(children[best_idx].r#move);
             let (child_entry, child_work) = self.mid(
@@ -402,7 +414,8 @@ impl Worker<'_> {
         );
         if self.cfg.debug > 4 {
             eprintln!(
-                "try_run_job: d={} bounds=({}, {}) node=({}, {}) vnode=({}, {}) w={}",
+                "{:1$}try_run_job: d={} bounds=({}, {}) node=({}, {}) vnode=({}, {}) w={}",
+                "",
                 vdata.depth(),
                 bounds.phi,
                 bounds.delta,
@@ -429,7 +442,8 @@ impl Worker<'_> {
             self.stats.jobs += 1;
             if self.cfg.debug > 3 {
                 eprintln!(
-                    "try_run_job: mid[d={}]({}, {})",
+                    "{:1$}try_run_job: mid[d={}]({}, {})",
+                    "",
                     vdata.depth(),
                     bounds.phi,
                     bounds.delta,
@@ -491,7 +505,7 @@ impl Worker<'_> {
                 break;
             }
             let (idx, child_bounds) =
-                select_child(&vdata.children, bounds, &vdata.entry, self.cfg.epsilon);
+                select_child(&vdata.children, bounds, &mut vdata.entry, self.cfg.epsilon);
             let child_data = vdata.children[idx].entry.clone();
             let mut vchild = VPath {
                 parent: Some(vdata as *mut VPath),
@@ -499,12 +513,14 @@ impl Worker<'_> {
                 entry: child_data,
             };
 
+            self.stack.push(children[idx].r#move);
             let (child_entry, child_work, ran) = self.try_run_job(
                 child_bounds,
                 &children[idx].position,
                 children[idx].entry.clone(),
                 &mut vchild,
             );
+            self.stack.pop();
             did_job = ran;
 
             local_work += child_work;
@@ -593,7 +609,7 @@ fn compute_bounds(children: &Vec<Child>) -> Bounds {
 fn select_child(
     children: &Vec<Child>,
     bounds: Bounds,
-    data: &Entry,
+    data: &mut Entry,
     epsilon: f64,
 ) -> (usize, Bounds) {
     let (mut delta_1, mut delta_2) = (INFINITY, INFINITY);
@@ -607,15 +623,38 @@ fn select_child(
             delta_2 = ch.entry.bounds.delta;
         }
     }
+    if data.child != std::u8::MAX && data.child != (idx as u8) {
+        let child_bounds = thresholds(
+            epsilon,
+            bounds,
+            data.bounds,
+            children[data.child as usize].entry.bounds.phi,
+            delta_1,
+        );
+        if children[data.child as usize].entry.bounds.delta < child_bounds.delta {
+            return (data.child as usize, child_bounds);
+        }
+    }
+    data.child = idx as u8;
 
-    let child_bounds = Bounds {
-        phi: bounds.delta + children[idx].entry.bounds.phi - data.bounds.delta,
+    let child_bounds = thresholds(
+        epsilon,
+        bounds,
+        data.bounds,
+        children[idx].entry.bounds.phi,
+        delta_2,
+    );
+    (idx, child_bounds)
+}
+
+fn thresholds(epsilon: f64, bounds: Bounds, nd: Bounds, phi_1: u32, delta_2: u32) -> Bounds {
+    Bounds {
+        phi: bounds.delta + phi_1 - nd.delta,
         delta: min(
             bounds.phi,
             max(delta_2 + 1, (delta_2 as f64 * (1.0 + epsilon)) as u32),
         ),
-    };
-    (idx, child_bounds)
+    }
 }
 
 fn ttlookup_or_default<N>(
@@ -642,7 +681,7 @@ where
             bounds: bounds,
             hash: g.zobrist(),
             work: 0,
-            pv: game::Move::none(),
+            ..Default::default()
         }
     })
 }
