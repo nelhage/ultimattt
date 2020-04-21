@@ -4,7 +4,7 @@ use crate::table;
 use std::cmp::{max, min};
 use std::collections::hash_map::HashMap;
 use std::ops::{Deref, DerefMut};
-use std::sync::{Mutex, MutexGuard};
+use std::sync::{Condvar, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 use std::{fs, io};
 use typenum;
@@ -147,8 +147,6 @@ pub struct ProveResult {
 
 pub struct DFPN {
     start: Instant,
-    tick: Instant,
-    dump_tick: Instant,
     cfg: Config,
     table: table::ConcurrentTranspositionTable<Entry, typenum::U4>,
     stats: Stats,
@@ -178,8 +176,6 @@ impl DFPN {
         let mut prover = DFPN {
             root: g.clone(),
             start: start,
-            tick: start,
-            dump_tick: start + cfg.dump_interval,
             cfg: cfg.clone(),
             table: table,
             stats: Default::default(),
@@ -204,86 +200,33 @@ impl DFPN {
     }
 
     fn run(&mut self) -> (Entry, u64) {
+        let shared = Mutex::new(SharedState {
+            vtable: HashMap::new(),
+            shutdown: false,
+            start: self.start,
+            tick: self.start,
+        });
+        let cv = Condvar::new();
+
         let mut worker = Worker {
             cfg: &self.cfg,
-            guard: YieldableGuard::new(&self.vtable),
+            guard: YieldableGuard::new(&shared),
             table: &self.table,
             stats: Default::default(),
             stack: Vec::new(),
+            wait: &cv,
         };
 
-        let mut root = Entry {
-            bounds: Bounds::unity(),
-            hash: self.root.zobrist(),
-            work: 0,
-            ..Default::default()
-        };
-        let mut vroot = VPath {
-            parent: None,
-            children: Vec::new(),
-            entry: root.clone(),
-        };
-        let mut work = 0;
-        loop {
-            let (result, this_work, did_job) = worker.try_run_job(
-                Bounds {
-                    phi: INFINITY / 2,
-                    delta: INFINITY / 2,
-                },
-                &self.root,
-                root,
-                &mut vroot,
-            );
-            debug_assert!(worker.guard.is_empty(), "Leaking VEntry's");
-            root = result;
-            work += this_work;
+        let work = worker.run(&self.root);
 
-            let now = Instant::now();
-            if self.cfg.debug > 0 && now > self.tick {
-                let elapsed = now.duration_since(self.start);
-                eprintln!(
-                    "t={}.{:03}s root=({},{}) jobs={} work={}",
-                    elapsed.as_secs(),
-                    elapsed.subsec_millis(),
-                    root.bounds.phi,
-                    root.bounds.delta,
-                    worker.stats.jobs,
-                    work,
-                );
-                self.tick = now + TICK_TIME;
-            }
-            if let Some(_) = self.cfg.dump_table {
-                if now > self.dump_tick {
-                    self.dump_table().expect("dump_table failed");
-                    self.dump_tick = now + self.cfg.dump_interval;
-                }
-            }
-
-            if root.bounds.solved() {
-                break;
-            }
-            if !did_job {
-                panic!("single-threaded could not find job");
-            }
-        }
-        if let Some(troot) = self.table.lookup(root.hash) {
-            if troot.bounds != root.bounds {
-                panic!(
-                    "Stored bounds ({}, {})@{} != returned bounds ({}, {})@{}",
-                    troot.bounds.phi,
-                    troot.bounds.delta,
-                    troot.work,
-                    root.bounds.phi,
-                    root.bounds.delta,
-                    root.work,
-                )
-            }
-        } else {
-            panic!("did not store root");
-        }
         self.dump_table().expect("final dump_table");
         self.stats = self.stats.merge(&worker.stats);
-        (root, work)
+        (
+            self.table
+                .lookup(self.root.zobrist())
+                .expect("no entry for root"),
+            work,
+        )
     }
 
     fn dump_table(&self) -> io::Result<()> {
@@ -383,12 +326,20 @@ impl<'a, T> DerefMut for YieldableGuard<'a, T> {
     }
 }
 
+struct SharedState {
+    vtable: HashMap<u64, VEntry>,
+    shutdown: bool,
+    start: Instant,
+    tick: Instant,
+}
+
 struct Worker<'a> {
     cfg: &'a Config,
-    guard: YieldableGuard<'a, HashMap<u64, VEntry>>,
+    guard: YieldableGuard<'a, SharedState>,
     table: &'a table::ConcurrentTranspositionTable<Entry, typenum::U4>,
     stats: Stats,
     stack: Vec<game::Move>,
+    wait: &'a Condvar,
 }
 
 impl Worker<'_> {
@@ -562,6 +513,7 @@ impl Worker<'_> {
             };
             let vchild = self
                 .guard
+                .vtable
                 .get(&child.entry.hash)
                 .map(|ve| Child {
                     entry: ve.entry.clone(),
@@ -583,7 +535,7 @@ impl Worker<'_> {
                     if let Some(e) = self.table.lookup(child.position.zobrist()) {
                         child.entry = e;
                     }
-                    if let Some(v) = self.guard.get(&child.position.zobrist()) {
+                    if let Some(v) = self.guard.vtable.get(&child.position.zobrist()) {
                         vdata.children[i].entry = v.entry.clone();
                     }
                 }
@@ -643,8 +595,69 @@ impl Worker<'_> {
         (data, local_work, did_job)
     }
 
+    fn run(&mut self, pos: &game::Game) -> u64 {
+        let mut root = Entry {
+            bounds: Bounds::unity(),
+            hash: pos.zobrist(),
+            work: 0,
+            ..Default::default()
+        };
+        let mut vroot = VPath {
+            parent: None,
+            children: Vec::new(),
+            entry: root.clone(),
+        };
+        let mut work = 0;
+        loop {
+            let (result, this_work, did_job) = self.try_run_job(
+                Bounds {
+                    phi: INFINITY / 2,
+                    delta: INFINITY / 2,
+                },
+                &pos,
+                root,
+                &mut vroot,
+            );
+            debug_assert!(self.guard.vtable.is_empty(), "Leaking VEntry's");
+            root = result;
+            work += this_work;
+
+            let now = Instant::now();
+            if self.cfg.debug > 0 && now > self.guard.tick {
+                let elapsed = now.duration_since(self.guard.start);
+                eprintln!(
+                    "t={}.{:03}s root=({},{}) jobs={} work={}",
+                    elapsed.as_secs(),
+                    elapsed.subsec_millis(),
+                    root.bounds.phi,
+                    root.bounds.delta,
+                    self.stats.jobs,
+                    work,
+                );
+                self.guard.tick = now + TICK_TIME;
+            }
+            /*
+            if let Some(_) = self.cfg.dump_table {
+                if now > self.guard.dump_tick {
+                    self.dump_table().expect("dump_table failed");
+                    self.guard.dump_tick = now + self.cfg.dump_interval;
+                }
+            }
+            */
+
+            if root.bounds.solved() {
+                break;
+            }
+            if !did_job {
+                panic!("single-threaded could not find job");
+            }
+        }
+
+        work
+    }
+
     fn vadd(&mut self, entry: &Entry) -> &mut VEntry {
-        let vnode = self.guard.entry(entry.hash).or_insert(VEntry {
+        let vnode = self.guard.vtable.entry(entry.hash).or_insert(VEntry {
             entry: entry.clone(),
             saved: Vec::new(),
             count: 0,
@@ -655,12 +668,12 @@ impl Worker<'_> {
     }
 
     fn vremove(&mut self, hash: u64) {
-        let entry = self.guard.get_mut(&hash).unwrap();
+        let entry = self.guard.vtable.get_mut(&hash).unwrap();
         entry.count -= 1;
         entry.entry.bounds = entry.saved.pop().unwrap();
         let del = entry.count == 0;
         if del {
-            self.guard.remove(&hash);
+            self.guard.vtable.remove(&hash);
         }
     }
 
