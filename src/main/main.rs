@@ -243,6 +243,12 @@ struct AnalyzeParameters {
     max_work_per_job: Option<u64>,
     #[structopt(long, default_value = "0.125")]
     epsilon: f64,
+    #[structopt(long)]
+    dump_table: Option<String>,
+    #[structopt(long)]
+    load_table: Option<String>,
+    #[structopt(long, default_value = "60s", parse(try_from_str=parse_duration))]
+    dump_interval: Duration,
     position: String,
 }
 
@@ -402,6 +408,9 @@ fn main() -> Result<(), std::io::Error> {
                     timeout: Some(opt.timeout),
                     debug: opt.debug,
                     epsilon: analyze.epsilon,
+                    dump_table: analyze.dump_table.clone(),
+                    load_table: analyze.load_table.clone(),
+                    dump_interval: analyze.dump_interval.clone(),
                     ..Default::default()
                 };
                 if let Some(m) = analyze.max_work_per_job {

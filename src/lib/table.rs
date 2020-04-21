@@ -1,10 +1,10 @@
 use typenum;
 
 use std::marker::PhantomData;
-use std::mem;
 use std::mem::MaybeUninit;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::RwLock;
+use std::{fs, io, mem, slice};
 
 #[derive(Default)]
 struct AtomicStats {
@@ -59,6 +59,14 @@ where
     unsafe { slice.assume_init() }
 }
 
+#[repr(C)]
+struct Header {
+    version: u64,
+    entries: u64,
+}
+
+const DUMPFILE_VERSION: u64 = 1;
+
 impl<E, N> TranspositionTable<E, N>
 where
     E: Entry + Default + Clone,
@@ -70,7 +78,10 @@ where
 
     pub fn with_memory(bytes: usize) -> Self {
         let len = bytes / (1 + mem::size_of::<E>());
+        Self::with_entries(len)
+    }
 
+    pub fn with_entries(len: usize) -> Self {
         TranspositionTable::<E, N> {
             index: new_default_slice(len),
             entries: new_default_slice(len),
@@ -126,6 +137,66 @@ where
     pub fn stats(&self) -> Stats {
         self.stats.load()
     }
+
+    pub fn dump(&self, w: &mut dyn io::Write) -> io::Result<()> {
+        let header = Header {
+            version: DUMPFILE_VERSION,
+            entries: self.entries.len() as u64,
+        };
+        w.write(unsafe {
+            slice::from_raw_parts(
+                mem::transmute::<_, *const u8>(&header),
+                mem::size_of::<Header>(),
+            )
+        })?;
+        w.write(unsafe {
+            slice::from_raw_parts(
+                mem::transmute::<_, *const u8>(self.index.as_ptr()),
+                self.index.len() * mem::size_of_val(&self.index[0]),
+            )
+        })?;
+        w.write(unsafe {
+            slice::from_raw_parts(
+                mem::transmute::<_, *const u8>(self.entries.as_ptr()),
+                self.entries.len() * mem::size_of_val(&self.entries[0]),
+            )
+        })?;
+        Ok(())
+    }
+
+    pub fn from_reader(r: &mut dyn io::Read) -> io::Result<Self> {
+        let header = unsafe {
+            let mut buf: MaybeUninit<Header> = MaybeUninit::uninit();
+            r.read(slice::from_raw_parts_mut(
+                mem::transmute::<_, *mut u8>(buf.as_mut_ptr()),
+                mem::size_of::<Header>(),
+            ))?;
+            buf.assume_init()
+        };
+        if header.version != DUMPFILE_VERSION {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                format!(
+                    "dumpfile version mismatch: expected {} got {}",
+                    DUMPFILE_VERSION, header.version,
+                ),
+            ));
+        }
+        let mut table = Self::with_entries(header.entries as usize);
+        r.read(&mut table.index)?;
+        r.read(unsafe {
+            slice::from_raw_parts_mut(
+                mem::transmute::<_, *mut u8>(table.entries.as_mut_ptr()),
+                table.entries.len() * mem::size_of_val(&table.entries[0]),
+            )
+        })?;
+        Ok(table)
+    }
+
+    pub fn from_file(path: &str) -> io::Result<Self> {
+        let mut f = fs::File::open(path)?;
+        Self::from_reader(&mut f)
+    }
 }
 
 pub struct ConcurrentTranspositionTable<E, N>(RwLock<TranspositionTable<E, N>>)
@@ -146,6 +217,18 @@ where
         Self(RwLock::new(TranspositionTable::with_memory(bytes)))
     }
 
+    pub fn with_entries(len: usize) -> Self {
+        Self(RwLock::new(TranspositionTable::with_entries(len)))
+    }
+
+    pub fn from_reader(r: &mut dyn io::Read) -> io::Result<Self> {
+        TranspositionTable::from_reader(r).map(|t| Self(RwLock::new(t)))
+    }
+
+    pub fn from_file(path: &str) -> io::Result<Self> {
+        TranspositionTable::from_file(path).map(|t| Self(RwLock::new(t)))
+    }
+
     pub fn lookup(&self, hash: u64) -> Option<E> {
         self.0.read().unwrap().lookup(hash)
     }
@@ -156,5 +239,9 @@ where
 
     pub fn stats(&self) -> Stats {
         self.0.read().unwrap().stats()
+    }
+
+    pub fn dump(&self, w: &mut dyn io::Write) -> io::Result<()> {
+        self.0.read().unwrap().dump(w)
     }
 }

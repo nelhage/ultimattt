@@ -6,6 +6,7 @@ use std::collections::hash_map::HashMap;
 use std::ops::{Deref, DerefMut};
 use std::sync::{Mutex, MutexGuard};
 use std::time::{Duration, Instant};
+use std::{fs, io};
 use typenum;
 
 #[derive(Clone, Debug, Default)]
@@ -29,7 +30,8 @@ impl Stats {
 
 const INFINITY: u32 = 1 << 31;
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[repr(C)]
 pub struct Bounds {
     pub phi: u32,
     pub delta: u32,
@@ -71,6 +73,7 @@ impl Bounds {
 }
 
 #[derive(Clone)]
+#[repr(C)]
 struct Entry {
     bounds: Bounds,
     hash: u64,
@@ -112,6 +115,9 @@ pub struct Config {
     pub debug: usize,
     pub epsilon: f64,
     pub max_work_per_job: u64,
+    pub dump_table: Option<String>,
+    pub load_table: Option<String>,
+    pub dump_interval: Duration,
 }
 
 impl Default for Config {
@@ -122,6 +128,9 @@ impl Default for Config {
             debug: 0,
             epsilon: 1.0 / 8.0,
             max_work_per_job: 500,
+            dump_table: None,
+            load_table: None,
+            dump_interval: Duration::from_secs(30),
         }
     }
 }
@@ -139,6 +148,7 @@ pub struct ProveResult {
 pub struct DFPN {
     start: Instant,
     tick: Instant,
+    dump_tick: Instant,
     cfg: Config,
     table: table::ConcurrentTranspositionTable<Entry, typenum::U4>,
     stats: Stats,
@@ -160,12 +170,18 @@ static TICK_TIME: Duration = Duration::from_millis(500);
 impl DFPN {
     pub fn prove(cfg: &Config, g: &game::Game) -> ProveResult {
         let start = Instant::now();
+        let table = if let Some(ref path) = cfg.load_table {
+            table::ConcurrentTranspositionTable::from_file(path).expect("invalid table file")
+        } else {
+            table::ConcurrentTranspositionTable::with_memory(cfg.table_size)
+        };
         let mut prover = DFPN {
             root: g.clone(),
             start: start,
             tick: start,
+            dump_tick: start + cfg.dump_interval,
             cfg: cfg.clone(),
-            table: table::ConcurrentTranspositionTable::with_memory(cfg.table_size),
+            table: table,
             stats: Default::default(),
             vtable: Mutex::new(HashMap::new()),
         };
@@ -236,6 +252,12 @@ impl DFPN {
                 );
                 self.tick = now + TICK_TIME;
             }
+            if let Some(_) = self.cfg.dump_table {
+                if now > self.dump_tick {
+                    self.dump_table().expect("dump_table failed");
+                    self.dump_tick = now + self.cfg.dump_interval;
+                }
+            }
 
             if root.bounds.solved() {
                 break;
@@ -244,8 +266,27 @@ impl DFPN {
                 panic!("single-threaded could not find job");
             }
         }
+        self.dump_table().expect("final dump_table");
         self.stats = self.stats.merge(&worker.stats);
         (root, work)
+    }
+
+    fn dump_table(&self) -> io::Result<()> {
+        if let Some(ref path) = self.cfg.dump_table {
+            let before = Instant::now();
+            let mut f = fs::File::create(path)?;
+            self.table.dump(&mut f)?;
+            let elapsed = Instant::now().duration_since(before);
+            if self.cfg.debug > 0 {
+                eprintln!(
+                    "Checkpointed table[{}] in {}.{:03}s",
+                    path,
+                    elapsed.as_secs(),
+                    elapsed.subsec_millis(),
+                );
+            }
+        }
+        Ok(())
     }
 
     fn extract_pv(&self) -> Vec<game::Move> {
