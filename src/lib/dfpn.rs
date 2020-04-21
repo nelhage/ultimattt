@@ -169,16 +169,36 @@ impl DFPN {
             stats: Default::default(),
             vtable: Mutex::new(HashMap::new()),
         };
+        let (result, work) = prover.run();
+        ProveResult {
+            value: if result.bounds.phi == 0 {
+                prove::Evaluation::True
+            } else if result.bounds.delta == 0 {
+                prove::Evaluation::False
+            } else {
+                prove::Evaluation::Unknown
+            },
+            work: work,
+            bounds: result.bounds,
+            stats: prover.stats.clone(),
+            ttstats: prover.table.stats(),
+            duration: Instant::now().duration_since(prover.start),
+            pv: prover.extract_pv(),
+        }
+    }
+
+    fn run(&mut self) -> (Entry, u64) {
         let mut worker = Worker {
-            cfg: &prover.cfg,
-            guard: YieldableGuard::new(&prover.vtable),
-            table: &prover.table,
+            cfg: &self.cfg,
+            guard: YieldableGuard::new(&self.vtable),
+            table: &self.table,
             stats: Default::default(),
             stack: Vec::new(),
         };
+
         let mut root = Entry {
             bounds: Bounds::unity(),
-            hash: g.zobrist(),
+            hash: self.root.zobrist(),
             work: 0,
             ..Default::default()
         };
@@ -194,13 +214,29 @@ impl DFPN {
                     phi: INFINITY / 2,
                     delta: INFINITY / 2,
                 },
-                &g,
+                &self.root,
                 root,
                 &mut vroot,
             );
             debug_assert!(worker.guard.is_empty(), "Leaking VEntry's");
             root = result;
             work += this_work;
+
+            let now = Instant::now();
+            if self.cfg.debug > 0 && now > self.tick {
+                let elapsed = now.duration_since(self.start);
+                eprintln!(
+                    "t={}.{:03}s root=({},{}) jobs={} work={}",
+                    elapsed.as_secs(),
+                    elapsed.subsec_millis(),
+                    root.bounds.phi,
+                    root.bounds.delta,
+                    worker.stats.jobs,
+                    work,
+                );
+                self.tick = now + TICK_TIME;
+            }
+
             if root.bounds.solved() {
                 break;
             }
@@ -208,22 +244,8 @@ impl DFPN {
                 panic!("single-threaded could not find job");
             }
         }
-        prover.stats = prover.stats.merge(&worker.stats);
-        ProveResult {
-            value: if root.bounds.phi == 0 {
-                prove::Evaluation::True
-            } else if root.bounds.delta == 0 {
-                prove::Evaluation::False
-            } else {
-                prove::Evaluation::Unknown
-            },
-            work: work,
-            bounds: root.bounds,
-            stats: prover.stats.clone(),
-            ttstats: prover.table.stats(),
-            duration: Instant::now().duration_since(prover.start),
-            pv: prover.extract_pv(),
-        }
+        self.stats = self.stats.merge(&worker.stats);
+        (root, work)
     }
 
     fn extract_pv(&self) -> Vec<game::Move> {
@@ -446,11 +468,12 @@ impl Worker<'_> {
             self.stats.jobs += 1;
             if self.cfg.debug > 3 {
                 eprintln!(
-                    "{:1$}try_run_job: mid[d={}]({}, {})",
+                    "{:1$}try_run_job: mid[d={}]({}, {}) work={}",
                     "",
                     vdata.depth(),
                     bounds.phi,
                     bounds.delta,
+                    data.work,
                 );
             }
             self.guard.drop_lock();
