@@ -88,7 +88,7 @@ impl table::Entry for Entry {
     }
 
     fn better_than(&self, other: &Entry) -> bool {
-        self.work > other.work
+        self.work >= other.work
     }
 
     fn valid(&self) -> bool {
