@@ -342,6 +342,7 @@ pub struct Game {
 }
 
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
+#[repr(transparent)]
 pub struct Move {
     bits: u8,
 }

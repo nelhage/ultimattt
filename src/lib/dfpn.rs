@@ -266,6 +266,21 @@ impl DFPN {
                 panic!("single-threaded could not find job");
             }
         }
+        if let Some(troot) = self.table.lookup(root.hash) {
+            if troot.bounds != root.bounds {
+                panic!(
+                    "Stored bounds ({}, {})@{} != returned bounds ({}, {})@{}",
+                    troot.bounds.phi,
+                    troot.bounds.delta,
+                    troot.work,
+                    root.bounds.phi,
+                    root.bounds.delta,
+                    root.work,
+                )
+            }
+        } else {
+            panic!("did not store root");
+        }
         self.dump_table().expect("final dump_table");
         self.stats = self.stats.merge(&worker.stats);
         (root, work)
@@ -295,7 +310,12 @@ impl DFPN {
         loop {
             match g.game_state() {
                 game::BoardState::InPlay => (),
-                _ => break,
+                _ => {
+                    if self.cfg.debug > 0 {
+                        eprintln!("PV terminated depth={} game={:?}", pv.len(), g.game_state());
+                    }
+                    break;
+                }
             };
             if let Some(ent) = self.table.lookup(g.zobrist()) {
                 if ent.bounds.phi != 0 && ent.bounds.delta != 0 {
@@ -314,6 +334,9 @@ impl DFPN {
                     panic!("PV contained illegal move depth={} m={}", pv.len(), ent.pv)
                 });
             } else {
+                if self.cfg.debug > 0 {
+                    eprintln!("PV terminated depth={} no entry", pv.len());
+                }
                 break;
             }
         }
