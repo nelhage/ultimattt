@@ -12,6 +12,7 @@ use typenum;
 pub struct Stats {
     pub mid: usize,
     pub terminal: usize,
+    pub try_calls: usize,
     pub jobs: usize,
 }
 
@@ -21,6 +22,7 @@ impl Stats {
             mid: self.mid + other.mid,
             terminal: self.terminal + other.terminal,
             jobs: self.jobs + other.jobs,
+            try_calls: self.try_calls + other.try_calls,
         }
     }
 }
@@ -427,6 +429,7 @@ impl Worker<'_> {
                 data.work,
             );
         }
+        self.stats.try_calls += 1;
 
         let mut local_work = 0;
 

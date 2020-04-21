@@ -409,13 +409,14 @@ fn main() -> Result<(), std::io::Error> {
                 }
                 let result = dfpn::DFPN::prove(&cfg, &game);
                 println!(
-                    "result={:?} time={}.{:03}s pn={} dpn={} mid={} jobs={} tthit={}/{} ({:.1}%) ttstore={}",
+                    "result={:?} time={}.{:03}s pn={} dpn={} mid={} try={} jobs={} tthit={}/{} ({:.1}%) ttstore={}",
                     result.value,
                     result.duration.as_secs(),
                     result.duration.subsec_millis(),
                     result.bounds.phi,
                     result.bounds.delta,
                     result.stats.mid,
+                    result.stats.try_calls,
                     result.stats.jobs,
                     result.ttstats.hits,
                     result.ttstats.lookups,
