@@ -470,7 +470,7 @@ impl Worker<'_> {
         pos: &game::Game,
         mut data: Entry,
         mut vdata: &mut VPath,
-    ) -> (Entry, u64, bool) {
+    ) -> (Entry, Bounds, u64, bool) {
         if self.cfg.debug > 4 {
             eprintln!(
                 "{:depth$}[{}]try_run_job: m={} d={depth} bounds=({}, {}) node=({}, {}) vnode=({}, {}) w={}",
@@ -526,7 +526,8 @@ impl Worker<'_> {
             self.guard.acquire_lock();
 
             self.vremove(pos.zobrist(), result.bounds);
-            return (result, local_work, true);
+            let b = result.bounds;
+            return (result, b, local_work, true);
         }
 
         // build children
@@ -602,7 +603,7 @@ impl Worker<'_> {
             };
 
             self.stack.push(children[idx].r#move);
-            let (child_entry, child_work, ran) = self.try_run_job(
+            let (child_result, child_vbounds, child_work, ran) = self.try_run_job(
                 child_bounds,
                 &children[idx].position,
                 children[idx].entry.clone(),
@@ -613,20 +614,16 @@ impl Worker<'_> {
 
             local_work += child_work;
             data.work += child_work;
-            if vdata.children[idx].r#virtual {
-                vdata.children[idx].entry =
-                    self.guard.vtable.get(&data.hash).unwrap().entry.clone();
-            } else {
-                vdata.children[idx].entry = child_entry.clone();
-            }
-            children[idx].entry = child_entry;
+
+            children[idx].entry.bounds = child_result.bounds;
+            vdata.children[idx].entry.bounds = child_vbounds;
         }
 
         if did_job {
             self.vremove(data.hash, vdata.entry.bounds);
         }
 
-        (data, local_work, did_job)
+        (data, vdata.entry.bounds, local_work, did_job)
     }
 
     fn run(&mut self, pos: &game::Game) -> u64 {
@@ -643,14 +640,8 @@ impl Worker<'_> {
         };
         let mut work = 0;
         loop {
-            vroot.entry = self
-                .guard
-                .vtable
-                .get(&root.hash)
-                .map(|v| v.entry.clone())
-                .unwrap_or_else(|| root.clone());
-            let (result, this_work, did_job) = if vroot.entry.bounds.solved() {
-                (root, 0, false)
+            let (result, vbounds, this_work, did_job) = if vroot.entry.bounds.solved() {
+                (root, vroot.entry.bounds, 0, false)
             } else {
                 self.try_run_job(
                     Bounds {
@@ -663,6 +654,7 @@ impl Worker<'_> {
                 )
             };
             root = result;
+            vroot.entry.bounds = vbounds;
             work += this_work;
 
             let now = Instant::now();
