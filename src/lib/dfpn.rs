@@ -541,7 +541,7 @@ impl Worker<'_> {
             let (result, local_work) = self.mid(bounds, self.cfg.max_work_per_job, data, pos);
             self.guard.acquire_lock();
 
-            self.vremove(pos.zobrist());
+            self.vremove(pos.zobrist(), result.bounds);
             return (result, local_work, true);
         }
 
@@ -639,7 +639,7 @@ impl Worker<'_> {
         }
 
         if did_job {
-            self.vremove(data.hash);
+            self.vremove(data.hash, vdata.entry.bounds);
         }
 
         (data, local_work, did_job)
@@ -718,18 +718,16 @@ impl Worker<'_> {
     fn vadd(&mut self, entry: &Entry) -> &mut VEntry {
         let vnode = self.guard.vtable.entry(entry.hash).or_insert(VEntry {
             entry: entry.clone(),
-            saved: Vec::new(),
             count: 0,
         });
-        vnode.saved.push(vnode.entry.bounds);
         vnode.count += 1;
         vnode
     }
 
-    fn vremove(&mut self, hash: u64) {
+    fn vremove(&mut self, hash: u64, bounds: Bounds) {
         let entry = self.guard.vtable.get_mut(&hash).unwrap();
         entry.count -= 1;
-        entry.entry.bounds = entry.saved.pop().unwrap();
+        entry.entry.bounds = bounds;
         let del = entry.count == 0;
         if del {
             self.guard.vtable.remove(&hash);
@@ -747,7 +745,6 @@ impl Worker<'_> {
 
 struct VEntry {
     entry: Entry,
-    saved: Vec<Bounds>,
     count: isize,
 }
 
