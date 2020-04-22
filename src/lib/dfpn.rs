@@ -630,12 +630,12 @@ impl Worker<'_> {
     }
 
     fn run(&mut self, pos: &game::Game) -> u64 {
-        let mut root = Entry {
+        let mut root = self.table.lookup(pos.zobrist()).unwrap_or(Entry {
             bounds: Bounds::unity(),
             hash: pos.zobrist(),
             work: 0,
             ..Default::default()
-        };
+        });
         let mut vroot = VPath {
             parent: None,
             children: Vec::new(),
