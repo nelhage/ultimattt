@@ -1,3 +1,5 @@
+extern crate crossbeam;
+
 use crate::game;
 use crate::prove;
 use crate::table;
@@ -208,19 +210,41 @@ impl DFPN {
         });
         let cv = Condvar::new();
 
-        let mut worker = Worker {
-            cfg: &self.cfg,
-            guard: YieldableGuard::new(&shared),
-            table: &self.table,
-            stats: Default::default(),
-            stack: Vec::new(),
-            wait: &cv,
-        };
+        let (work, stats) = crossbeam::scope(|s| {
+            let mut guards = Vec::new();
+            for i in 0..2 {
+                let root = &self.root;
+                let cfg = &self.cfg;
+                let table = &self.table;
+                let cref = &cv;
+                let sref = &shared;
+                guards.push(s.spawn(move |_| {
+                    let mut worker = Worker {
+                        id: i,
+                        cfg: cfg,
+                        guard: YieldableGuard::new(sref),
+                        table: table,
+                        stats: Default::default(),
+                        stack: Vec::new(),
+                        wait: cref,
+                    };
 
-        let work = worker.run(&self.root);
+                    (worker.run(root), worker.stats.clone())
+                }));
+            }
+            guards
+                .into_iter()
+                .map(|g| g.join().expect("thread panicked"))
+                .fold(
+                    (0, Default::default()),
+                    |a: (u64, Stats), b: (u64, Stats)| (a.0 + b.0, a.1.merge(&b.1)),
+                )
+        })
+        .expect("thread panicked");
+
+        self.stats = self.stats.merge(&stats);
 
         self.dump_table().expect("final dump_table");
-        self.stats = self.stats.merge(&worker.stats);
         (
             self.table
                 .lookup(self.root.zobrist())
@@ -310,6 +334,14 @@ impl<'a, T> YieldableGuard<'a, T> {
         debug_assert!(self.guard.is_none());
         self.guard = Some(self.lock.lock().unwrap());
     }
+
+    fn take(&mut self) -> MutexGuard<'a, T> {
+        self.guard.take().unwrap()
+    }
+
+    fn wait(&mut self, cond: &Condvar) {
+        self.guard = Some(cond.wait(self.take()).unwrap());
+    }
 }
 
 impl<'a, T> Deref for YieldableGuard<'a, T> {
@@ -335,6 +367,7 @@ struct SharedState {
 
 struct Worker<'a> {
     cfg: &'a Config,
+    id: usize,
     guard: YieldableGuard<'a, SharedState>,
     table: &'a table::ConcurrentTranspositionTable<Entry, typenum::U4>,
     stats: Stats,
@@ -352,8 +385,9 @@ impl Worker<'_> {
     ) -> (Entry, u64) {
         if self.cfg.debug > 6 {
             eprintln!(
-                "{:2$}mid[{}]: m={} d={} bounds=({}, {}) max_work={}",
+                "{:3$}[{}]mid[{}]: m={} d={} bounds=({}, {}) max_work={}",
                 "",
+                self.id,
                 self.stack
                     .last()
                     .map(|&m| game::notation::render_move(m))
@@ -454,8 +488,9 @@ impl Worker<'_> {
         );
         if self.cfg.debug > 4 {
             eprintln!(
-                "{:1$}try_run_job: d={} bounds=({}, {}) node=({}, {}) vnode=({}, {}) w={}",
+                "{:2$}[{}]try_run_job: d={} bounds=({}, {}) node=({}, {}) vnode=({}, {}) w={}",
                 "",
+                self.id,
                 vdata.depth(),
                 bounds.phi,
                 bounds.delta,
@@ -483,8 +518,9 @@ impl Worker<'_> {
             self.stats.jobs += 1;
             if self.cfg.debug > 3 {
                 eprintln!(
-                    "{:1$}try_run_job: mid[d={}]({}, {}) work={}",
+                    "{:2$}[{}]try_run_job: mid[d={}]({}, {}) work={}",
                     "",
+                    self.id,
                     vdata.depth(),
                     bounds.phi,
                     bounds.delta,
@@ -546,9 +582,10 @@ impl Worker<'_> {
 
             if self.cfg.debug > 5 {
                 eprintln!(
-                    "{0:1$}try_run_job[loop]: node=({2}, {3}) vnode=({4}, {5}) w={6}",
+                    "{0:1$}[{2}]try_run_job[loop]: node=({3}, {4}) vnode=({5}, {6}) w={7}",
                     "",
                     self.stack.len(),
+                    self.id,
                     data.bounds.phi,
                     data.bounds.delta,
                     vdata.entry.bounds.phi,
@@ -618,7 +655,6 @@ impl Worker<'_> {
                 root,
                 &mut vroot,
             );
-            debug_assert!(self.guard.vtable.is_empty(), "Leaking VEntry's");
             root = result;
             work += this_work;
 
@@ -626,7 +662,8 @@ impl Worker<'_> {
             if self.cfg.debug > 0 && now > self.guard.tick {
                 let elapsed = now.duration_since(self.guard.start);
                 eprintln!(
-                    "t={}.{:03}s root=({},{}) jobs={} work={}",
+                    "[{}]t={}.{:03}s root=({},{}) jobs={} work={}",
+                    self.id,
                     elapsed.as_secs(),
                     elapsed.subsec_millis(),
                     root.bounds.phi,
@@ -643,13 +680,18 @@ impl Worker<'_> {
                     self.guard.dump_tick = now + self.cfg.dump_interval;
                 }
             }
-            */
+             */
 
-            if root.bounds.solved() {
+            if root.bounds.solved() || self.guard.shutdown {
+                self.guard.shutdown = true;
+                self.wait.notify_all();
                 break;
             }
-            if !did_job {
-                panic!("single-threaded could not find job");
+
+            if did_job {
+                self.wait.notify_all();
+            } else {
+                self.guard.wait(&self.wait);
             }
         }
 
