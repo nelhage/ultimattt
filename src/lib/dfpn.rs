@@ -659,6 +659,12 @@ impl Worker<'_> {
         };
         let mut work = 0;
         loop {
+            vroot.entry = self
+                .guard
+                .vtable
+                .get(&root.hash)
+                .map(|v| v.entry.clone())
+                .unwrap_or_else(|| root.clone());
             let (result, this_work, did_job) = if vroot.entry.bounds.solved() {
                 (root, 0, false)
             } else {
@@ -737,6 +743,13 @@ impl Worker<'_> {
     fn update_parents(&mut self, mut node: Option<*mut VPath>) {
         while let Some(ptr) = node {
             let v = unsafe { ptr.as_mut().unwrap() };
+            for child in v.children.iter_mut() {
+                if let Some(ref vchild) = self.guard.vtable.get(&child.entry.hash) {
+                    child.entry = vchild.entry.clone()
+                } else if let Some(tchild) = self.table.lookup(child.entry.hash) {
+                    child.entry = tchild;
+                }
+            }
             self.vadd(&v.entry).entry.bounds = compute_bounds(&v.children);
             node = v.parent;
         }
