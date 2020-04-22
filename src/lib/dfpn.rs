@@ -619,7 +619,10 @@ impl Worker<'_> {
 
             local_work += child_work;
             data.work += child_work;
-            if !vdata.children[idx].r#virtual {
+            if vdata.children[idx].r#virtual {
+                vdata.children[idx].entry =
+                    self.guard.vtable.get(&data.hash).unwrap().entry.clone();
+            } else {
                 vdata.children[idx].entry = child_entry.clone();
             }
             children[idx].entry = child_entry;
