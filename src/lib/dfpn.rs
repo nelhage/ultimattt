@@ -207,6 +207,7 @@ impl DFPN {
             shutdown: false,
             start: self.start,
             tick: self.start,
+            dump_tick: self.start + self.cfg.dump_interval,
         });
         let cv = Condvar::new();
 
@@ -249,31 +250,13 @@ impl DFPN {
 
         self.stats = self.stats.merge(&stats);
 
-        self.dump_table().expect("final dump_table");
+        dump_table(&self.cfg, &self.table).expect("final dump_table");
         (
             self.table
                 .lookup(self.root.zobrist())
                 .expect("no entry for root"),
             work,
         )
-    }
-
-    fn dump_table(&self) -> io::Result<()> {
-        if let Some(ref path) = self.cfg.dump_table {
-            let before = Instant::now();
-            let mut f = fs::File::create(path)?;
-            self.table.dump(&mut f)?;
-            let elapsed = Instant::now().duration_since(before);
-            if self.cfg.debug > 0 {
-                eprintln!(
-                    "Checkpointed table[{}] in {}.{:03}s",
-                    path,
-                    elapsed.as_secs(),
-                    elapsed.subsec_millis(),
-                );
-            }
-        }
-        Ok(())
     }
 
     fn extract_pv(&self) -> Vec<game::Move> {
@@ -368,6 +351,7 @@ struct SharedState {
     shutdown: bool,
     start: Instant,
     tick: Instant,
+    dump_tick: Instant,
 }
 
 struct Worker<'a> {
@@ -696,14 +680,13 @@ impl Worker<'_> {
                 );
                 self.guard.tick = now + TICK_TIME;
             }
-            /*
+
             if let Some(_) = self.cfg.dump_table {
                 if now > self.guard.dump_tick {
-                    self.dump_table().expect("dump_table failed");
+                    dump_table(&self.cfg, self.table).expect("dump_table failed");
                     self.guard.dump_tick = now + self.cfg.dump_interval;
                 }
             }
-             */
 
             if root.bounds.solved() || self.guard.shutdown {
                 self.guard.shutdown = true;
@@ -891,4 +874,25 @@ fn populate_pv(data: &mut Entry, children: &Vec<Child>) {
             .map(|e| e.r#move)
             .expect("lost node, no move");
     }
+}
+
+fn dump_table<N: typenum::Unsigned>(
+    cfg: &Config,
+    table: &table::ConcurrentTranspositionTable<Entry, N>,
+) -> io::Result<()> {
+    if let Some(ref path) = cfg.dump_table {
+        let before = Instant::now();
+        let mut f = fs::File::create(path)?;
+        table.dump(&mut f)?;
+        let elapsed = Instant::now().duration_since(before);
+        if cfg.debug > 0 {
+            eprintln!(
+                "Checkpointed table[{}] in {}.{:03}s",
+                path,
+                elapsed.as_secs(),
+                elapsed.subsec_millis(),
+            );
+        }
+    }
+    Ok(())
 }
