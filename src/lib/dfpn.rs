@@ -487,16 +487,15 @@ impl Worker<'_> {
         mut data: Entry,
         mut vdata: &mut VPath,
     ) -> (Entry, u64, bool) {
-        debug_assert!(
-            !vdata.entry.bounds.exceeded(bounds),
-            "inconsistent select_next_job call"
-        );
         if self.cfg.debug > 4 {
             eprintln!(
-                "{:2$}[{}]try_run_job: d={} bounds=({}, {}) node=({}, {}) vnode=({}, {}) w={}",
+                "{:depth$}[{}]try_run_job: m={} d={depth} bounds=({}, {}) node=({}, {}) vnode=({}, {}) w={}",
                 "",
                 self.id,
-                vdata.depth(),
+                self.stack
+                    .last()
+                    .map(|&m| game::notation::render_move(m))
+                    .unwrap_or_else(|| "<root>".to_owned()),
                 bounds.phi,
                 bounds.delta,
                 data.bounds.phi,
@@ -504,8 +503,14 @@ impl Worker<'_> {
                 vdata.entry.bounds.phi,
                 vdata.entry.bounds.delta,
                 data.work,
+                depth=vdata.depth(),
             );
         }
+        debug_assert!(
+            !vdata.entry.bounds.exceeded(bounds),
+            "inconsistent select_next_job call"
+        );
+
         self.stats.try_calls += 1;
 
         let mut local_work = 0;
