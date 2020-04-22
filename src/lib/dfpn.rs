@@ -218,19 +218,24 @@ impl DFPN {
                 let table = &self.table;
                 let cref = &cv;
                 let sref = &shared;
-                guards.push(s.spawn(move |_| {
-                    let mut worker = Worker {
-                        id: i,
-                        cfg: cfg,
-                        guard: YieldableGuard::new(sref),
-                        table: table,
-                        stats: Default::default(),
-                        stack: Vec::new(),
-                        wait: cref,
-                    };
+                guards.push(
+                    s.builder()
+                        .name(format!("worker-{}", i))
+                        .spawn(move |_| {
+                            let mut worker = Worker {
+                                id: i,
+                                cfg: cfg,
+                                guard: YieldableGuard::new(sref),
+                                table: table,
+                                stats: Default::default(),
+                                stack: Vec::new(),
+                                wait: cref,
+                            };
 
-                    (worker.run(root), worker.stats.clone())
-                }));
+                            (worker.run(root), worker.stats.clone())
+                        })
+                        .unwrap(),
+                );
             }
             guards
                 .into_iter()
