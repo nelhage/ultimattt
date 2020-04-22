@@ -167,7 +167,7 @@ where
     pub fn from_reader(r: &mut dyn io::Read) -> io::Result<Self> {
         let header = unsafe {
             let mut buf: MaybeUninit<Header> = MaybeUninit::uninit();
-            r.read(slice::from_raw_parts_mut(
+            r.read_exact(slice::from_raw_parts_mut(
                 mem::transmute::<_, *mut u8>(buf.as_mut_ptr()),
                 mem::size_of::<Header>(),
             ))?;
@@ -183,8 +183,8 @@ where
             ));
         }
         let mut table = Self::with_entries(header.entries as usize);
-        r.read(&mut table.index)?;
-        r.read(unsafe {
+        r.read_exact(&mut table.index)?;
+        r.read_exact(unsafe {
             slice::from_raw_parts_mut(
                 mem::transmute::<_, *mut u8>(table.entries.as_mut_ptr()),
                 table.entries.len() * mem::size_of_val(&table.entries[0]),
