@@ -659,15 +659,19 @@ impl Worker<'_> {
         };
         let mut work = 0;
         loop {
-            let (result, this_work, did_job) = self.try_run_job(
-                Bounds {
-                    phi: INFINITY / 2,
-                    delta: INFINITY / 2,
-                },
-                &pos,
-                root,
-                &mut vroot,
-            );
+            let (result, this_work, did_job) = if vroot.entry.bounds.solved() {
+                (root, 0, false)
+            } else {
+                self.try_run_job(
+                    Bounds {
+                        phi: INFINITY / 2,
+                        delta: INFINITY / 2,
+                    },
+                    &pos,
+                    root,
+                    &mut vroot,
+                )
+            };
             root = result;
             work += this_work;
 
