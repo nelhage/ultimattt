@@ -500,178 +500,7 @@ struct Metrics<'a> {
     stats: &'a Stats,
 }
 
-// const PROBE_HASH: u64 = 10700673491507517620;
-
 impl Worker<'_> {
-    fn try_minimax(&mut self, pos: &game::Game) -> Option<bool> {
-        self.stats.minimax += 1;
-        let (_aipv, aistats) = self.minimax.analyze(pos);
-        if let Some(st) = aistats.last() {
-            if st.score >= minimax::EVAL_WON {
-                self.stats.minimax_solve += 1;
-                return Some(true);
-            } else if st.score <= minimax::EVAL_LOST {
-                self.stats.minimax_solve += 1;
-                return Some(false);
-            }
-        }
-        return None;
-    }
-
-    fn try_probe(&mut self, data: &Entry, children: &Vec<Child>) {
-        if let Some(ref mut p) = self.probe {
-            if data.hash != p.hash {
-                return;
-            }
-            let now = Instant::now();
-            if now < p.tick && !data.bounds.solved() {
-                return;
-            }
-            p.tick = now + Duration::from_millis(10);
-
-            let mut lk = p.out.lock();
-            for (i, ch) in children.iter().enumerate() {
-                write!(
-                    lk,
-                    "{},{},{},{},{},{},{},{}\n",
-                    self.stats.mid,
-                    data.work,
-                    data.bounds.phi,
-                    data.bounds.delta,
-                    i,
-                    ch.entry.work,
-                    ch.entry.bounds.phi,
-                    ch.entry.bounds.delta,
-                )
-                .expect("probe line");
-            }
-        }
-    }
-
-    fn mid(
-        &mut self,
-        bounds: Bounds,
-        max_work: u64,
-        mut data: Entry,
-        pos: &game::Game,
-    ) -> (Entry, u64) {
-        if self.cfg.debug > 6 {
-            eprintln!(
-                "{:4$}[{}]mid[{}]: mid={} d={} bounds=({}, {}) max_work={}",
-                "",
-                self.id,
-                self.stack
-                    .last()
-                    .map(|&m| game::notation::render_move(m))
-                    .unwrap_or_else(|| "<root>".to_owned()),
-                self.stats.mid,
-                self.stack.len(),
-                bounds.phi,
-                bounds.delta,
-                max_work,
-            );
-        }
-        self.stats.mid += 1;
-        self.stats.mid_depth.inc(self.stack.len());
-
-        debug_assert!(
-            !data.bounds.exceeded(bounds),
-            "inconsistent mid call d={}, bounds=({}, {}) me=({}, {}) w={}",
-            self.stack.len(),
-            bounds.phi,
-            bounds.delta,
-            data.bounds.phi,
-            data.bounds.delta,
-            data.work,
-        );
-
-        let terminal = match pos.game_state() {
-            game::BoardState::InPlay => {
-                if pos.bound_depth() <= self.cfg.minimax_cutoff {
-                    self.try_minimax(pos)
-                } else {
-                    None
-                }
-            }
-            game::BoardState::Drawn => Some(pos.player() != self.player),
-            game::BoardState::Won(p) => Some(p == pos.player()),
-        };
-        if let Some(v) = terminal {
-            if v {
-                data.bounds = Bounds::winning();
-            } else {
-                data.bounds = Bounds::losing();
-            }
-            self.stats.terminal += 1;
-            data.work = 1;
-            self.table.store(&mut self.stats.tt, &data);
-            return (data, 1);
-        }
-
-        let mut local_work = 1;
-
-        let mut children = Vec::new();
-        for m in pos.all_moves() {
-            let g = pos.make_move(m).expect("all_moves returned illegal move");
-            let data = self.ttlookup_or_default(&g);
-            let bounds = data.bounds;
-            children.push(Child {
-                position: g,
-                r#move: m,
-                entry: data,
-                r#virtual: false,
-            });
-            if bounds.delta == 0 {
-                break;
-            }
-        }
-
-        self.stats.branch.inc(children.len());
-
-        loop {
-            data.bounds = compute_bounds(&children);
-            self.try_probe(&data, &children);
-
-            if local_work >= max_work || data.bounds.exceeded(bounds) {
-                break;
-            }
-            let (best_idx, child_bounds) =
-                select_child(&children, bounds, &mut data, self.cfg.epsilon);
-            let child = &children[best_idx];
-            self.stack.push(children[best_idx].r#move);
-            let (child_entry, child_work) = self.mid(
-                child_bounds,
-                max_work - local_work,
-                children[best_idx].entry.clone(),
-                &child.position,
-            );
-            children[best_idx].entry = child_entry;
-            self.stack.pop();
-            local_work += child_work;
-
-            if children[best_idx].entry.bounds.delta == 0 {
-                self.stats.winning_child.inc(best_idx);
-            }
-        }
-
-        data.work += local_work;
-
-        populate_pv(&mut data, &children);
-        let did_store = self.table.store(&mut self.stats.tt, &data);
-        if self.cfg.debug > 6 {
-            eprintln!(
-                "{:depth$}[{id}]exit mid bounds={bounds:?} local_work={local_work} store={did_store}",
-                "",
-                id=self.id,
-                depth = self.stack.len(),
-                bounds = data.bounds,
-                local_work = local_work,
-                did_store = did_store,
-            );
-        }
-        (data, local_work)
-    }
-
     fn try_run_job(
         &mut self,
         bounds: Bounds,
@@ -1149,4 +978,242 @@ fn dump_table<N: typenum::Unsigned>(
         }
     }
     Ok(())
+}
+
+trait DFPNWorker {
+    fn id(&self) -> usize;
+    fn cfg(&self) -> &Config;
+    fn stack(&mut self) -> &mut Vec<game::Move>;
+    fn stats(&mut self) -> &mut Stats;
+    fn player(&self) -> game::Player;
+    fn ttlookup(&mut self, hash: u64) -> Option<Entry>;
+    fn ttstore(&mut self, entry: &Entry) -> bool;
+    fn minimax(&mut self) -> &mut minimax::Minimax;
+    fn try_probe(&mut self, data: &Entry, children: &Vec<Child>);
+
+    fn try_minimax(&mut self, pos: &game::Game) -> Option<bool> {
+        self.stats().minimax += 1;
+        let (_aipv, aistats) = self.minimax().analyze(pos);
+        if let Some(st) = aistats.last() {
+            if st.score >= minimax::EVAL_WON {
+                self.stats().minimax_solve += 1;
+                return Some(true);
+            } else if st.score <= minimax::EVAL_LOST {
+                self.stats().minimax_solve += 1;
+                return Some(false);
+            }
+        }
+        return None;
+    }
+
+    fn mid(
+        &mut self,
+        bounds: Bounds,
+        max_work: u64,
+        mut data: Entry,
+        pos: &game::Game,
+    ) -> (Entry, u64) {
+        let depth = self.stack().len();
+        if self.cfg().debug > 6 {
+            eprintln!(
+                "{:4$}[{}]mid[{}]: mid={} d={} bounds=({}, {}) max_work={}",
+                "",
+                self.id(),
+                self.stack()
+                    .last()
+                    .map(|&m| game::notation::render_move(m))
+                    .unwrap_or_else(|| "<root>".to_owned()),
+                self.stats().mid,
+                depth,
+                bounds.phi,
+                bounds.delta,
+                max_work,
+            );
+        }
+        self.stats().mid += 1;
+        self.stats().mid_depth.inc(depth);
+
+        debug_assert!(
+            !data.bounds.exceeded(bounds),
+            "inconsistent mid call d={}, bounds=({}, {}) me=({}, {}) w={}",
+            self.stack().len(),
+            bounds.phi,
+            bounds.delta,
+            data.bounds.phi,
+            data.bounds.delta,
+            data.work,
+        );
+
+        let terminal = match pos.game_state() {
+            game::BoardState::InPlay => {
+                if pos.bound_depth() <= self.cfg().minimax_cutoff {
+                    self.try_minimax(pos)
+                } else {
+                    None
+                }
+            }
+            game::BoardState::Drawn => Some(pos.player() != self.player()),
+            game::BoardState::Won(p) => Some(p == pos.player()),
+        };
+        if let Some(v) = terminal {
+            if v {
+                data.bounds = Bounds::winning();
+            } else {
+                data.bounds = Bounds::losing();
+            }
+            self.stats().terminal += 1;
+            data.work = 1;
+            self.ttstore(&data);
+            return (data, 1);
+        }
+
+        let mut local_work = 1;
+
+        let mut children = Vec::new();
+        for m in pos.all_moves() {
+            let g = pos.make_move(m).expect("all_moves returned illegal move");
+            let data = self.ttlookup_or_default(&g);
+            let bounds = data.bounds;
+            children.push(Child {
+                position: g,
+                r#move: m,
+                entry: data,
+                r#virtual: false,
+            });
+            if bounds.delta == 0 {
+                break;
+            }
+        }
+
+        self.stats().branch.inc(children.len());
+
+        loop {
+            data.bounds = compute_bounds(&children);
+            self.try_probe(&data, &children);
+
+            if local_work >= max_work || data.bounds.exceeded(bounds) {
+                break;
+            }
+            let (best_idx, child_bounds) =
+                select_child(&children, bounds, &mut data, self.cfg().epsilon);
+            let child = &children[best_idx];
+            self.stack().push(children[best_idx].r#move);
+            let (child_entry, child_work) = self.mid(
+                child_bounds,
+                max_work - local_work,
+                children[best_idx].entry.clone(),
+                &child.position,
+            );
+            children[best_idx].entry = child_entry;
+            self.stack().pop();
+            local_work += child_work;
+
+            if children[best_idx].entry.bounds.delta == 0 {
+                self.stats().winning_child.inc(best_idx);
+            }
+        }
+
+        data.work += local_work;
+
+        populate_pv(&mut data, &children);
+        let did_store = self.ttstore(&data);
+        if self.cfg().debug > 6 {
+            eprintln!(
+                "{:depth$}[{id}]exit mid bounds={bounds:?} local_work={local_work} store={did_store}",
+                "",
+                id=self.id(),
+                depth = self.stack().len(),
+                bounds = data.bounds,
+                local_work = local_work,
+                did_store = did_store,
+            );
+        }
+        (data, local_work)
+    }
+
+    fn ttlookup_or_default(&mut self, g: &game::Game) -> Entry {
+        let te = self.ttlookup(g.zobrist());
+        te.unwrap_or_else(|| {
+            let bounds = match g.game_state() {
+                game::BoardState::Won(p) => {
+                    if p == g.player() {
+                        Bounds::winning()
+                    } else {
+                        Bounds::losing()
+                    }
+                }
+                game::BoardState::Drawn => {
+                    if g.player() == self.player() {
+                        Bounds::losing()
+                    } else {
+                        Bounds::winning()
+                    }
+                }
+                game::BoardState::InPlay => Bounds::unity(),
+            };
+            Entry {
+                bounds: bounds,
+                hash: g.zobrist(),
+                work: 0,
+                ..Default::default()
+            }
+        })
+    }
+}
+
+impl<'a> DFPNWorker for Worker<'a> {
+    fn id(&self) -> usize {
+        self.id
+    }
+    fn cfg(&self) -> &Config {
+        &self.cfg
+    }
+    fn stack(&mut self) -> &mut Vec<game::Move> {
+        &mut self.stack
+    }
+    fn stats(&mut self) -> &mut Stats {
+        &mut self.stats
+    }
+    fn player(&self) -> game::Player {
+        self.player
+    }
+    fn ttlookup(&mut self, hash: u64) -> Option<Entry> {
+        self.table.lookup(&mut self.stats.tt, hash)
+    }
+    fn ttstore(&mut self, entry: &Entry) -> bool {
+        self.table.store(&mut self.stats.tt, entry)
+    }
+    fn minimax(&mut self) -> &mut minimax::Minimax {
+        &mut self.minimax
+    }
+
+    fn try_probe(&mut self, data: &Entry, children: &Vec<Child>) {
+        if let Some(ref mut p) = self.probe {
+            if data.hash != p.hash {
+                return;
+            }
+            let now = Instant::now();
+            if now < p.tick && !data.bounds.solved() {
+                return;
+            }
+            p.tick = now + Duration::from_millis(10);
+
+            let mut lk = p.out.lock();
+            for (i, ch) in children.iter().enumerate() {
+                write!(
+                    lk,
+                    "{},{},{},{},{},{},{},{}\n",
+                    self.stats().mid,
+                    data.work,
+                    data.bounds.phi,
+                    data.bounds.delta,
+                    i,
+                    ch.entry.work,
+                    ch.entry.bounds.phi,
+                    ch.entry.bounds.delta,
+                )
+                .expect("probe line");
+            }
+        }
+    }
 }
