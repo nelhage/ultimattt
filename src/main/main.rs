@@ -435,6 +435,11 @@ fn main() -> Result<(), std::io::Error> {
                     100.0 * (result.ttstats.hits as f64 / result.ttstats.lookups as f64),
                     result.ttstats.stores,
                 );
+                println!(
+                    "  perf: mid/ms={:.2} job/ms={:.2}",
+                    (result.stats.mid as f64) / (result.duration.as_millis() as f64),
+                    (result.stats.jobs as f64) / (result.duration.as_millis() as f64),
+                );
                 let mut pv = String::new();
                 for m in result.pv.iter() {
                     write!(&mut pv, "{} ", m).unwrap();
