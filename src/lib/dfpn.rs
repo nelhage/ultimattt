@@ -591,6 +591,8 @@ impl Worker<'_> {
                     }
                     if let Some(v) = self.guard.vtable.get(&child.position.zobrist()) {
                         vdata.children[i].entry = v.entry.clone();
+                    } else {
+                        vdata.children[i].entry = child.entry.clone();
                     }
                 }
             }
