@@ -112,6 +112,7 @@ impl Default for Entry {
 
 #[derive(Clone)]
 pub struct Config {
+    pub threads: usize,
     pub table_size: usize,
     pub timeout: Option<Duration>,
     pub debug: usize,
@@ -125,6 +126,7 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Config {
+            threads: 0,
             table_size: table::DEFAULT_TABLE_SIZE,
             timeout: None,
             debug: 0,
@@ -213,7 +215,7 @@ impl DFPN {
 
         let (work, stats) = crossbeam::scope(|s| {
             let mut guards = Vec::new();
-            for i in 0..2 {
+            for i in 0..self.cfg.threads {
                 let root = &self.root;
                 let cfg = &self.cfg;
                 let table = &self.table;

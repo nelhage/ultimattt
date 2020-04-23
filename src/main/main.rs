@@ -214,6 +214,8 @@ pub struct Opt {
     #[structopt(long, default_value = "1G", parse(try_from_str=parse_bytesize))]
     table_mem: bytesize::ByteSize,
     #[structopt(long, default_value = "1")]
+    threads: usize,
+    #[structopt(long, default_value = "1")]
     debug: usize,
     #[structopt(subcommand)]
     cmd: Command,
@@ -404,6 +406,7 @@ fn main() -> Result<(), std::io::Error> {
                 );
             } else if analyze.dfpn {
                 let mut cfg = dfpn::Config {
+                    threads: opt.threads,
                     table_size: opt.table_mem.as_u64() as usize,
                     timeout: Some(opt.timeout),
                     debug: opt.debug,
