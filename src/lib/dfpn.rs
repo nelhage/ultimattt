@@ -216,6 +216,7 @@ impl DFPN {
         let (work, stats) = crossbeam::scope(|s| {
             let mut guards = Vec::new();
             for i in 0..self.cfg.threads {
+                let player = self.root.player();
                 let root = &self.root;
                 let cfg = &self.cfg;
                 let table = &self.table;
@@ -228,6 +229,7 @@ impl DFPN {
                             let mut worker = Worker {
                                 id: i,
                                 cfg: cfg,
+                                player: player,
                                 guard: YieldableGuard::new(sref),
                                 table: table,
                                 stats: Default::default(),
@@ -372,6 +374,7 @@ struct SharedState {
 struct Worker<'a> {
     cfg: &'a Config,
     id: usize,
+    player: game::Player,
     guard: YieldableGuard<'a, SharedState>,
     table: &'a table::ConcurrentTranspositionTable<Entry, typenum::U4>,
     stats: Stats,
@@ -417,7 +420,7 @@ impl Worker<'_> {
 
         let terminal = match pos.game_state() {
             game::BoardState::InPlay => None,
-            game::BoardState::Drawn => Some(false),
+            game::BoardState::Drawn => Some(pos.player() != self.player),
             game::BoardState::Won(p) => Some(p == pos.player()),
         };
         if let Some(v) = terminal {
@@ -437,7 +440,7 @@ impl Worker<'_> {
         let mut children = Vec::new();
         for m in pos.all_moves() {
             let g = pos.make_move(m).expect("all_moves returned illegal move");
-            let data = ttlookup_or_default(&self.table, &g);
+            let data = ttlookup_or_default(&self.table, self.player, &g);
             let bounds = data.bounds;
             children.push(Child {
                 position: g,
@@ -550,7 +553,7 @@ impl Worker<'_> {
         vdata.children.clear();
         for m in pos.all_moves() {
             let g = pos.make_move(m).expect("all_moves returned illegal move");
-            let entry = ttlookup_or_default(&self.table, &g);
+            let entry = ttlookup_or_default(&self.table, self.player, &g);
             let child = Child {
                 position: g,
                 r#move: m,
@@ -829,6 +832,7 @@ fn thresholds(epsilon: f64, bounds: Bounds, nd: Bounds, phi_1: u32, delta_2: u32
 
 fn ttlookup_or_default<N>(
     table: &table::ConcurrentTranspositionTable<Entry, N>,
+    attacker: game::Player,
     g: &game::Game,
 ) -> Entry
 where
@@ -844,7 +848,13 @@ where
                     Bounds::losing()
                 }
             }
-            game::BoardState::Drawn => Bounds::losing(),
+            game::BoardState::Drawn => {
+                if g.player() == attacker {
+                    Bounds::losing()
+                } else {
+                    Bounds::winning()
+                }
+            }
             game::BoardState::InPlay => Bounds::unity(),
         };
         Entry {
