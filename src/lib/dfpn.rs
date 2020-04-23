@@ -264,6 +264,7 @@ impl DFPN {
     fn extract_pv(&self) -> Vec<game::Move> {
         let mut pv = Vec::new();
         let mut g = self.root.clone();
+        let mut prev = false;
         loop {
             match g.game_state() {
                 game::BoardState::InPlay => (),
@@ -286,6 +287,18 @@ impl DFPN {
                     );
                     break;
                 }
+                let won = ent.bounds.phi == 0;
+                if pv.len() != 0 {
+                    assert!(
+                        won == !prev,
+                        "inconsistent game tree d={} prev={} bounds=({}, {})",
+                        pv.len(),
+                        prev,
+                        ent.bounds.phi,
+                        ent.bounds.delta
+                    );
+                }
+                prev = won;
                 pv.push(ent.pv);
                 g = g.make_move(ent.pv).unwrap_or_else(|_| {
                     panic!("PV contained illegal move depth={} m={}", pv.len(), ent.pv)
