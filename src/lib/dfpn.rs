@@ -90,6 +90,11 @@ impl table::Entry for Entry {
     }
 
     fn better_than(&self, other: &Entry) -> bool {
+        if self.hash == other.hash {
+            if self.bounds.solved() != other.bounds.solved() {
+                return self.bounds.solved();
+            }
+        }
         self.work >= other.work
     }
 
