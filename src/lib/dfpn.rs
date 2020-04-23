@@ -682,6 +682,15 @@ impl Worker<'_> {
             vroot.entry.bounds = vbounds;
             work += this_work;
 
+            if self.cfg.threads == 1 {
+                debug_assert!(self.guard.vtable.is_empty(), "leaking ventries");
+                debug_assert!(root.bounds == vroot.entry.bounds, "vroot differs from root");
+                debug_assert!(
+                    did_job || root.bounds.solved(),
+                    "single-threaded no progress"
+                );
+            }
+
             if self.cfg.debug > 2 && did_job {
                 eprintln!(
                     "[{}] top root=({},{}) vroot=({},{}) work={}",
