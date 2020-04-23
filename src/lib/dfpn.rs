@@ -680,6 +680,18 @@ impl Worker<'_> {
             vroot.entry.bounds = vbounds;
             work += this_work;
 
+            if self.cfg.debug > 2 && did_job {
+                eprintln!(
+                    "[{}] top root=({},{}) vroot=({},{}) work={}",
+                    self.id,
+                    root.bounds.phi,
+                    root.bounds.delta,
+                    vroot.entry.bounds.phi,
+                    vroot.entry.bounds.delta,
+                    work,
+                );
+            }
+
             let now = Instant::now();
             if self.cfg.debug > 0 && now > self.guard.tick {
                 let elapsed = now.duration_since(self.guard.start);
