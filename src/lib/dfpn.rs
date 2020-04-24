@@ -2,6 +2,7 @@ extern crate crossbeam;
 extern crate parking_lot;
 
 use crate::game;
+use crate::minimax;
 use crate::prove;
 use crate::table;
 use parking_lot::{Condvar, Mutex, MutexGuard};
@@ -46,6 +47,8 @@ pub struct Stats {
     pub jobs: usize,
     pub try_depth: Histogram,
     pub mid_depth: Histogram,
+    pub minimax: usize,
+    pub minimax_solve: usize,
     pub tt: table::Stats,
 }
 
@@ -56,6 +59,8 @@ impl Stats {
             terminal: self.terminal + other.terminal,
             jobs: self.jobs + other.jobs,
             try_calls: self.try_calls + other.try_calls,
+            minimax: self.minimax + other.minimax,
+            minimax_solve: self.minimax_solve + other.minimax_solve,
             tt: self.tt.merge(&other.tt),
             mid_depth: self.mid_depth.merge(&other.mid_depth),
             try_depth: self.try_depth.merge(&other.try_depth),
@@ -159,6 +164,7 @@ pub struct Config {
     pub dump_table: Option<String>,
     pub load_table: Option<String>,
     pub dump_interval: Duration,
+    pub minimax_cutoff: usize,
 }
 
 impl Default for Config {
@@ -173,6 +179,7 @@ impl Default for Config {
             dump_table: None,
             load_table: None,
             dump_interval: Duration::from_secs(30),
+            minimax_cutoff: 10,
         }
     }
 }
@@ -271,6 +278,13 @@ impl DFPN {
                                 stats: Default::default(),
                                 stack: Vec::new(),
                                 wait: cref,
+                                minimax: minimax::Minimax::with_config(&minimax::Config {
+                                    max_depth: Some(cfg.minimax_cutoff as i64 + 1),
+                                    timeout: Some(Duration::from_secs(1)),
+                                    debug: 0,
+                                    table_bytes: None,
+                                    draw_winner: Some(player),
+                                }),
                             };
 
                             (worker.run(root), worker.stats.clone())
@@ -337,6 +351,12 @@ impl DFPN {
                     );
                 }
                 prev = won;
+                if ent.pv.is_none() {
+                    if self.cfg.debug > 0 {
+                        eprintln!("PV terminated, no move");
+                    }
+                    break;
+                }
                 pv.push(ent.pv);
                 g = g.make_move(ent.pv).unwrap_or_else(|_| {
                     panic!("PV contained illegal move depth={} m={}", pv.len(), ent.pv)
@@ -416,15 +436,32 @@ struct Worker<'a> {
     stats: Stats,
     stack: Vec<game::Move>,
     wait: &'a Condvar,
+    minimax: minimax::Minimax,
 }
 
 impl Worker<'_> {
+    fn try_minimax(&mut self, pos: &game::Game) -> Option<bool> {
+        self.stats.minimax += 1;
+        let (_aipv, aistats) = self.minimax.analyze(pos);
+        if let Some(st) = aistats.last() {
+            if st.score >= minimax::EVAL_WON {
+                self.stats.minimax_solve += 1;
+                return Some(true);
+            } else if st.score <= minimax::EVAL_LOST {
+                self.stats.minimax_solve += 1;
+                return Some(false);
+            }
+        }
+        return None;
+    }
+
     fn mid(
         &mut self,
         bounds: Bounds,
         max_work: u64,
         mut data: Entry,
         pos: &game::Game,
+        try_minimax: bool,
     ) -> (Entry, u64) {
         if self.cfg.debug > 6 {
             eprintln!(
@@ -457,7 +494,13 @@ impl Worker<'_> {
         );
 
         let terminal = match pos.game_state() {
-            game::BoardState::InPlay => None,
+            game::BoardState::InPlay => {
+                if try_minimax {
+                    self.try_minimax(pos)
+                } else {
+                    None
+                }
+            }
             game::BoardState::Drawn => Some(pos.player() != self.player),
             game::BoardState::Won(p) => Some(p == pos.player()),
         };
@@ -507,6 +550,8 @@ impl Worker<'_> {
                 max_work - local_work,
                 children[best_idx].entry.clone(),
                 &child.position,
+                child.position.bound_depth() <= self.cfg.minimax_cutoff
+                    && pos.bound_depth() > self.cfg.minimax_cutoff,
             );
             children[best_idx].entry = child_entry;
             self.stack.pop();
@@ -579,7 +624,8 @@ impl Worker<'_> {
                 );
             }
             self.guard.drop_lock();
-            let (result, local_work) = self.mid(bounds, self.cfg.max_work_per_job, data, pos);
+            let (result, local_work) =
+                self.mid(bounds, self.cfg.max_work_per_job, data, pos, false);
             self.guard.acquire_lock();
 
             self.vremove(pos.zobrist(), result.bounds);

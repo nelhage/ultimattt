@@ -249,6 +249,8 @@ struct AnalyzeParameters {
     dump_table: Option<String>,
     #[structopt(long)]
     load_table: Option<String>,
+    #[structopt(long)]
+    minimax_cutoff: Option<usize>,
     #[structopt(long, default_value = "60s", parse(try_from_str=parse_duration))]
     dump_interval: Duration,
     position: String,
@@ -419,9 +421,12 @@ fn main() -> Result<(), std::io::Error> {
                 if let Some(m) = analyze.max_work_per_job {
                     cfg.max_work_per_job = m;
                 }
+                if let Some(c) = analyze.minimax_cutoff {
+                    cfg.minimax_cutoff = c;
+                }
                 let result = dfpn::DFPN::prove(&cfg, &game);
                 println!(
-                    "result={:?} time={}.{:03}s pn={} dpn={} mid={} try={} jobs={} tthit={}/{} ({:.1}%) ttstore={}",
+                    "result={:?} time={}.{:03}s pn={} dpn={} mid={} try={} jobs={} tthit={}/{} ({:.1}%) ttstore={} minimax={}/{}",
                     result.value,
                     result.duration.as_secs(),
                     result.duration.subsec_millis(),
@@ -434,6 +439,8 @@ fn main() -> Result<(), std::io::Error> {
                     result.stats.tt.lookups,
                     100.0 * (result.stats.tt.hits as f64 / result.stats.tt.lookups as f64),
                     result.stats.tt.stores,
+                    result.stats.minimax_solve,
+                    result.stats.minimax,
                 );
                 println!(
                     "  perf: mid/ms={:.2} job/ms={:.2}",

@@ -69,6 +69,7 @@ pub struct Config {
     pub timeout: Option<Duration>,
     pub debug: usize,
     pub table_bytes: Option<usize>,
+    pub draw_winner: Option<game::Player>,
 }
 
 impl Default for Config {
@@ -78,6 +79,7 @@ impl Default for Config {
             timeout: None,
             debug: 0,
             table_bytes: Some(table::DEFAULT_TABLE_SIZE),
+            draw_winner: None,
         }
     }
 }
@@ -267,11 +269,14 @@ impl Minimax {
     }
 
     pub fn evaluate(&self, g: &game::Game) -> i64 {
-        match g.game_state() {
-            game::BoardState::Drawn => (),
-            game::BoardState::InPlay => (),
-            game::BoardState::Won(p) => return if p == g.player() { EVAL_WON } else { EVAL_LOST },
+        let winner = match g.game_state() {
+            game::BoardState::Drawn => self.config.draw_winner,
+            game::BoardState::InPlay => None,
+            game::BoardState::Won(p) => Some(p),
         };
+        if let Some(p) = winner {
+            return if p == g.player() { EVAL_WON } else { EVAL_LOST };
+        }
 
         let mut board_scores: [i64; 9] = [0; 9];
         for board in 0..9 {
