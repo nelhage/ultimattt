@@ -398,7 +398,7 @@ impl Worker<'_> {
     ) -> (Entry, u64) {
         if self.cfg.debug > 6 {
             eprintln!(
-                "{:3$}[{}]mid[{}]: m={} d={} bounds=({}, {}) max_work={}",
+                "{:4$}[{}]mid[{}]: mid={} d={} bounds=({}, {}) max_work={}",
                 "",
                 self.id,
                 self.stack
