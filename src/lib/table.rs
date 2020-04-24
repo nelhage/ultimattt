@@ -243,14 +243,14 @@ where
     }
 
     pub fn with_memory(bytes: usize) -> Self {
-        Self::with_entries(bytes / (std::mem::size_of::<E>() + 1))
+        Self::with_entries(bytes / (mem::size_of::<E>() + 1))
     }
 
     pub fn with_entries(len: usize) -> Self {
         Self {
             index: new_default_slice(len),
             entries: new_default_slice(len),
-            counters: new_default_slice(len),
+            counters: new_default_slice(len / ENTRIES_PER_LOCK),
             len: len,
             stats: Default::default(),
             write: Mutex::new(()),
