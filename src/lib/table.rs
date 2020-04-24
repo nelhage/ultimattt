@@ -3,32 +3,25 @@ use typenum;
 use std::cell::UnsafeCell;
 use std::marker::PhantomData;
 use std::mem::MaybeUninit;
-use std::sync::atomic::{fence, AtomicU32, AtomicUsize, Ordering};
+use std::sync::atomic::{fence, AtomicU32, Ordering};
 use std::sync::Mutex;
 use std::{fs, io, mem, ptr, slice, thread};
 
-#[derive(Default)]
-struct AtomicStats {
-    lookups: AtomicUsize,
-    hits: AtomicUsize,
-    stores: AtomicUsize,
-}
-
-impl AtomicStats {
-    fn load(&self) -> Stats {
-        Stats {
-            lookups: self.lookups.load(Ordering::SeqCst),
-            hits: self.hits.load(Ordering::SeqCst),
-            stores: self.stores.load(Ordering::SeqCst),
-        }
-    }
-}
-
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug)]
 pub struct Stats {
     pub lookups: usize,
     pub hits: usize,
     pub stores: usize,
+}
+
+impl Stats {
+    pub fn merge(&self, other: &Stats) -> Stats {
+        Stats {
+            lookups: self.lookups + other.lookups,
+            hits: self.hits + other.hits,
+            stores: self.stores + other.stores,
+        }
+    }
 }
 
 pub struct TranspositionTable<E, N>
@@ -213,7 +206,6 @@ where
     counters: Box<[AtomicU32]>,
 
     len: usize,
-    stats: AtomicStats,
     write: Mutex<()>,
 
     n: PhantomData<N>,
@@ -252,7 +244,6 @@ where
             entries: new_default_slice(len),
             counters: new_default_slice(len / ENTRIES_PER_LOCK),
             len: len,
-            stats: Default::default(),
             write: Mutex::new(()),
             n: PhantomData,
         }
@@ -273,14 +264,13 @@ where
             entries: unsafe { mem::transmute(t.entries) },
             len: entries,
             counters: new_default_slice(entries / ENTRIES_PER_LOCK),
-            stats: Default::default(),
             write: Mutex::new(()),
             n: PhantomData,
         }
     }
 
-    pub fn lookup(&self, h: u64) -> Option<E> {
-        self.stats.lookups.fetch_add(1, Ordering::Relaxed);
+    pub fn lookup(&self, stats: &mut Stats, h: u64) -> Option<E> {
+        stats.lookups += 1;
         let base = h as usize;
         for j in 0..N::to_usize() {
             let i = (base + j) % self.len;
@@ -289,7 +279,7 @@ where
             }
             let entry = self.entry(i);
             if entry.valid() && entry.hash() == h {
-                self.stats.hits.fetch_add(1, Ordering::Relaxed);
+                stats.hits += 1;
                 return Some(entry);
             }
         }
@@ -317,7 +307,7 @@ where
         }
     }
 
-    pub fn store(&self, ent: &E) -> bool {
+    pub fn store(&self, stats: &mut Stats, ent: &E) -> bool {
         let _lk = self.write.lock().unwrap();
         debug_assert!(ent.valid());
         let mut worst: Option<usize> = None;
@@ -351,15 +341,11 @@ where
 
             seq.fetch_add(1, Ordering::Release);
 
-            self.stats.stores.fetch_add(1, Ordering::Relaxed);
+            stats.stores += 1;
             true
         } else {
             false
         }
-    }
-
-    pub fn stats(&self) -> Stats {
-        self.stats.load()
     }
 
     pub fn dump(&self, w: &mut dyn io::Write) -> io::Result<()> {

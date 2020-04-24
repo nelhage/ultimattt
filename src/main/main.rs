@@ -430,10 +430,10 @@ fn main() -> Result<(), std::io::Error> {
                     result.stats.mid,
                     result.stats.try_calls,
                     result.stats.jobs,
-                    result.ttstats.hits,
-                    result.ttstats.lookups,
-                    100.0 * (result.ttstats.hits as f64 / result.ttstats.lookups as f64),
-                    result.ttstats.stores,
+                    result.stats.tt.hits,
+                    result.stats.tt.lookups,
+                    100.0 * (result.stats.tt.hits as f64 / result.stats.tt.lookups as f64),
+                    result.stats.tt.stores,
                 );
                 println!(
                     "  perf: mid/ms={:.2} job/ms={:.2}",

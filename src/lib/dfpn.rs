@@ -18,6 +18,7 @@ pub struct Stats {
     pub terminal: usize,
     pub try_calls: usize,
     pub jobs: usize,
+    pub tt: table::Stats,
 }
 
 impl Stats {
@@ -27,6 +28,7 @@ impl Stats {
             terminal: self.terminal + other.terminal,
             jobs: self.jobs + other.jobs,
             try_calls: self.try_calls + other.try_calls,
+            tt: self.tt.merge(&other.tt),
         }
     }
 }
@@ -149,7 +151,6 @@ pub struct ProveResult {
     pub value: prove::Evaluation,
     pub bounds: Bounds,
     pub stats: Stats,
-    pub ttstats: table::Stats,
     pub duration: Duration,
     pub work: u64,
     pub pv: Vec<game::Move>,
@@ -203,7 +204,6 @@ impl DFPN {
             work: work,
             bounds: result.bounds,
             stats: prover.stats.clone(),
-            ttstats: prover.table.stats(),
             duration: Instant::now().duration_since(prover.start),
             pv: prover.extract_pv(),
         }
@@ -263,13 +263,13 @@ impl DFPN {
         dump_table(&self.cfg, &self.table).expect("final dump_table");
         (
             self.table
-                .lookup(self.root.zobrist())
+                .lookup(&mut self.stats.tt, self.root.zobrist())
                 .expect("no entry for root"),
             work,
         )
     }
 
-    fn extract_pv(&self) -> Vec<game::Move> {
+    fn extract_pv(&mut self) -> Vec<game::Move> {
         let mut pv = Vec::new();
         let mut g = self.root.clone();
         let mut prev = false;
@@ -283,7 +283,7 @@ impl DFPN {
                     break;
                 }
             };
-            if let Some(ent) = self.table.lookup(g.zobrist()) {
+            if let Some(ent) = self.table.lookup(&mut self.stats.tt, g.zobrist()) {
                 if ent.bounds.phi != 0 && ent.bounds.delta != 0 {
                     assert!(
                         pv.len() == 0,
@@ -437,7 +437,7 @@ impl Worker<'_> {
             }
             self.stats.terminal += 1;
             data.work = 1;
-            self.table.store(&data);
+            self.table.store(&mut self.stats.tt, &data);
             return (data, 1);
         }
 
@@ -446,7 +446,7 @@ impl Worker<'_> {
         let mut children = Vec::new();
         for m in pos.all_moves() {
             let g = pos.make_move(m).expect("all_moves returned illegal move");
-            let data = ttlookup_or_default(&self.table, self.player, &g);
+            let data = self.ttlookup_or_default(&g);
             let bounds = data.bounds;
             children.push(Child {
                 position: g,
@@ -484,7 +484,7 @@ impl Worker<'_> {
         data.work += local_work;
 
         populate_pv(&mut data, &children);
-        self.table.store(&data);
+        self.table.store(&mut self.stats.tt, &data);
         (data, local_work)
     }
 
@@ -559,7 +559,7 @@ impl Worker<'_> {
         vdata.children.clear();
         for m in pos.all_moves() {
             let g = pos.make_move(m).expect("all_moves returned illegal move");
-            let entry = ttlookup_or_default(&self.table, self.player, &g);
+            let entry = self.ttlookup_or_default(&g);
             let child = Child {
                 position: g,
                 r#move: m,
@@ -587,7 +587,10 @@ impl Worker<'_> {
         loop {
             if did_job {
                 for (i, child) in children.iter_mut().enumerate() {
-                    if let Some(e) = self.table.lookup(child.position.zobrist()) {
+                    if let Some(e) = self
+                        .table
+                        .lookup(&mut self.stats.tt, child.position.zobrist())
+                    {
                         child.entry = e;
                     }
                     if let Some(v) = self.guard.vtable.get(&child.position.zobrist()) {
@@ -615,7 +618,7 @@ impl Worker<'_> {
                 );
             }
 
-            self.table.store(&data);
+            self.table.store(&mut self.stats.tt, &data);
             if vdata.entry.bounds.exceeded(bounds) || did_job {
                 break;
             }
@@ -653,12 +656,15 @@ impl Worker<'_> {
     }
 
     fn run(&mut self, pos: &game::Game) -> u64 {
-        let mut root = self.table.lookup(pos.zobrist()).unwrap_or(Entry {
-            bounds: Bounds::unity(),
-            hash: pos.zobrist(),
-            work: 0,
-            ..Default::default()
-        });
+        let mut root = self
+            .table
+            .lookup(&mut self.stats.tt, pos.zobrist())
+            .unwrap_or(Entry {
+                bounds: Bounds::unity(),
+                hash: pos.zobrist(),
+                work: 0,
+                ..Default::default()
+            });
         let mut vroot = VPath {
             parent: None,
             children: Vec::new(),
@@ -769,6 +775,35 @@ impl Worker<'_> {
             node = v.parent;
         }
     }
+
+    fn ttlookup_or_default(&mut self, g: &game::Game) -> Entry {
+        let te = self.table.lookup(&mut self.stats.tt, g.zobrist());
+        te.unwrap_or_else(|| {
+            let bounds = match g.game_state() {
+                game::BoardState::Won(p) => {
+                    if p == g.player() {
+                        Bounds::winning()
+                    } else {
+                        Bounds::losing()
+                    }
+                }
+                game::BoardState::Drawn => {
+                    if g.player() == self.player {
+                        Bounds::losing()
+                    } else {
+                        Bounds::winning()
+                    }
+                }
+                game::BoardState::InPlay => Bounds::unity(),
+            };
+            Entry {
+                bounds: bounds,
+                hash: g.zobrist(),
+                work: 0,
+                ..Default::default()
+            }
+        })
+    }
 }
 
 struct VEntry {
@@ -857,42 +892,6 @@ fn thresholds(epsilon: f64, bounds: Bounds, nd: Bounds, phi_1: u32, delta_2: u32
             max(delta_2 + 1, (delta_2 as f64 * (1.0 + epsilon)) as u32),
         ),
     }
-}
-
-fn ttlookup_or_default<N>(
-    table: &table::ConcurrentTranspositionTable<Entry, N>,
-    attacker: game::Player,
-    g: &game::Game,
-) -> Entry
-where
-    N: typenum::Unsigned,
-{
-    let te = table.lookup(g.zobrist());
-    te.unwrap_or_else(|| {
-        let bounds = match g.game_state() {
-            game::BoardState::Won(p) => {
-                if p == g.player() {
-                    Bounds::winning()
-                } else {
-                    Bounds::losing()
-                }
-            }
-            game::BoardState::Drawn => {
-                if g.player() == attacker {
-                    Bounds::losing()
-                } else {
-                    Bounds::winning()
-                }
-            }
-            game::BoardState::InPlay => Bounds::unity(),
-        };
-        Entry {
-            bounds: bounds,
-            hash: g.zobrist(),
-            work: 0,
-            ..Default::default()
-        }
-    })
 }
 
 fn populate_pv(data: &mut Entry, children: &Vec<Child>) {
