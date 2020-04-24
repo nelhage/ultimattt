@@ -698,6 +698,27 @@ impl Game {
                 .map(|b| ZOBRIST_TABLES.next_board[b as usize])
                 .unwrap_or(0)
     }
+
+    pub fn bound_depth(&self) -> usize {
+        let mut done = self.game_states.donebits();
+        let mut bound: usize = 0;
+        // done: u9
+        for row in self.boards.rows.iter() {
+            let mut free = !(row.x | row.o) & ((1 << 27) - 1);
+            if done & 1 != 0 {
+                free &= !BOARD_MASK;
+            }
+            if done & 2 != 0 {
+                free &= !(BOARD_MASK << 9);
+            }
+            if done & 4 != 0 {
+                free &= !(BOARD_MASK << 18);
+            }
+            done >>= 3;
+            bound += free.count_ones() as usize;
+        }
+        bound
+    }
 }
 
 impl Hash for Game {
@@ -958,6 +979,19 @@ mod tests {
                     panic!("Bad move: {:?}: {:?})", m, e);
                 }
             }
+        }
+    }
+
+    #[test]
+    fn test_bound_depth() {
+        let cases = &[
+            (Game::new(), 81),
+            (board(&[(0, 0)]), 80),
+            (board(&[(0, 2), (2, 0), (0, 4), (4, 0)]), 77),
+            (board(&[(0, 2), (2, 0), (0, 4), (4, 0), (0, 6)]), 70),
+        ];
+        for (i, tc) in cases.iter().enumerate() {
+            assert_eq!(tc.0.bound_depth(), tc.1, "idx: {}", i);
         }
     }
 
