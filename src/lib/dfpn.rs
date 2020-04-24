@@ -281,7 +281,7 @@ impl DFPN {
                                 minimax: minimax::Minimax::with_config(&minimax::Config {
                                     max_depth: Some(cfg.minimax_cutoff as i64 + 1),
                                     timeout: Some(Duration::from_secs(1)),
-                                    debug: 0,
+                                    debug: if cfg.debug > 6 { 1 } else { 0 },
                                     table_bytes: None,
                                     draw_winner: Some(player),
                                 }),
