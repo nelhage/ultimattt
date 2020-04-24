@@ -272,7 +272,7 @@ fn ai_config(opt: &Opt) -> minimax::Config {
         timeout: Some(opt.timeout),
         max_depth: opt.depth,
         debug: opt.debug,
-        table_bytes: opt.table_mem.as_u64() as usize,
+        table_bytes: Some(opt.table_mem.as_u64() as usize),
         ..Default::default()
     }
 }
