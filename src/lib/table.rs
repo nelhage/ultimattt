@@ -61,7 +61,22 @@ where
     unsafe { slice.assume_init() }
 }
 
+unsafe fn as_bytes<'a, T>(v: &T) -> &'a [u8] {
+    slice::from_raw_parts(
+        mem::transmute::<*const T, *const u8>(v as *const T),
+        mem::size_of::<T>(),
+    )
+}
+
+unsafe fn slice_as_bytes<'a, T>(slice: &'a [T]) -> &'a [u8] {
+    slice::from_raw_parts(
+        mem::transmute::<*const T, *const u8>(slice.as_ptr()),
+        slice.len() * mem::size_of::<T>(),
+    )
+}
+
 #[repr(C)]
+#[derive(Clone, Copy)]
 struct Header {
     version: u64,
     entries: u64,
@@ -145,24 +160,9 @@ where
             version: DUMPFILE_VERSION,
             entries: self.entries.len() as u64,
         };
-        w.write(unsafe {
-            slice::from_raw_parts(
-                mem::transmute::<_, *const u8>(&header),
-                mem::size_of::<Header>(),
-            )
-        })?;
-        w.write(unsafe {
-            slice::from_raw_parts(
-                mem::transmute::<_, *const u8>(self.index.as_ptr()),
-                self.index.len() * mem::size_of_val(&self.index[0]),
-            )
-        })?;
-        w.write(unsafe {
-            slice::from_raw_parts(
-                mem::transmute::<_, *const u8>(self.entries.as_ptr()),
-                self.entries.len() * mem::size_of_val(&self.entries[0]),
-            )
-        })?;
+        w.write(unsafe { as_bytes(&header) })?;
+        w.write(unsafe { slice_as_bytes(&*self.index) })?;
+        w.write(unsafe { slice_as_bytes(&*self.entries) })?;
         Ok(())
     }
 
@@ -362,7 +362,14 @@ where
         self.stats.load()
     }
 
-    pub fn dump(&self, _w: &mut dyn io::Write) -> io::Result<()> {
-        panic!("unimplemented!");
+    pub fn dump(&self, w: &mut dyn io::Write) -> io::Result<()> {
+        let header = Header {
+            version: DUMPFILE_VERSION,
+            entries: self.entries.len() as u64,
+        };
+        w.write(unsafe { as_bytes(&header) })?;
+        w.write(unsafe { slice_as_bytes(&*self.index) })?;
+        w.write(unsafe { slice_as_bytes(&*self.entries) })?;
+        Ok(())
     }
 }
