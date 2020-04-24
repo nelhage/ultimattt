@@ -1,12 +1,13 @@
 extern crate crossbeam;
+extern crate parking_lot;
 
 use crate::game;
 use crate::prove;
 use crate::table;
+use parking_lot::{Condvar, Mutex, MutexGuard};
 use std::cmp::{max, min};
 use std::collections::hash_map::HashMap;
 use std::ops::{Deref, DerefMut};
-use std::sync::{Condvar, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 use std::{fs, io};
 use typenum;
@@ -330,7 +331,7 @@ impl<'a, T> YieldableGuard<'a, T> {
     fn new(lk: &'a Mutex<T>) -> Self {
         YieldableGuard {
             lock: lk,
-            guard: Some(lk.lock().unwrap()),
+            guard: Some(lk.lock()),
         }
     }
 
@@ -342,7 +343,7 @@ impl<'a, T> YieldableGuard<'a, T> {
 
     fn acquire_lock(&mut self) {
         debug_assert!(self.guard.is_none());
-        self.guard = Some(self.lock.lock().unwrap());
+        self.guard = Some(self.lock.lock());
     }
 
     fn take(&mut self) -> MutexGuard<'a, T> {
@@ -350,7 +351,7 @@ impl<'a, T> YieldableGuard<'a, T> {
     }
 
     fn wait(&mut self, cond: &Condvar) {
-        self.guard = Some(cond.wait(self.take()).unwrap());
+        cond.wait(self.guard.as_mut().unwrap())
     }
 }
 
