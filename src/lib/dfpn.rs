@@ -461,7 +461,6 @@ impl Worker<'_> {
         max_work: u64,
         mut data: Entry,
         pos: &game::Game,
-        try_minimax: bool,
     ) -> (Entry, u64) {
         if self.cfg.debug > 6 {
             eprintln!(
@@ -495,7 +494,7 @@ impl Worker<'_> {
 
         let terminal = match pos.game_state() {
             game::BoardState::InPlay => {
-                if try_minimax {
+                if pos.bound_depth() <= self.cfg.minimax_cutoff {
                     self.try_minimax(pos)
                 } else {
                     None
@@ -550,8 +549,6 @@ impl Worker<'_> {
                 max_work - local_work,
                 children[best_idx].entry.clone(),
                 &child.position,
-                child.position.bound_depth() <= self.cfg.minimax_cutoff
-                    && pos.bound_depth() > self.cfg.minimax_cutoff,
             );
             children[best_idx].entry = child_entry;
             self.stack.pop();
@@ -624,8 +621,7 @@ impl Worker<'_> {
                 );
             }
             self.guard.drop_lock();
-            let (result, local_work) =
-                self.mid(bounds, self.cfg.max_work_per_job, data, pos, false);
+            let (result, local_work) = self.mid(bounds, self.cfg.max_work_per_job, data, pos);
             self.guard.acquire_lock();
 
             self.vremove(pos.zobrist(), result.bounds);
