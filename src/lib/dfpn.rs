@@ -13,11 +13,39 @@ use std::{fs, io};
 use typenum;
 
 #[derive(Clone, Debug, Default)]
+pub struct Histogram {
+    pub entries: Vec<usize>,
+}
+
+impl Histogram {
+    pub fn merge(&self, other: &Histogram) -> Histogram {
+        let mut out = Vec::new();
+        out.resize(max(self.entries.len(), other.entries.len()), 0);
+        for (i, n) in self.entries.iter().enumerate() {
+            out[i] += n;
+        }
+        for (i, n) in other.entries.iter().enumerate() {
+            out[i] += n;
+        }
+        Histogram { entries: out }
+    }
+
+    pub fn inc(&mut self, idx: usize) {
+        if self.entries.len() <= idx {
+            self.entries.resize(idx + 1, 0);
+        }
+        self.entries[idx] += 1;
+    }
+}
+
+#[derive(Clone, Debug, Default)]
 pub struct Stats {
     pub mid: usize,
     pub terminal: usize,
     pub try_calls: usize,
     pub jobs: usize,
+    pub try_depth: Histogram,
+    pub mid_depth: Histogram,
     pub tt: table::Stats,
 }
 
@@ -29,6 +57,8 @@ impl Stats {
             jobs: self.jobs + other.jobs,
             try_calls: self.try_calls + other.try_calls,
             tt: self.tt.merge(&other.tt),
+            mid_depth: self.mid_depth.merge(&other.mid_depth),
+            try_depth: self.try_depth.merge(&other.try_depth),
         }
     }
 }
@@ -413,6 +443,8 @@ impl Worker<'_> {
             );
         }
         self.stats.mid += 1;
+        self.stats.mid_depth.inc(self.stack.len());
+
         debug_assert!(
             !data.bounds.exceeded(bounds),
             "inconsistent mid call d={}, bounds=({}, {}) me=({}, {}) w={}",
@@ -520,6 +552,7 @@ impl Worker<'_> {
         );
 
         self.stats.try_calls += 1;
+        self.stats.try_depth.inc(self.stack.len());
 
         let mut local_work = 0;
 
@@ -723,6 +756,10 @@ impl Worker<'_> {
                     self.stats.jobs,
                     work,
                 );
+                if self.cfg.debug > 1 {
+                    eprintln!("  try={:?}", self.stats.try_depth);
+                    eprintln!("  mid={:?}", self.stats.mid_depth);
+                }
                 self.guard.tick = now + TICK_TIME;
             }
 
