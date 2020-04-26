@@ -804,10 +804,6 @@ impl Worker<'_> {
                     self.stats.jobs,
                     work,
                 );
-                if self.cfg.debug > 1 {
-                    eprintln!("  try={:?}", self.stats.try_depth);
-                    eprintln!("  mid={:?}", self.stats.mid_depth);
-                }
                 self.guard.tick = now + TICK_TIME;
             }
 
