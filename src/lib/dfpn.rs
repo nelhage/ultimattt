@@ -47,6 +47,7 @@ pub struct Stats {
     pub jobs: usize,
     pub try_depth: Histogram,
     pub mid_depth: Histogram,
+    pub winning_child: Histogram,
     pub minimax: usize,
     pub minimax_solve: usize,
     pub tt: table::Stats,
@@ -64,6 +65,7 @@ impl Stats {
             tt: self.tt.merge(&other.tt),
             mid_depth: self.mid_depth.merge(&other.mid_depth),
             try_depth: self.try_depth.merge(&other.try_depth),
+            winning_child: self.winning_child.merge(&other.winning_child),
         }
     }
 }
@@ -559,6 +561,10 @@ impl Worker<'_> {
             children[best_idx].entry = child_entry;
             self.stack.pop();
             local_work += child_work;
+
+            if children[best_idx].entry.bounds.delta == 0 {
+                self.stats.winning_child.inc(best_idx);
+            }
         }
 
         data.work += local_work;
@@ -727,6 +733,10 @@ impl Worker<'_> {
 
             children[idx].entry.bounds = child_result.bounds;
             vdata.children[idx].entry.bounds = child_vbounds;
+
+            if children[idx].entry.bounds.delta == 0 {
+                self.stats.winning_child.inc(idx);
+            }
         }
 
         if did_job {
