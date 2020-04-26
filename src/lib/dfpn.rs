@@ -48,6 +48,7 @@ pub struct Stats {
     pub try_depth: Histogram,
     pub mid_depth: Histogram,
     pub winning_child: Histogram,
+    pub branch: Histogram,
     pub minimax: usize,
     pub minimax_solve: usize,
     pub tt: table::Stats,
@@ -66,6 +67,7 @@ impl Stats {
             mid_depth: self.mid_depth.merge(&other.mid_depth),
             try_depth: self.try_depth.merge(&other.try_depth),
             winning_child: self.winning_child.merge(&other.winning_child),
+            branch: self.branch.merge(&other.branch),
         }
     }
 }
@@ -541,7 +543,7 @@ impl Worker<'_> {
             }
         }
 
-        // recurse
+        self.stats.branch.inc(children.len());
 
         loop {
             data.bounds = compute_bounds(&children);
@@ -669,7 +671,9 @@ impl Worker<'_> {
             children.push(child);
         }
         debug_assert_eq!(vdata.children.len(), children.len());
-        // recurse
+
+        self.stats.branch.inc(children.len());
+
         let mut did_job = false;
         loop {
             if did_job {
@@ -731,7 +735,7 @@ impl Worker<'_> {
             local_work += child_work;
             data.work += child_work;
 
-            children[idx].entry.bounds = child_result.bounds;
+            children[idx].entry = child_result;
             vdata.children[idx].entry.bounds = child_vbounds;
 
             if children[idx].entry.bounds.delta == 0 {
