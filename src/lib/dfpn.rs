@@ -10,7 +10,7 @@ use std::cmp::{max, min};
 use std::collections::hash_map::HashMap;
 use std::ops::{Deref, DerefMut};
 use std::time::{Duration, Instant};
-use std::{fs, io};
+use std::{fmt, fs, io};
 use typenum;
 
 #[derive(Clone, Debug, Default)]
@@ -70,11 +70,17 @@ impl Stats {
 
 const INFINITY: u32 = 1 << 31;
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 #[repr(C)]
 pub struct Bounds {
     pub phi: u32,
     pub delta: u32,
+}
+
+impl fmt::Debug for Bounds {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "({}, {})", self.phi, self.delta)
+    }
 }
 
 impl Bounds {
