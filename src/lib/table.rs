@@ -1,5 +1,6 @@
 use typenum;
 
+use serde::Serialize;
 use std::cell::UnsafeCell;
 use std::marker::PhantomData;
 use std::mem::MaybeUninit;
@@ -7,7 +8,7 @@ use std::sync::atomic::{fence, AtomicU32, Ordering};
 use std::sync::Mutex;
 use std::{fs, io, mem, ptr, slice, thread};
 
-#[derive(Default, Clone, Debug)]
+#[derive(Default, Clone, Debug, Serialize)]
 pub struct Stats {
     pub lookups: usize,
     pub hits: usize,

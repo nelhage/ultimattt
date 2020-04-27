@@ -6,14 +6,16 @@ use crate::minimax;
 use crate::prove;
 use crate::table;
 use parking_lot::{Condvar, Mutex, MutexGuard};
+use serde::Serialize;
 use std::cmp::{max, min};
 use std::collections::hash_map::HashMap;
+use std::io::Write;
 use std::ops::{Deref, DerefMut};
 use std::time::{Duration, Instant};
 use std::{fmt, fs, io};
 use typenum;
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize)]
 pub struct Histogram {
     pub counts: Vec<usize>,
 }
@@ -39,7 +41,7 @@ impl Histogram {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize)]
 pub struct Stats {
     pub mid: usize,
     pub terminal: usize,
@@ -175,6 +177,7 @@ pub struct Config {
     pub load_table: Option<String>,
     pub dump_interval: Duration,
     pub minimax_cutoff: usize,
+    pub write_metrics: Option<String>,
 }
 
 impl Default for Config {
@@ -190,6 +193,7 @@ impl Default for Config {
             load_table: None,
             dump_interval: Duration::from_secs(30),
             minimax_cutoff: 0,
+            write_metrics: None,
         }
     }
 }
@@ -447,6 +451,12 @@ struct Worker<'a> {
     stack: Vec<game::Move>,
     wait: &'a Condvar,
     minimax: minimax::Minimax,
+}
+
+#[derive(Serialize)]
+struct Metrics<'a> {
+    elapsed_ms: u128,
+    stats: &'a Stats,
 }
 
 impl Worker<'_> {
@@ -819,6 +829,22 @@ impl Worker<'_> {
                     work,
                 );
                 self.guard.tick = now + TICK_TIME;
+                if let Some(ref p) = self.cfg.write_metrics {
+                    let mut f = fs::OpenOptions::new()
+                        .read(false)
+                        .append(true)
+                        .write(true)
+                        .truncate(false)
+                        .create(true)
+                        .open(p)
+                        .expect("write_metrics");
+                    let e = Metrics {
+                        elapsed_ms: elapsed.as_millis(),
+                        stats: &self.stats,
+                    };
+                    serde_json::to_writer(&mut f, &e).expect("write json");
+                    writeln!(f).expect("write newline");
+                }
             }
 
             if let Some(_) = self.cfg.dump_table {

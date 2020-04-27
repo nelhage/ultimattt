@@ -251,6 +251,8 @@ struct AnalyzeParameters {
     load_table: Option<String>,
     #[structopt(long)]
     minimax_cutoff: Option<usize>,
+    #[structopt(long)]
+    write_metrics: Option<String>,
     #[structopt(long, default_value = "60s", parse(try_from_str=parse_duration))]
     dump_interval: Duration,
     position: String,
@@ -416,6 +418,7 @@ fn main() -> Result<(), std::io::Error> {
                     dump_table: analyze.dump_table.clone(),
                     load_table: analyze.load_table.clone(),
                     dump_interval: analyze.dump_interval.clone(),
+                    write_metrics: analyze.write_metrics.clone(),
                     ..Default::default()
                 };
                 if let Some(m) = analyze.max_work_per_job {
