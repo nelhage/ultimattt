@@ -189,7 +189,7 @@ impl Default for Config {
             dump_table: None,
             load_table: None,
             dump_interval: Duration::from_secs(30),
-            minimax_cutoff: 10,
+            minimax_cutoff: 0,
         }
     }
 }
