@@ -15,27 +15,27 @@ use typenum;
 
 #[derive(Clone, Debug, Default)]
 pub struct Histogram {
-    pub entries: Vec<usize>,
+    pub counts: Vec<usize>,
 }
 
 impl Histogram {
     pub fn merge(&self, other: &Histogram) -> Histogram {
         let mut out = Vec::new();
-        out.resize(max(self.entries.len(), other.entries.len()), 0);
-        for (i, n) in self.entries.iter().enumerate() {
+        out.resize(max(self.counts.len(), other.counts.len()), 0);
+        for (i, n) in self.counts.iter().enumerate() {
             out[i] += n;
         }
-        for (i, n) in other.entries.iter().enumerate() {
+        for (i, n) in other.counts.iter().enumerate() {
             out[i] += n;
         }
-        Histogram { entries: out }
+        Histogram { counts: out }
     }
 
     pub fn inc(&mut self, idx: usize) {
-        if self.entries.len() <= idx {
-            self.entries.resize(idx + 1, 0);
+        if self.counts.len() <= idx {
+            self.counts.resize(idx + 1, 0);
         }
-        self.entries[idx] += 1;
+        self.counts[idx] += 1;
     }
 }
 
