@@ -255,6 +255,10 @@ struct AnalyzeParameters {
     write_metrics: Option<String>,
     #[structopt(long, default_value = "60s", parse(try_from_str=parse_duration))]
     dump_interval: Duration,
+    #[structopt(long)]
+    probe_hash: Option<u64>,
+    #[structopt(long, default_value = "probe.csv")]
+    probe_log: String,
     position: String,
 }
 
@@ -419,6 +423,8 @@ fn main() -> Result<(), std::io::Error> {
                     load_table: analyze.load_table.clone(),
                     dump_interval: analyze.dump_interval.clone(),
                     write_metrics: analyze.write_metrics.clone(),
+                    probe_log: analyze.probe_log.clone(),
+                    probe_hash: analyze.probe_hash,
                     ..Default::default()
                 };
                 if let Some(m) = analyze.max_work_per_job {

@@ -178,6 +178,8 @@ pub struct Config {
     pub dump_interval: Duration,
     pub minimax_cutoff: usize,
     pub write_metrics: Option<String>,
+    pub probe_hash: Option<u64>,
+    pub probe_log: String,
 }
 
 impl Default for Config {
@@ -194,6 +196,8 @@ impl Default for Config {
             dump_interval: Duration::from_secs(30),
             minimax_cutoff: 0,
             write_metrics: None,
+            probe_hash: None,
+            probe_log: "probe.csv".to_owned(),
         }
     }
 }
@@ -270,6 +274,33 @@ impl DFPN {
         });
         let cv = Condvar::new();
 
+        let probelog: Option<Mutex<fs::File>>;
+        let probe = if let Some(h) = self.cfg.probe_hash {
+            probelog = Some(Mutex::new(
+                fs::OpenOptions::new()
+                    .create(true)
+                    .truncate(true)
+                    .write(true)
+                    .open(&self.cfg.probe_log)
+                    .expect("open probe log"),
+            ));
+            let probe = Probe {
+                hash: h,
+                tick: self.start,
+                out: probelog.as_ref().unwrap(),
+            };
+            {
+                write!(
+                    probe.out.lock(),
+                    "mid,node_work,node_phi,node_delta,child,work,phi,delta\n"
+                )
+                .expect("probe header");
+            }
+            Some(probe)
+        } else {
+            None
+        };
+
         let (work, stats) = crossbeam::scope(|s| {
             let mut guards = Vec::new();
             for i in 0..self.cfg.threads {
@@ -279,6 +310,7 @@ impl DFPN {
                 let table = &self.table;
                 let cref = &cv;
                 let sref = &shared;
+                let probe = probe.clone();
                 guards.push(
                     s.builder()
                         .name(format!("worker-{}", i))
@@ -299,6 +331,7 @@ impl DFPN {
                                     table_bytes: None,
                                     draw_winner: Some(player),
                                 }),
+                                probe: probe,
                             };
 
                             (worker.run(root), worker.stats.clone())
@@ -441,6 +474,13 @@ struct SharedState {
     dump_tick: Instant,
 }
 
+#[derive(Clone)]
+struct Probe<'a> {
+    tick: Instant,
+    hash: u64,
+    out: &'a Mutex<fs::File>,
+}
+
 struct Worker<'a> {
     cfg: &'a Config,
     id: usize,
@@ -451,6 +491,7 @@ struct Worker<'a> {
     stack: Vec<game::Move>,
     wait: &'a Condvar,
     minimax: minimax::Minimax,
+    probe: Option<Probe<'a>>,
 }
 
 #[derive(Serialize)]
@@ -458,6 +499,8 @@ struct Metrics<'a> {
     elapsed_ms: u128,
     stats: &'a Stats,
 }
+
+// const PROBE_HASH: u64 = 10700673491507517620;
 
 impl Worker<'_> {
     fn try_minimax(&mut self, pos: &game::Game) -> Option<bool> {
@@ -473,6 +516,36 @@ impl Worker<'_> {
             }
         }
         return None;
+    }
+
+    fn try_probe(&mut self, data: &Entry, children: &Vec<Child>) {
+        if let Some(ref mut p) = self.probe {
+            if data.hash != p.hash {
+                return;
+            }
+            let now = Instant::now();
+            if now < p.tick {
+                return;
+            }
+            p.tick = now + Duration::from_millis(10);
+
+            let mut lk = p.out.lock();
+            for (i, ch) in children.iter().enumerate() {
+                write!(
+                    lk,
+                    "{},{},{},{},{},{},{},{}\n",
+                    self.stats.mid,
+                    data.work,
+                    data.bounds.phi,
+                    data.bounds.delta,
+                    i,
+                    ch.entry.work,
+                    ch.entry.bounds.phi,
+                    ch.entry.bounds.delta,
+                )
+                .expect("probe line");
+            }
+        }
     }
 
     fn mid(
@@ -557,6 +630,8 @@ impl Worker<'_> {
 
         loop {
             data.bounds = compute_bounds(&children);
+            self.try_probe(&data, &children);
+
             if local_work >= max_work || data.bounds.exceeded(bounds) {
                 break;
             }
@@ -704,6 +779,8 @@ impl Worker<'_> {
             data.bounds = compute_bounds(&children);
             vdata.entry.bounds = compute_bounds(&vdata.children);
             populate_pv(&mut data, &children);
+
+            self.try_probe(&data, &children);
 
             if self.cfg.debug > 5 {
                 eprintln!(
