@@ -524,7 +524,7 @@ impl Worker<'_> {
                 return;
             }
             let now = Instant::now();
-            if now < p.tick {
+            if now < p.tick && !data.bounds.solved() {
                 return;
             }
             p.tick = now + Duration::from_millis(10);
