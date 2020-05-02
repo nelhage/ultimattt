@@ -257,6 +257,8 @@ struct AnalyzeParameters {
     dump_interval: Duration,
     #[structopt(long)]
     probe_hash: Option<u64>,
+    #[structopt(long)]
+    probe: Option<String>,
     #[structopt(long, default_value = "probe.csv")]
     probe_log: String,
     position: String,
@@ -413,6 +415,22 @@ fn main() -> Result<(), std::io::Error> {
                     result.allocated,
                 );
             } else if analyze.dfpn {
+                let probe_hash = match (analyze.probe_hash, analyze.probe.as_ref()) {
+                    (None, None) => None,
+                    (Some(p), None) => Some(p),
+                    (None, Some(moves)) => Some(if moves.len() == 0 {
+                        game.zobrist()
+                    } else {
+                        moves
+                            .split(" ")
+                            .fold(game.clone(), |pos, mv| {
+                                pos.make_move(game::notation::parse_move(mv).expect("parse_move"))
+                                    .expect("make_move")
+                            })
+                            .zobrist()
+                    }),
+                    (Some(_), Some(_)) => panic!("--probe-hash and --probe are incompatible"),
+                };
                 let mut cfg = dfpn::Config {
                     threads: opt.threads,
                     table_size: opt.table_mem.as_u64() as usize,
@@ -424,7 +442,7 @@ fn main() -> Result<(), std::io::Error> {
                     dump_interval: analyze.dump_interval.clone(),
                     write_metrics: analyze.write_metrics.clone(),
                     probe_log: analyze.probe_log.clone(),
-                    probe_hash: analyze.probe_hash,
+                    probe_hash: probe_hash,
                     ..Default::default()
                 };
                 if let Some(m) = analyze.max_work_per_job {
