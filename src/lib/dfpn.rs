@@ -329,7 +329,7 @@ impl DFPN {
                                     timeout: Some(Duration::from_secs(1)),
                                     debug: if cfg.debug > 6 { 1 } else { 0 },
                                     table_bytes: None,
-                                    draw_winner: Some(player),
+                                    draw_winner: Some(player.other()),
                                 }),
                                 probe: probe,
                             };
