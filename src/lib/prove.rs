@@ -230,10 +230,17 @@ impl Prover {
 
     fn evaluate(&self, node: &mut node_pool::AllocedNode<Node>) {
         let player = self.player();
-        let res = self.cursor.position(node.id).game_state();
+        let pos = self.cursor.position(node.id);
+        let res = pos.game_state();
         node.value = match res {
             game::BoardState::InPlay => Evaluation::Unknown,
-            game::BoardState::Drawn => Evaluation::False,
+            game::BoardState::Drawn => {
+                if pos.player() == player {
+                    Evaluation::False
+                } else {
+                    Evaluation::True
+                }
+            }
             game::BoardState::Won(p) => {
                 if p == player {
                     Evaluation::True
