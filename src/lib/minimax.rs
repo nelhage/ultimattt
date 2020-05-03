@@ -270,7 +270,13 @@ impl Minimax {
 
     pub fn evaluate(&self, g: &game::Game) -> i64 {
         let winner = match g.game_state() {
-            game::BoardState::Drawn => self.config.draw_winner,
+            game::BoardState::Drawn => {
+                if let Some(w) = self.config.draw_winner {
+                    Some(w)
+                } else {
+                    return 0;
+                }
+            }
             game::BoardState::InPlay => None,
             game::BoardState::Won(p) => Some(p),
         };
