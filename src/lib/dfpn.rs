@@ -838,22 +838,29 @@ impl Worker<'_> {
     }
 
     fn run(&mut self, pos: &game::Game) -> u64 {
-        let mut root = self
-            .table
-            .lookup(&mut self.stats.tt, pos.zobrist())
-            .unwrap_or(Entry {
-                bounds: Bounds::unity(),
-                hash: pos.zobrist(),
-                work: 0,
-                ..Default::default()
-            });
+        let mut work = 0;
         let mut vroot = VPath {
             parent: None,
             children: Vec::new(),
-            entry: root.clone(),
+            entry: Default::default(),
         };
-        let mut work = 0;
         loop {
+            let mut root = self
+                .table
+                .lookup(&mut self.stats.tt, pos.zobrist())
+                .unwrap_or(Entry {
+                    bounds: Bounds::unity(),
+                    hash: pos.zobrist(),
+                    work: 0,
+                    ..Default::default()
+                });
+            vroot.entry = self
+                .guard
+                .vtable
+                .get(&root.hash)
+                .map(|v| v.entry.clone())
+                .unwrap_or_else(|| root.clone());
+
             let (result, vbounds, this_work, did_job) = if vroot.entry.bounds.solved() {
                 (root, vroot.entry.bounds, 0, false)
             } else {
