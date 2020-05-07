@@ -657,7 +657,18 @@ impl Worker<'_> {
         data.work += local_work;
 
         populate_pv(&mut data, &children);
-        self.table.store(&mut self.stats.tt, &data);
+        let did_store = self.table.store(&mut self.stats.tt, &data);
+        if self.cfg.debug > 6 {
+            eprintln!(
+                "{:depth$}[{id}]exit mid bounds={bounds:?} local_work={local_work} store={did_store}",
+                "",
+                id=self.id,
+                depth = self.stack.len(),
+                bounds = data.bounds,
+                local_work = local_work,
+                did_store = did_store,
+            );
+        }
         (data, local_work)
     }
 
