@@ -5,7 +5,7 @@ use crate::game;
 use crate::minimax;
 use crate::prove;
 use crate::table;
-use parking_lot::{Condvar, Mutex, MutexGuard};
+use parking_lot::{Condvar, Mutex, MutexGuard, RwLock};
 use serde::Serialize;
 use std::cmp::{max, min};
 use std::collections::hash_map::HashMap;
@@ -247,7 +247,7 @@ impl DFPN {
             stats: Default::default(),
             vtable: Mutex::new(HashMap::new()),
         };
-        let (result, work) = prover.run();
+        let (result, pv, work) = prover.run();
         ProveResult {
             value: if result.bounds.phi == 0 {
                 prove::Evaluation::True
@@ -260,38 +260,26 @@ impl DFPN {
             bounds: result.bounds,
             stats: prover.stats.clone(),
             duration: Instant::now().duration_since(prover.start),
-            pv: prover.extract_pv(),
+            pv: pv,
         }
     }
 
-    fn run(&mut self) -> (Entry, u64) {
-        let shared = Mutex::new(SharedState {
-            vtable: HashMap::new(),
-            shutdown: false,
-            start: self.start,
-            tick: self.start,
-            dump_tick: self.start + self.cfg.dump_interval,
-        });
-        let cv = Condvar::new();
-
-        let probelog: Option<Mutex<fs::File>>;
+    fn run(&mut self) -> (Entry, Vec<game::Move>, u64) {
         let probe = if let Some(h) = self.cfg.probe_hash {
-            probelog = Some(Mutex::new(
-                fs::OpenOptions::new()
-                    .create(true)
-                    .truncate(true)
-                    .write(true)
-                    .open(&self.cfg.probe_log)
-                    .expect("open probe log"),
-            ));
-            let probe = Probe {
+            let probelog = fs::OpenOptions::new()
+                .create(true)
+                .truncate(true)
+                .write(true)
+                .open(&self.cfg.probe_log)
+                .expect("open probe log");
+            let mut probe = Probe {
                 hash: h,
                 tick: self.start,
-                out: probelog.as_ref().unwrap(),
+                out: probelog,
             };
             {
                 write!(
-                    probe.out.lock(),
+                    probe.out,
                     "mid,node_work,node_phi,node_delta,child,work,phi,delta\n"
                 )
                 .expect("probe header");
@@ -301,121 +289,126 @@ impl DFPN {
             None
         };
 
-        let (work, stats) = crossbeam::scope(|s| {
-            let mut guards = Vec::new();
-            for i in 0..self.cfg.threads {
-                let player = self.root.player();
-                let root = &self.root;
-                let cfg = &self.cfg;
-                let table = &self.table;
-                let cref = &cv;
-                let sref = &shared;
-                let probe = probe.clone();
-                guards.push(
-                    s.builder()
-                        .name(format!("worker-{}", i))
-                        .spawn(move |_| {
-                            let mut worker = Worker {
-                                id: i,
-                                cfg: cfg,
-                                player: player,
-                                guard: YieldableGuard::new(sref),
-                                table: table,
-                                stats: Default::default(),
-                                stack: Vec::new(),
-                                wait: cref,
-                                minimax: minimax::Minimax::with_config(&minimax::Config {
-                                    max_depth: Some(cfg.minimax_cutoff as i64 + 1),
-                                    timeout: Some(Duration::from_secs(1)),
-                                    debug: if cfg.debug > 6 { 1 } else { 0 },
-                                    table_bytes: None,
-                                    draw_winner: Some(player.other()),
-                                }),
-                                probe: probe,
-                            };
+        let mmcfg = minimax::Config {
+            max_depth: Some(self.cfg.minimax_cutoff as i64 + 1),
+            timeout: Some(Duration::from_secs(1)),
+            debug: if self.cfg.debug > 6 { 1 } else { 0 },
+            table_bytes: None,
+            draw_winner: Some(self.root.player().other()),
+        };
 
-                            (worker.run(root), worker.stats.clone())
-                        })
-                        .unwrap(),
-                );
-            }
-            guards
-                .into_iter()
-                .map(|g| g.join().expect("thread panicked"))
-                .fold(
-                    (0, Default::default()),
-                    |a: (u64, Stats), b: (u64, Stats)| (a.0 + b.0, a.1.merge(&b.1)),
-                )
-        })
-        .expect("thread panicked");
-
-        self.stats = self.stats.merge(&stats);
-
-        dump_table(&self.cfg, &self.table).expect("final dump_table");
-        (
-            self.table
-                .lookup(&mut self.stats.tt, self.root.zobrist())
-                .expect("no entry for root"),
-            work,
-        )
-    }
-
-    fn extract_pv(&mut self) -> Vec<game::Move> {
-        let mut pv = Vec::new();
-        let mut g = self.root.clone();
-        let mut prev = false;
-        loop {
-            match g.game_state() {
-                game::BoardState::InPlay => (),
-                _ => {
-                    if self.cfg.debug > 0 {
-                        eprintln!("PV terminated depth={} game={:?}", pv.len(), g.game_state());
-                    }
-                    break;
-                }
+        if self.cfg.threads == 1 {
+            let table = table::TranspositionTable::with_memory(self.cfg.table_size);
+            let mut worker = SingleThreadedWorker {
+                cfg: &self.cfg,
+                player: self.root.player(),
+                table: table,
+                stats: Default::default(),
+                stack: Vec::new(),
+                minimax: minimax::Minimax::with_config(&mmcfg),
+                probe: probe,
             };
-            if let Some(ent) = self.table.lookup(&mut self.stats.tt, g.zobrist()) {
-                if ent.bounds.phi != 0 && ent.bounds.delta != 0 {
-                    assert!(
-                        pv.len() == 0,
-                        "PV contains unproven positions d={} bounds=({}, {}) work={}",
-                        pv.len(),
-                        ent.bounds.phi,
-                        ent.bounds.delta,
-                        ent.work,
+            let root = Entry {
+                hash: self.root.zobrist(),
+                bounds: Bounds::unity(),
+                child: 0xff,
+                pv: game::Move::none(),
+                work: 0,
+            };
+            let (out, work) = worker.mid(
+                Bounds {
+                    phi: INFINITY / 2,
+                    delta: INFINITY / 2,
+                },
+                std::u64::MAX,
+                root,
+                &self.root,
+            );
+            self.stats = worker.stats.clone();
+            self.stats.tt = worker.table.stats();
+            (out, worker.extract_pv(&self.root), work)
+        } else {
+            let shared = Mutex::new(SharedState {
+                vtable: HashMap::new(),
+                shutdown: false,
+                start: self.start,
+                tick: self.start,
+                dump_tick: self.start + self.cfg.dump_interval,
+            });
+            let cv = Condvar::new();
+
+            let mut rwlock: Option<RwLock<Probe>> = None;
+            let probe = probe.map(|p| {
+                rwlock = Some(RwLock::new(p));
+                rwlock.as_ref().unwrap()
+            });
+            let (work, stats) = crossbeam::scope(|s| {
+                let mut guards = Vec::new();
+                for i in 0..self.cfg.threads {
+                    let player = self.root.player();
+                    let root = &self.root;
+                    let cfg = &self.cfg;
+                    let table = &self.table;
+                    let cref = &cv;
+                    let sref = &shared;
+                    let probe = probe.clone();
+                    let mcref = &mmcfg;
+                    guards.push(
+                        s.builder()
+                            .name(format!("worker-{}", i))
+                            .spawn(move |_| {
+                                let mut worker = Worker {
+                                    id: i,
+                                    cfg: cfg,
+                                    player: player,
+                                    guard: YieldableGuard::new(sref),
+                                    table: table,
+                                    stats: Default::default(),
+                                    stack: Vec::new(),
+                                    wait: cref,
+                                    minimax: minimax::Minimax::with_config(mcref),
+                                    probe: probe,
+                                };
+
+                                (worker.run(root), worker.stats.clone())
+                            })
+                            .unwrap(),
                     );
-                    break;
                 }
-                let won = ent.bounds.phi == 0;
-                if pv.len() != 0 {
-                    assert!(
-                        won == !prev,
-                        "inconsistent game tree d={} prev={} bounds=({}, {})",
-                        pv.len(),
-                        prev,
-                        ent.bounds.phi,
-                        ent.bounds.delta
-                    );
-                }
-                prev = won;
-                if ent.pv.is_none() {
-                    if self.cfg.debug > 0 {
-                        eprintln!("PV terminated, no move");
-                    }
-                    break;
-                }
-                pv.push(ent.pv);
-                g = g.make_move(ent.pv).unwrap_or_else(|_| {
-                    panic!("PV contained illegal move depth={} m={}", pv.len(), ent.pv)
-                });
-            } else {
-                if self.cfg.debug > 0 {
-                    eprintln!("PV terminated depth={} no entry", pv.len());
-                }
-                break;
+                guards
+                    .into_iter()
+                    .map(|g| g.join().expect("thread panicked"))
+                    .fold(
+                        (0, Default::default()),
+                        |a: (u64, Stats), b: (u64, Stats)| (a.0 + b.0, a.1.merge(&b.1)),
+                    )
+            })
+            .expect("thread panicked");
+
+            self.stats = self.stats.merge(&stats);
+            let pv = Worker {
+                // TODO
+                id: 0,
+                cfg: &self.cfg,
+                player: self.root.player(),
+                guard: YieldableGuard::new(&shared),
+                table: &self.table,
+                stats: Default::default(),
+                stack: Vec::new(),
+                wait: &cv,
+                minimax: minimax::Minimax::with_config(&mmcfg),
+                probe: probe,
             }
+            .extract_pv(&self.root);
+            dump_table(&self.cfg, &self.table).expect("final dump_table");
+            (
+                self.table
+                    .lookup(&mut self.stats.tt, self.root.zobrist())
+                    .expect("no entry for root"),
+                pv,
+                work,
+            )
         }
-        pv
     }
 }
 
@@ -474,11 +467,10 @@ struct SharedState {
     dump_tick: Instant,
 }
 
-#[derive(Clone)]
-struct Probe<'a> {
+struct Probe {
     tick: Instant,
     hash: u64,
-    out: &'a Mutex<fs::File>,
+    out: fs::File,
 }
 
 struct Worker<'a> {
@@ -491,7 +483,17 @@ struct Worker<'a> {
     stack: Vec<game::Move>,
     wait: &'a Condvar,
     minimax: minimax::Minimax,
-    probe: Option<Probe<'a>>,
+    probe: Option<&'a RwLock<Probe>>,
+}
+
+struct SingleThreadedWorker<'a> {
+    cfg: &'a Config,
+    player: game::Player,
+    table: table::TranspositionTable<Entry, typenum::U4>,
+    stats: Stats,
+    stack: Vec<game::Move>,
+    minimax: minimax::Minimax,
+    probe: Option<Probe>,
 }
 
 #[derive(Serialize)]
@@ -1159,6 +1161,64 @@ trait DFPNWorker {
             }
         })
     }
+
+    fn extract_pv(&mut self, root: &game::Game) -> Vec<game::Move> {
+        let mut pv = Vec::new();
+        let mut g = root.clone();
+        let mut prev = false;
+        loop {
+            match g.game_state() {
+                game::BoardState::InPlay => (),
+                _ => {
+                    if self.cfg().debug > 0 {
+                        eprintln!("PV terminated depth={} game={:?}", pv.len(), g.game_state());
+                    }
+                    break;
+                }
+            };
+            if let Some(ent) = self.ttlookup(g.zobrist()) {
+                if ent.bounds.phi != 0 && ent.bounds.delta != 0 {
+                    assert!(
+                        pv.len() == 0,
+                        "PV contains unproven positions d={} bounds=({}, {}) work={}",
+                        pv.len(),
+                        ent.bounds.phi,
+                        ent.bounds.delta,
+                        ent.work,
+                    );
+                    break;
+                }
+                let won = ent.bounds.phi == 0;
+                if pv.len() != 0 {
+                    assert!(
+                        won == !prev,
+                        "inconsistent game tree d={} prev={} bounds=({}, {})",
+                        pv.len(),
+                        prev,
+                        ent.bounds.phi,
+                        ent.bounds.delta
+                    );
+                }
+                prev = won;
+                if ent.pv.is_none() {
+                    if self.cfg().debug > 0 {
+                        eprintln!("PV terminated, no move");
+                    }
+                    break;
+                }
+                pv.push(ent.pv);
+                g = g.make_move(ent.pv).unwrap_or_else(|_| {
+                    panic!("PV contained illegal move depth={} m={}", pv.len(), ent.pv)
+                });
+            } else {
+                if self.cfg().debug > 0 {
+                    eprintln!("PV terminated depth={} no entry", pv.len());
+                }
+                break;
+            }
+        }
+        pv
+    }
 }
 
 impl<'a> DFPNWorker for Worker<'a> {
@@ -1189,6 +1249,65 @@ impl<'a> DFPNWorker for Worker<'a> {
 
     fn try_probe(&mut self, data: &Entry, children: &Vec<Child>) {
         if let Some(ref mut p) = self.probe {
+            let r = p.read();
+            if data.hash != r.hash {
+                return;
+            }
+            let now = Instant::now();
+            if now < r.tick && !data.bounds.solved() {
+                return;
+            }
+            let mut w = p.write();
+            w.tick = now + Duration::from_millis(10);
+
+            for (i, ch) in children.iter().enumerate() {
+                write!(
+                    w.out,
+                    "{},{},{},{},{},{},{},{}\n",
+                    self.stats.mid,
+                    data.work,
+                    data.bounds.phi,
+                    data.bounds.delta,
+                    i,
+                    ch.entry.work,
+                    ch.entry.bounds.phi,
+                    ch.entry.bounds.delta,
+                )
+                .expect("probe line");
+            }
+        }
+    }
+}
+
+impl<'a> DFPNWorker for SingleThreadedWorker<'a> {
+    fn id(&self) -> usize {
+        0
+    }
+    fn cfg(&self) -> &Config {
+        &self.cfg
+    }
+    fn stack(&mut self) -> &mut Vec<game::Move> {
+        &mut self.stack
+    }
+    fn stats(&mut self) -> &mut Stats {
+        &mut self.stats
+    }
+    fn player(&self) -> game::Player {
+        self.player
+    }
+    fn ttlookup(&mut self, hash: u64) -> Option<Entry> {
+        self.table.lookup(hash)
+    }
+    fn ttstore(&mut self, entry: &Entry) -> bool {
+        self.table.store(entry)
+    }
+    fn minimax(&mut self) -> &mut minimax::Minimax {
+        &mut self.minimax
+    }
+
+    // TODO: unify with Worker::try_probe
+    fn try_probe(&mut self, data: &Entry, children: &Vec<Child>) {
+        if let Some(ref mut p) = self.probe {
             if data.hash != p.hash {
                 return;
             }
@@ -1198,12 +1317,11 @@ impl<'a> DFPNWorker for Worker<'a> {
             }
             p.tick = now + Duration::from_millis(10);
 
-            let mut lk = p.out.lock();
             for (i, ch) in children.iter().enumerate() {
                 write!(
-                    lk,
+                    p.out,
                     "{},{},{},{},{},{},{},{}\n",
-                    self.stats().mid,
+                    self.stats.mid,
                     data.work,
                     data.bounds.phi,
                     data.bounds.delta,
