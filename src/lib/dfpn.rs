@@ -5,6 +5,8 @@ use crate::game;
 use crate::minimax;
 use crate::prove;
 use crate::table;
+use crate::table::Table;
+
 use parking_lot::{Condvar, Mutex, MutexGuard, RwLock};
 use serde::Serialize;
 use std::cmp::{max, min};
@@ -320,9 +322,10 @@ impl DFPN {
                 &self.root,
             );
             self.stats = worker.stats.clone();
+            let pv = extract_pv(&worker.cfg, &mut worker.table, &self.root);
             self.stats.tt = worker.table.stats();
             dump_table(&self.cfg, &worker.table).expect("final dump_table");
-            (out, worker.extract_pv(&self.root), work)
+            (out, pv, work)
         } else {
             let table = if let Some(ref path) = self.cfg.load_table {
                 table::ConcurrentTranspositionTable::from_file(path).expect("invalid table file")
@@ -387,19 +390,7 @@ impl DFPN {
             .expect("thread panicked");
 
             self.stats = self.stats.merge(&stats);
-            let pv = Worker {
-                id: 0,
-                cfg: &self.cfg,
-                player: self.root.player(),
-                guard: YieldableGuard::new(&shared),
-                table: table.handle(),
-                stats: Default::default(),
-                stack: Vec::new(),
-                wait: &cv,
-                minimax: minimax::Minimax::with_config(&mmcfg),
-                probe: probe,
-            }
-            .extract_pv(&self.root);
+            let pv = extract_pv(&self.cfg, &mut table.handle(), &self.root);
             dump_table(&self.cfg, &table.handle()).expect("final dump_table");
             self.stats.tt = table.stats();
             (
@@ -945,14 +936,77 @@ fn dump_table<'a, T: table::Table<Entry>>(cfg: &Config, table: &T) -> io::Result
     Ok(())
 }
 
+fn extract_pv<T: table::Table<Entry>>(
+    cfg: &Config,
+    table: &mut T,
+    root: &game::Game,
+) -> Vec<game::Move> {
+    let mut pv = Vec::new();
+    let mut g = root.clone();
+    let mut prev = false;
+    loop {
+        match g.game_state() {
+            game::BoardState::InPlay => (),
+            _ => {
+                if cfg.debug > 0 {
+                    eprintln!("PV terminated depth={} game={:?}", pv.len(), g.game_state());
+                }
+                break;
+            }
+        };
+        if let Some(ent) = table.lookup(g.zobrist()) {
+            if ent.bounds.phi != 0 && ent.bounds.delta != 0 {
+                assert!(
+                    pv.len() == 0,
+                    "PV contains unproven positions d={} bounds=({}, {}) work={}",
+                    pv.len(),
+                    ent.bounds.phi,
+                    ent.bounds.delta,
+                    ent.work,
+                );
+                break;
+            }
+            let won = ent.bounds.phi == 0;
+            if pv.len() != 0 {
+                assert!(
+                    won == !prev,
+                    "inconsistent game tree d={} prev={} bounds=({}, {})",
+                    pv.len(),
+                    prev,
+                    ent.bounds.phi,
+                    ent.bounds.delta
+                );
+            }
+            prev = won;
+            if ent.pv.is_none() {
+                if cfg.debug > 0 {
+                    eprintln!("PV terminated, no move");
+                }
+                break;
+            }
+            pv.push(ent.pv);
+            g = g.make_move(ent.pv).unwrap_or_else(|_| {
+                panic!("PV contained illegal move depth={} m={}", pv.len(), ent.pv)
+            });
+        } else {
+            if cfg.debug > 0 {
+                eprintln!("PV terminated depth={} no entry", pv.len());
+            }
+            break;
+        }
+    }
+    pv
+}
+
 trait DFPNWorker {
+    type Table: table::Table<Entry>;
+
     fn id(&self) -> usize;
     fn cfg(&self) -> &Config;
     fn stack(&mut self) -> &mut Vec<game::Move>;
     fn stats(&mut self) -> &mut Stats;
     fn player(&self) -> game::Player;
-    fn ttlookup(&mut self, hash: u64) -> Option<Entry>;
-    fn ttstore(&mut self, entry: &Entry) -> bool;
+    fn table(&mut self) -> &mut Self::Table;
     fn minimax(&mut self) -> &mut minimax::Minimax;
     fn try_probe(&mut self, data: &Entry, children: &Vec<Child>);
 
@@ -1028,7 +1082,7 @@ trait DFPNWorker {
             }
             self.stats().terminal += 1;
             data.work = 1;
-            self.ttstore(&data);
+            self.table().store(&data);
             return (data, 1);
         }
 
@@ -1081,7 +1135,7 @@ trait DFPNWorker {
         data.work += local_work;
 
         populate_pv(&mut data, &children);
-        let did_store = self.ttstore(&data);
+        let did_store = self.table().store(&data);
         if self.cfg().debug > 6 {
             eprintln!(
                 "{:depth$}[{id}]exit mid bounds={bounds:?} local_work={local_work} store={did_store}",
@@ -1097,7 +1151,7 @@ trait DFPNWorker {
     }
 
     fn ttlookup_or_default(&mut self, g: &game::Game) -> Entry {
-        let te = self.ttlookup(g.zobrist());
+        let te = self.table().lookup(g.zobrist());
         te.unwrap_or_else(|| {
             let bounds = match g.game_state() {
                 game::BoardState::Won(p) => {
@@ -1124,67 +1178,11 @@ trait DFPNWorker {
             }
         })
     }
-
-    fn extract_pv(&mut self, root: &game::Game) -> Vec<game::Move> {
-        let mut pv = Vec::new();
-        let mut g = root.clone();
-        let mut prev = false;
-        loop {
-            match g.game_state() {
-                game::BoardState::InPlay => (),
-                _ => {
-                    if self.cfg().debug > 0 {
-                        eprintln!("PV terminated depth={} game={:?}", pv.len(), g.game_state());
-                    }
-                    break;
-                }
-            };
-            if let Some(ent) = self.ttlookup(g.zobrist()) {
-                if ent.bounds.phi != 0 && ent.bounds.delta != 0 {
-                    assert!(
-                        pv.len() == 0,
-                        "PV contains unproven positions d={} bounds=({}, {}) work={}",
-                        pv.len(),
-                        ent.bounds.phi,
-                        ent.bounds.delta,
-                        ent.work,
-                    );
-                    break;
-                }
-                let won = ent.bounds.phi == 0;
-                if pv.len() != 0 {
-                    assert!(
-                        won == !prev,
-                        "inconsistent game tree d={} prev={} bounds=({}, {})",
-                        pv.len(),
-                        prev,
-                        ent.bounds.phi,
-                        ent.bounds.delta
-                    );
-                }
-                prev = won;
-                if ent.pv.is_none() {
-                    if self.cfg().debug > 0 {
-                        eprintln!("PV terminated, no move");
-                    }
-                    break;
-                }
-                pv.push(ent.pv);
-                g = g.make_move(ent.pv).unwrap_or_else(|_| {
-                    panic!("PV contained illegal move depth={} m={}", pv.len(), ent.pv)
-                });
-            } else {
-                if self.cfg().debug > 0 {
-                    eprintln!("PV terminated depth={} no entry", pv.len());
-                }
-                break;
-            }
-        }
-        pv
-    }
 }
 
 impl<'a> DFPNWorker for Worker<'a> {
+    type Table = table::ConcurrentTranspositionTableHandle<'a, Entry, typenum::U4>;
+
     fn id(&self) -> usize {
         self.id
     }
@@ -1200,12 +1198,10 @@ impl<'a> DFPNWorker for Worker<'a> {
     fn player(&self) -> game::Player {
         self.player
     }
-    fn ttlookup(&mut self, hash: u64) -> Option<Entry> {
-        self.table.lookup(hash)
+    fn table(&mut self) -> &mut Self::Table {
+        &mut self.table
     }
-    fn ttstore(&mut self, entry: &Entry) -> bool {
-        self.table.store(entry)
-    }
+
     fn minimax(&mut self) -> &mut minimax::Minimax {
         &mut self.minimax
     }
@@ -1229,6 +1225,8 @@ impl<'a> DFPNWorker for Worker<'a> {
 }
 
 impl<'a> DFPNWorker for SingleThreadedWorker<'a> {
+    type Table = table::TranspositionTable<Entry, typenum::U4>;
+
     fn id(&self) -> usize {
         0
     }
@@ -1244,11 +1242,8 @@ impl<'a> DFPNWorker for SingleThreadedWorker<'a> {
     fn player(&self) -> game::Player {
         self.player
     }
-    fn ttlookup(&mut self, hash: u64) -> Option<Entry> {
-        self.table.lookup(hash)
-    }
-    fn ttstore(&mut self, entry: &Entry) -> bool {
-        self.table.store(entry)
+    fn table(&mut self) -> &mut Self::Table {
+        &mut self.table
     }
     fn minimax(&mut self) -> &mut minimax::Minimax {
         &mut self.minimax
