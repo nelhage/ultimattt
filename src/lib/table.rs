@@ -1,11 +1,11 @@
 use typenum;
 
+use parking_lot::Mutex;
 use serde::Serialize;
 use std::cell::UnsafeCell;
 use std::marker::PhantomData;
 use std::mem::MaybeUninit;
-use std::sync::atomic::{fence, AtomicU32, Ordering};
-use std::sync::Mutex;
+use std::sync::atomic::{fence, AtomicU32, AtomicUsize, Ordering};
 use std::{fs, io, mem, ptr, slice, thread};
 
 #[derive(Default, Clone, Debug, Serialize)]
@@ -209,6 +209,9 @@ where
     len: usize,
     write: Mutex<()>,
 
+    handles: AtomicUsize,
+    stats: Mutex<Stats>,
+
     n: PhantomData<N>,
 }
 
@@ -247,6 +250,8 @@ where
             len: len,
             write: Mutex::new(()),
             n: PhantomData,
+            handles: AtomicUsize::new(0),
+            stats: Default::default(),
         }
     }
 
@@ -267,6 +272,8 @@ where
             counters: new_default_slice(entries / ENTRIES_PER_LOCK),
             write: Mutex::new(()),
             n: PhantomData,
+            handles: AtomicUsize::new(0),
+            stats: Default::default(),
         }
     }
 
@@ -309,7 +316,7 @@ where
     }
 
     pub fn store(&self, stats: &mut Stats, ent: &E) -> bool {
-        let _lk = self.write.lock().unwrap();
+        let _lk = self.write.lock();
         debug_assert!(ent.valid());
         let mut worst: Option<usize> = None;
         let base = ent.hash() as usize;
@@ -358,5 +365,66 @@ where
         w.write(unsafe { slice_as_bytes(&*self.index) })?;
         w.write(unsafe { slice_as_bytes(&*self.entries) })?;
         Ok(())
+    }
+
+    pub fn stats(&self) -> Stats {
+        self.stats.lock().clone()
+    }
+
+    pub fn handle<'a>(&'a self) -> ConcurrentTranspositionTableHandle<'a, E, N> {
+        self.handles.fetch_add(1, Ordering::SeqCst);
+        ConcurrentTranspositionTableHandle {
+            table: self,
+            stats: Default::default(),
+        }
+    }
+}
+
+pub struct ConcurrentTranspositionTableHandle<'a, E, N>
+where
+    E: Entry + Default + Clone,
+    N: typenum::Unsigned,
+{
+    table: &'a ConcurrentTranspositionTable<E, N>,
+    stats: Stats,
+}
+
+impl<'a, E, N> ConcurrentTranspositionTableHandle<'a, E, N>
+where
+    E: Entry + Default + Clone,
+    N: typenum::Unsigned,
+{
+    pub fn lookup(&mut self, h: u64) -> Option<E> {
+        self.table.lookup(&mut self.stats, h)
+    }
+
+    pub fn store(&mut self, e: &E) -> bool {
+        self.table.store(&mut self.stats, e)
+    }
+
+    pub fn dump(&self, w: &mut dyn io::Write) -> io::Result<()> {
+        self.table.dump(w)
+    }
+}
+
+impl<'a, E, N> Drop for ConcurrentTranspositionTableHandle<'a, E, N>
+where
+    E: Entry + Default + Clone,
+    N: typenum::Unsigned,
+{
+    fn drop(&mut self) {
+        let mut lk = self.table.stats.lock();
+        *lk = lk.merge(&self.stats);
+        self.table.handles.fetch_sub(1, Ordering::SeqCst);
+    }
+}
+
+impl<'a, E, N> Clone for ConcurrentTranspositionTableHandle<'a, E, N>
+where
+    E: Entry + Default + Clone,
+    N: typenum::Unsigned,
+{
+    fn clone(&self) -> Self {
+        self.table.handle()
     }
 }

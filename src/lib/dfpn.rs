@@ -348,7 +348,7 @@ impl DFPN {
                     let player = self.root.player();
                     let root = &self.root;
                     let cfg = &self.cfg;
-                    let table = &table;
+                    let table = table.handle();
                     let cref = &cv;
                     let sref = &shared;
                     let probe = probe.clone();
@@ -387,12 +387,11 @@ impl DFPN {
 
             self.stats = self.stats.merge(&stats);
             let pv = Worker {
-                // TODO
                 id: 0,
                 cfg: &self.cfg,
                 player: self.root.player(),
                 guard: YieldableGuard::new(&shared),
-                table: &table,
+                table: table.handle(),
                 stats: Default::default(),
                 stack: Vec::new(),
                 wait: &cv,
@@ -400,7 +399,8 @@ impl DFPN {
                 probe: probe,
             }
             .extract_pv(&self.root);
-            dump_table(&self.cfg, &table).expect("final dump_table");
+            dump_table(&self.cfg, table.handle()).expect("final dump_table");
+            self.stats.tt = table.stats();
             (
                 table
                     .lookup(&mut self.stats.tt, self.root.zobrist())
@@ -478,7 +478,7 @@ struct Worker<'a> {
     id: usize,
     player: game::Player,
     guard: YieldableGuard<'a, SharedState>,
-    table: &'a table::ConcurrentTranspositionTable<Entry, typenum::U4>,
+    table: table::ConcurrentTranspositionTableHandle<'a, Entry, typenum::U4>,
     stats: Stats,
     stack: Vec<game::Move>,
     wait: &'a Condvar,
@@ -605,10 +605,7 @@ impl Worker<'_> {
         loop {
             if did_job {
                 for (i, child) in children.iter_mut().enumerate() {
-                    if let Some(e) = self
-                        .table
-                        .lookup(&mut self.stats.tt, child.position.zobrist())
-                    {
+                    if let Some(e) = self.table.lookup(child.position.zobrist()) {
                         child.entry = e;
                     }
                     if let Some(v) = self.guard.vtable.get(&child.position.zobrist()) {
@@ -638,7 +635,7 @@ impl Worker<'_> {
                 );
             }
 
-            self.table.store(&mut self.stats.tt, &data);
+            self.table.store(&data);
             if vdata.entry.bounds.exceeded(bounds) || did_job {
                 break;
             }
@@ -687,15 +684,12 @@ impl Worker<'_> {
             entry: Default::default(),
         };
         loop {
-            let mut root = self
-                .table
-                .lookup(&mut self.stats.tt, pos.zobrist())
-                .unwrap_or(Entry {
-                    bounds: Bounds::unity(),
-                    hash: pos.zobrist(),
-                    work: 0,
-                    ..Default::default()
-                });
+            let mut root = self.table.lookup(pos.zobrist()).unwrap_or(Entry {
+                bounds: Bounds::unity(),
+                hash: pos.zobrist(),
+                work: 0,
+                ..Default::default()
+            });
             vroot.entry = self
                 .guard
                 .vtable
@@ -775,7 +769,7 @@ impl Worker<'_> {
 
             if let Some(_) = self.cfg.dump_table {
                 if now > self.guard.dump_tick {
-                    dump_table(&self.cfg, self.table).expect("dump_table failed");
+                    dump_table(&self.cfg, self.table.clone()).expect("dump_table failed");
                     self.guard.dump_tick = now + self.cfg.dump_interval;
                 }
             }
@@ -821,35 +815,6 @@ impl Worker<'_> {
             self.vadd(&v.entry).entry.bounds = compute_bounds(&v.children);
             node = v.parent;
         }
-    }
-
-    fn ttlookup_or_default(&mut self, g: &game::Game) -> Entry {
-        let te = self.table.lookup(&mut self.stats.tt, g.zobrist());
-        te.unwrap_or_else(|| {
-            let bounds = match g.game_state() {
-                game::BoardState::Won(p) => {
-                    if p == g.player() {
-                        Bounds::winning()
-                    } else {
-                        Bounds::losing()
-                    }
-                }
-                game::BoardState::Drawn => {
-                    if g.player() == self.player {
-                        Bounds::losing()
-                    } else {
-                        Bounds::winning()
-                    }
-                }
-                game::BoardState::InPlay => Bounds::unity(),
-            };
-            Entry {
-                bounds: bounds,
-                hash: g.zobrist(),
-                work: 0,
-                ..Default::default()
-            }
-        })
     }
 }
 
@@ -961,9 +926,9 @@ fn populate_pv(data: &mut Entry, children: &Vec<Child>) {
     }
 }
 
-fn dump_table<N: typenum::Unsigned>(
+fn dump_table<'a, N: typenum::Unsigned>(
     cfg: &Config,
-    table: &table::ConcurrentTranspositionTable<Entry, N>,
+    table: table::ConcurrentTranspositionTableHandle<'a, Entry, N>,
 ) -> io::Result<()> {
     if let Some(ref path) = cfg.dump_table {
         let before = Instant::now();
@@ -1238,10 +1203,10 @@ impl<'a> DFPNWorker for Worker<'a> {
         self.player
     }
     fn ttlookup(&mut self, hash: u64) -> Option<Entry> {
-        self.table.lookup(&mut self.stats.tt, hash)
+        self.table.lookup(hash)
     }
     fn ttstore(&mut self, entry: &Entry) -> bool {
-        self.table.store(&mut self.stats.tt, entry)
+        self.table.store(entry)
     }
     fn minimax(&mut self) -> &mut minimax::Minimax {
         &mut self.minimax
