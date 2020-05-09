@@ -321,6 +321,7 @@ impl DFPN {
             );
             self.stats = worker.stats.clone();
             self.stats.tt = worker.table.stats();
+            dump_table(&self.cfg, &worker.table).expect("final dump_table");
             (out, worker.extract_pv(&self.root), work)
         } else {
             let table = if let Some(ref path) = self.cfg.load_table {
@@ -399,7 +400,7 @@ impl DFPN {
                 probe: probe,
             }
             .extract_pv(&self.root);
-            dump_table(&self.cfg, table.handle()).expect("final dump_table");
+            dump_table(&self.cfg, &table.handle()).expect("final dump_table");
             self.stats.tt = table.stats();
             (
                 table
@@ -769,7 +770,7 @@ impl Worker<'_> {
 
             if let Some(_) = self.cfg.dump_table {
                 if now > self.guard.dump_tick {
-                    dump_table(&self.cfg, self.table.clone()).expect("dump_table failed");
+                    dump_table(&self.cfg, &self.table).expect("dump_table failed");
                     self.guard.dump_tick = now + self.cfg.dump_interval;
                 }
             }
@@ -926,10 +927,7 @@ fn populate_pv(data: &mut Entry, children: &Vec<Child>) {
     }
 }
 
-fn dump_table<'a, N: typenum::Unsigned>(
-    cfg: &Config,
-    table: table::ConcurrentTranspositionTableHandle<'a, Entry, N>,
-) -> io::Result<()> {
+fn dump_table<'a, T: table::Table<Entry>>(cfg: &Config, table: &T) -> io::Result<()> {
     if let Some(ref path) = cfg.dump_table {
         let before = Instant::now();
         let mut f = fs::File::create(path)?;

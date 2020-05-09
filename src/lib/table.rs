@@ -428,3 +428,48 @@ where
         self.table.handle()
     }
 }
+
+pub trait Table<E>
+where
+    E: Entry + Default + Clone,
+{
+    fn lookup(&mut self, h: u64) -> Option<E>;
+    fn store(&mut self, e: &E) -> bool;
+    fn dump(&self, w: &mut dyn io::Write) -> io::Result<()>;
+}
+
+impl<E, N> Table<E> for TranspositionTable<E, N>
+where
+    E: Entry + Default + Clone,
+    N: typenum::Unsigned,
+{
+    fn lookup(&mut self, h: u64) -> Option<E> {
+        self.lookup(h)
+    }
+
+    fn store(&mut self, e: &E) -> bool {
+        self.store(e)
+    }
+
+    fn dump(&self, w: &mut dyn io::Write) -> io::Result<()> {
+        self.dump(w)
+    }
+}
+
+impl<'a, E, N> Table<E> for ConcurrentTranspositionTableHandle<'a, E, N>
+where
+    E: Entry + Default + Clone,
+    N: typenum::Unsigned,
+{
+    fn lookup(&mut self, h: u64) -> Option<E> {
+        self.lookup(h)
+    }
+
+    fn store(&mut self, e: &E) -> bool {
+        self.store(e)
+    }
+
+    fn dump(&self, w: &mut dyn io::Write) -> io::Result<()> {
+        self.dump(w)
+    }
+}
