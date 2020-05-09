@@ -1248,6 +1248,7 @@ impl<'a> DFPNWorker for Worker<'a> {
     }
 
     fn try_probe(&mut self, data: &Entry, children: &Vec<Child>) {
+        let mid = self.stats().mid;
         if let Some(ref mut p) = self.probe {
             let r = p.read();
             if data.hash != r.hash {
@@ -1257,24 +1258,9 @@ impl<'a> DFPNWorker for Worker<'a> {
             if now < r.tick && !data.bounds.solved() {
                 return;
             }
-            let mut w = p.write();
-            w.tick = now + Duration::from_millis(10);
 
-            for (i, ch) in children.iter().enumerate() {
-                write!(
-                    w.out,
-                    "{},{},{},{},{},{},{},{}\n",
-                    self.stats.mid,
-                    data.work,
-                    data.bounds.phi,
-                    data.bounds.delta,
-                    i,
-                    ch.entry.work,
-                    ch.entry.bounds.phi,
-                    ch.entry.bounds.delta,
-                )
-                .expect("probe line");
-            }
+            let mut w = p.write();
+            w.do_probe(now + Duration::from_millis(10), mid, data, children);
         }
     }
 }
@@ -1307,6 +1293,7 @@ impl<'a> DFPNWorker for SingleThreadedWorker<'a> {
 
     // TODO: unify with Worker::try_probe
     fn try_probe(&mut self, data: &Entry, children: &Vec<Child>) {
+        let mid = self.stats().mid;
         if let Some(ref mut p) = self.probe {
             if data.hash != p.hash {
                 return;
@@ -1315,23 +1302,29 @@ impl<'a> DFPNWorker for SingleThreadedWorker<'a> {
             if now < p.tick && !data.bounds.solved() {
                 return;
             }
-            p.tick = now + Duration::from_millis(10);
+            p.do_probe(now + Duration::from_millis(10), mid, data, children);
+        }
+    }
+}
 
-            for (i, ch) in children.iter().enumerate() {
-                write!(
-                    p.out,
-                    "{},{},{},{},{},{},{},{}\n",
-                    self.stats.mid,
-                    data.work,
-                    data.bounds.phi,
-                    data.bounds.delta,
-                    i,
-                    ch.entry.work,
-                    ch.entry.bounds.phi,
-                    ch.entry.bounds.delta,
-                )
-                .expect("probe line");
-            }
+impl Probe {
+    fn do_probe(&mut self, tick: Instant, mid: usize, data: &Entry, children: &Vec<Child>) {
+        self.tick = tick;
+
+        for (i, ch) in children.iter().enumerate() {
+            write!(
+                self.out,
+                "{},{},{},{},{},{},{},{}\n",
+                mid,
+                data.work,
+                data.bounds.phi,
+                data.bounds.delta,
+                i,
+                ch.entry.work,
+                ch.entry.bounds.phi,
+                ch.entry.bounds.delta,
+            )
+            .expect("probe line");
         }
     }
 }
