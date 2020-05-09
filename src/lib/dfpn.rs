@@ -214,10 +214,8 @@ pub struct ProveResult {
 pub struct DFPN {
     start: Instant,
     cfg: Config,
-    table: table::ConcurrentTranspositionTable<Entry, typenum::U4>,
     stats: Stats,
     root: game::Game,
-    vtable: Mutex<HashMap<u64, VEntry>>,
 }
 
 #[derive(Clone)]
@@ -234,18 +232,11 @@ static TICK_TIME: Duration = Duration::from_millis(500);
 impl DFPN {
     pub fn prove(cfg: &Config, g: &game::Game) -> ProveResult {
         let start = Instant::now();
-        let table = if let Some(ref path) = cfg.load_table {
-            table::ConcurrentTranspositionTable::from_file(path).expect("invalid table file")
-        } else {
-            table::ConcurrentTranspositionTable::with_memory(cfg.table_size)
-        };
         let mut prover = DFPN {
             root: g.clone(),
             start: start,
             cfg: cfg.clone(),
-            table: table,
             stats: Default::default(),
-            vtable: Mutex::new(HashMap::new()),
         };
         let (result, pv, work) = prover.run();
         ProveResult {
@@ -298,7 +289,11 @@ impl DFPN {
         };
 
         if self.cfg.threads == 1 {
-            let table = table::TranspositionTable::with_memory(self.cfg.table_size);
+            let table = if let Some(ref path) = self.cfg.load_table {
+                table::TranspositionTable::from_file(path).expect("invalid table file")
+            } else {
+                table::TranspositionTable::with_memory(self.cfg.table_size)
+            };
             let mut worker = SingleThreadedWorker {
                 cfg: &self.cfg,
                 player: self.root.player(),
@@ -328,6 +323,11 @@ impl DFPN {
             self.stats.tt = worker.table.stats();
             (out, worker.extract_pv(&self.root), work)
         } else {
+            let table = if let Some(ref path) = self.cfg.load_table {
+                table::ConcurrentTranspositionTable::from_file(path).expect("invalid table file")
+            } else {
+                table::ConcurrentTranspositionTable::with_memory(self.cfg.table_size)
+            };
             let shared = Mutex::new(SharedState {
                 vtable: HashMap::new(),
                 shutdown: false,
@@ -348,7 +348,7 @@ impl DFPN {
                     let player = self.root.player();
                     let root = &self.root;
                     let cfg = &self.cfg;
-                    let table = &self.table;
+                    let table = &table;
                     let cref = &cv;
                     let sref = &shared;
                     let probe = probe.clone();
@@ -392,7 +392,7 @@ impl DFPN {
                 cfg: &self.cfg,
                 player: self.root.player(),
                 guard: YieldableGuard::new(&shared),
-                table: &self.table,
+                table: &table,
                 stats: Default::default(),
                 stack: Vec::new(),
                 wait: &cv,
@@ -400,9 +400,9 @@ impl DFPN {
                 probe: probe,
             }
             .extract_pv(&self.root);
-            dump_table(&self.cfg, &self.table).expect("final dump_table");
+            dump_table(&self.cfg, &table).expect("final dump_table");
             (
-                self.table
+                table
                     .lookup(&mut self.stats.tt, self.root.zobrist())
                     .expect("no entry for root"),
                 pv,
