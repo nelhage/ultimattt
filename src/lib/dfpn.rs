@@ -225,7 +225,6 @@ struct Child {
     position: game::Game,
     r#move: game::Move,
     entry: Entry,
-    r#virtual: bool,
 }
 
 const CHECK_TICK_INTERVAL: usize = 1 << 12;
@@ -572,7 +571,6 @@ impl SPDFPNWorker<'_> {
                 position: g,
                 r#move: m,
                 entry: entry,
-                r#virtual: false,
             };
             let vchild = self
                 .guard
@@ -582,7 +580,6 @@ impl SPDFPNWorker<'_> {
                     entry: ve.entry.clone(),
                     r#move: m,
                     position: child.position.clone(),
-                    r#virtual: true,
                 })
                 .unwrap_or_else(|| child.clone());
 
@@ -1097,7 +1094,6 @@ trait DFPNWorker {
                 position: g,
                 r#move: m,
                 entry: data,
-                r#virtual: false,
             });
             if bounds.delta == 0 {
                 break;
