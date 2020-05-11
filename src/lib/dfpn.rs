@@ -361,7 +361,7 @@ impl DFPN {
                         s.builder()
                             .name(format!("worker-{}", i))
                             .spawn(move |_| {
-                                let mut worker = Worker {
+                                let mut worker = SPDFPNWorker {
                                     id: i,
                                     cfg: cfg,
                                     player: player,
@@ -465,7 +465,7 @@ struct Probe {
     out: fs::File,
 }
 
-struct Worker<'a> {
+struct SPDFPNWorker<'a> {
     cfg: &'a Config,
     id: usize,
     player: game::Player,
@@ -494,7 +494,7 @@ struct Metrics<'a> {
     stats: &'a Stats,
 }
 
-impl Worker<'_> {
+impl SPDFPNWorker<'_> {
     fn try_run_job(
         &mut self,
         bounds: Bounds,
@@ -1180,7 +1180,7 @@ trait DFPNWorker {
     }
 }
 
-impl<'a> DFPNWorker for Worker<'a> {
+impl<'a> DFPNWorker for SPDFPNWorker<'a> {
     type Table = table::ConcurrentTranspositionTableHandle<'a, Entry, typenum::U4>;
 
     fn id(&self) -> usize {
@@ -1249,7 +1249,7 @@ impl<'a> DFPNWorker for SingleThreadedWorker<'a> {
         &mut self.minimax
     }
 
-    // TODO: unify with Worker::try_probe
+    // TODO: unify with SPDFPNWorker::try_probe
     fn try_probe(&mut self, data: &Entry, children: &Vec<Child>) {
         let mid = self.stats().mid;
         if let Some(ref mut p) = self.probe {
