@@ -256,7 +256,7 @@ impl DFPN {
     }
 
     fn run(&mut self) -> (Entry, Vec<game::Move>, u64) {
-        let mut probe = if let Some(h) = self.cfg.probe_hash {
+        let mut probe = self.cfg.probe_hash.map(|h| {
             let probelog = fs::OpenOptions::new()
                 .create(true)
                 .truncate(true)
@@ -269,10 +269,8 @@ impl DFPN {
                 out: probelog,
             };
             probe.write_header();
-            Some(probe)
-        } else {
-            None
-        };
+            probe
+        });
 
         let mmcfg = minimax::Config {
             max_depth: Some(self.cfg.minimax_cutoff as i64 + 1),
