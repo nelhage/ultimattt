@@ -226,7 +226,7 @@ struct Child {
     entry: Entry,
 }
 
-const CHECK_TICK_INTERVAL: usize = 1 << 12;
+const CHECK_TICK_WORK: u64 = 500000;
 static TICK_TIME: Duration = Duration::from_millis(500);
 
 impl DFPN {
@@ -308,27 +308,40 @@ impl DFPN {
                     }
                 },
             };
-            let root = Entry {
+            let mut root = Entry {
                 hash: self.root.zobrist(),
                 bounds: Bounds::unity(),
                 child: 0xff,
                 pv: game::Move::none(),
                 work: 0,
             };
-            let (out, work) = worker.mid(
-                Bounds {
-                    phi: INFINITY / 2,
-                    delta: INFINITY / 2,
-                },
-                std::u64::MAX,
-                root,
-                &self.root,
-            );
+            let mut work = 0;
+            while !root.bounds.solved() {
+                let (out, this_work) = worker.mid(
+                    Bounds {
+                        phi: INFINITY / 2,
+                        delta: INFINITY / 2,
+                    },
+                    CHECK_TICK_WORK,
+                    root,
+                    &self.root,
+                );
+                root = out;
+                work += this_work;
+                let elapsed = Instant::now() - self.start;
+                eprintln!(
+                    "t={}.{:03}s mid={} root={:?}",
+                    elapsed.as_secs(),
+                    elapsed.subsec_millis(),
+                    worker.stats.mid,
+                    root.bounds,
+                )
+            }
             self.stats = worker.stats.clone();
             let pv = extract_pv(&worker.cfg, &mut worker.table, &self.root);
             self.stats.tt = worker.table.stats();
             dump_table(&self.cfg, &worker.table).expect("final dump_table");
-            (out, pv, work)
+            (root, pv, work)
         } else {
             let table = if let Some(ref path) = self.cfg.load_table {
                 table::ConcurrentTranspositionTable::from_file(path).expect("invalid table file")
