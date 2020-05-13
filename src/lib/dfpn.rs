@@ -5,7 +5,6 @@ use crate::game;
 use crate::minimax;
 use crate::prove;
 use crate::table;
-use crate::table::Table;
 
 use parking_lot::{Condvar, Mutex, MutexGuard, RwLock};
 use serde::Serialize;
@@ -257,7 +256,7 @@ impl DFPN {
     }
 
     fn run(&mut self) -> (Entry, Vec<game::Move>, u64) {
-        let probe = if let Some(h) = self.cfg.probe_hash {
+        let mut probe = if let Some(h) = self.cfg.probe_hash {
             let probelog = fs::OpenOptions::new()
                 .create(true)
                 .truncate(true)
@@ -291,18 +290,31 @@ impl DFPN {
 
         if self.cfg.threads == 1 {
             let table = if let Some(ref path) = self.cfg.load_table {
-                table::TranspositionTable::from_file(path).expect("invalid table file")
+                table::TranspositionTable::<_, typenum::U4>::from_file(path)
+                    .expect("invalid table file")
             } else {
-                table::TranspositionTable::with_memory(self.cfg.table_size)
+                table::TranspositionTable::<_, typenum::U4>::with_memory(self.cfg.table_size)
             };
-            let mut worker = SingleThreadedWorker {
+            let mut worker = MID {
+                id: 0,
                 cfg: &self.cfg,
                 player: self.root.player(),
                 table: table,
                 stats: Default::default(),
                 stack: Vec::new(),
                 minimax: minimax::Minimax::with_config(&mmcfg),
-                probe: probe,
+                probe: |stats: &Stats, data: &Entry, children: &Vec<Child>| {
+                    if let Some(ref mut p) = probe {
+                        if data.hash != p.hash {
+                            return;
+                        }
+                        let now = Instant::now();
+                        if now < p.tick && !data.bounds.solved() {
+                            return;
+                        }
+                        p.do_probe(now + Duration::from_millis(10), stats.mid, data, children);
+                    }
+                },
             };
             let root = Entry {
                 hash: self.root.zobrist(),
@@ -361,19 +373,41 @@ impl DFPN {
                             .name(format!("worker-{}", i))
                             .spawn(move |_| {
                                 let mut worker = SPDFPNWorker {
-                                    id: i,
-                                    cfg: cfg,
-                                    player: player,
+                                    mid: MID {
+                                        id: i,
+                                        cfg: cfg,
+                                        player: player,
+                                        table: table,
+                                        stack: Vec::new(),
+                                        minimax: minimax::Minimax::with_config(mcref),
+                                        stats: Default::default(),
+                                        probe:
+                                            |stats: &Stats, data: &Entry, children: &Vec<Child>| {
+                                                if let Some(ref p) = probe {
+                                                    let r = p.read();
+                                                    if data.hash != r.hash {
+                                                        return;
+                                                    }
+                                                    let now = Instant::now();
+                                                    if now < r.tick && !data.bounds.solved() {
+                                                        return;
+                                                    }
+
+                                                    let mut w = p.write();
+                                                    w.do_probe(
+                                                        now + Duration::from_millis(10),
+                                                        stats.mid,
+                                                        data,
+                                                        children,
+                                                    );
+                                                }
+                                            },
+                                    },
                                     guard: YieldableGuard::new(sref),
-                                    table: table,
-                                    stats: Default::default(),
-                                    stack: Vec::new(),
                                     wait: cref,
-                                    minimax: minimax::Minimax::with_config(mcref),
-                                    probe: probe,
                                 };
 
-                                (worker.run(root), worker.stats.clone())
+                                (worker.run(root), worker.mid.stats.clone())
                             })
                             .unwrap(),
                     );
@@ -464,27 +498,35 @@ struct Probe {
     out: fs::File,
 }
 
-struct SPDFPNWorker<'a> {
-    cfg: &'a Config,
-    id: usize,
-    player: game::Player,
-    guard: YieldableGuard<'a, SharedState>,
-    table: table::ConcurrentTranspositionTableHandle<'a, Entry, typenum::U4>,
-    stats: Stats,
-    stack: Vec<game::Move>,
-    wait: &'a Condvar,
-    minimax: minimax::Minimax,
-    probe: Option<&'a RwLock<Probe>>,
+impl Probe {
+    fn do_probe(&mut self, tick: Instant, mid: usize, data: &Entry, children: &Vec<Child>) {
+        self.tick = tick;
+
+        for (i, ch) in children.iter().enumerate() {
+            write!(
+                self.out,
+                "{},{},{},{},{},{},{},{}\n",
+                mid,
+                data.work,
+                data.bounds.phi,
+                data.bounds.delta,
+                i,
+                ch.entry.work,
+                ch.entry.bounds.phi,
+                ch.entry.bounds.delta,
+            )
+            .expect("probe line");
+        }
+    }
 }
 
-struct SingleThreadedWorker<'a> {
-    cfg: &'a Config,
-    player: game::Player,
-    table: table::TranspositionTable<Entry, typenum::U4>,
-    stats: Stats,
-    stack: Vec<game::Move>,
-    minimax: minimax::Minimax,
-    probe: Option<Probe>,
+struct SPDFPNWorker<'a, P>
+where
+    P: FnMut(&Stats, &Entry, &Vec<Child>),
+{
+    mid: MID<'a, table::ConcurrentTranspositionTableHandle<'a, Entry, typenum::U4>, P>,
+    guard: YieldableGuard<'a, SharedState>,
+    wait: &'a Condvar,
 }
 
 #[derive(Serialize)]
@@ -493,7 +535,10 @@ struct Metrics<'a> {
     stats: &'a Stats,
 }
 
-impl SPDFPNWorker<'_> {
+impl<Probe> SPDFPNWorker<'_, Probe>
+where
+    Probe: FnMut(&Stats, &Entry, &Vec<Child>),
+{
     fn try_run_job(
         &mut self,
         bounds: Bounds,
@@ -501,12 +546,12 @@ impl SPDFPNWorker<'_> {
         mut data: Entry,
         mut vdata: &mut VPath,
     ) -> (Entry, Bounds, u64, bool) {
-        if self.cfg.debug > 4 {
+        if self.mid.cfg.debug > 4 {
             eprintln!(
                 "{:depth$}[{}]try_run_job: m={} d={depth} bounds=({}, {}) node=({}, {}) vnode=({}, {}) w={}",
                 "",
-                self.id,
-                self.stack
+                self.mid.id,
+                self.mid.stack
                     .last()
                     .map(|&m| game::notation::render_move(m))
                     .unwrap_or_else(|| "<root>".to_owned()),
@@ -525,12 +570,12 @@ impl SPDFPNWorker<'_> {
             "inconsistent select_next_job call"
         );
 
-        self.stats.try_calls += 1;
-        self.stats.try_depth.inc(self.stack.len());
+        self.mid.stats.try_calls += 1;
+        self.mid.stats.try_depth.inc(self.mid.stack.len());
 
         let mut local_work = 0;
 
-        if data.work < self.cfg.max_work_per_job {
+        if data.work < self.mid.cfg.max_work_per_job {
             let vnode = self.vadd(&vdata.entry);
             if data.bounds.phi < data.bounds.delta {
                 // TODO: does < / <= matter here?
@@ -540,12 +585,12 @@ impl SPDFPNWorker<'_> {
             }
 
             self.update_parents(vdata.parent);
-            self.stats.jobs += 1;
-            if self.cfg.debug > 3 {
+            self.mid.stats.jobs += 1;
+            if self.mid.cfg.debug > 3 {
                 eprintln!(
                     "{:2$}[{}]try_run_job: mid[d={}]({}, {}) work={}",
                     "",
-                    self.id,
+                    self.mid.id,
                     vdata.depth(),
                     bounds.phi,
                     bounds.delta,
@@ -553,7 +598,9 @@ impl SPDFPNWorker<'_> {
                 );
             }
             self.guard.drop_lock();
-            let (result, local_work) = self.mid(bounds, self.cfg.max_work_per_job, data, pos);
+            let (result, local_work) =
+                self.mid
+                    .mid(bounds, self.mid.cfg.max_work_per_job, data, pos);
             self.guard.acquire_lock();
 
             self.vremove(pos.zobrist(), result.bounds);
@@ -566,7 +613,7 @@ impl SPDFPNWorker<'_> {
         vdata.children.clear();
         for m in pos.all_moves() {
             let g = pos.make_move(m).expect("all_moves returned illegal move");
-            let entry = self.ttlookup_or_default(&g);
+            let entry = self.mid.ttlookup_or_default(&g);
             let child = Child {
                 position: g,
                 r#move: m,
@@ -588,13 +635,13 @@ impl SPDFPNWorker<'_> {
         }
         debug_assert_eq!(vdata.children.len(), children.len());
 
-        self.stats.branch.inc(children.len());
+        self.mid.stats.branch.inc(children.len());
 
         let mut did_job = false;
         loop {
             if did_job {
                 for (i, child) in children.iter_mut().enumerate() {
-                    if let Some(e) = self.table.lookup(child.position.zobrist()) {
+                    if let Some(e) = self.mid.table.lookup(child.position.zobrist()) {
                         child.entry = e;
                     }
                     if let Some(v) = self.guard.vtable.get(&child.position.zobrist()) {
@@ -608,14 +655,14 @@ impl SPDFPNWorker<'_> {
             vdata.entry.bounds = compute_bounds(&vdata.children);
             populate_pv(&mut data, &children);
 
-            self.try_probe(&data, &children);
+            (self.mid.probe)(&self.mid.stats, &data, &children);
 
-            if self.cfg.debug > 5 {
+            if self.mid.cfg.debug > 5 {
                 eprintln!(
                     "{0:1$}[{2}]try_run_job[loop]: node=({3}, {4}) vnode=({5}, {6}) w={7}",
                     "",
-                    self.stack.len(),
-                    self.id,
+                    self.mid.stack.len(),
+                    self.mid.id,
                     data.bounds.phi,
                     data.bounds.delta,
                     vdata.entry.bounds.phi,
@@ -624,12 +671,16 @@ impl SPDFPNWorker<'_> {
                 );
             }
 
-            self.table.store(&data);
+            self.mid.table.store(&data);
             if vdata.entry.bounds.exceeded(bounds) || did_job {
                 break;
             }
-            let (idx, child_bounds) =
-                select_child(&vdata.children, bounds, &mut vdata.entry, self.cfg.epsilon);
+            let (idx, child_bounds) = select_child(
+                &vdata.children,
+                bounds,
+                &mut vdata.entry,
+                self.mid.cfg.epsilon,
+            );
             let child_data = vdata.children[idx].entry.clone();
             let mut vchild = VPath {
                 parent: Some(vdata as *mut VPath),
@@ -637,14 +688,14 @@ impl SPDFPNWorker<'_> {
                 entry: child_data,
             };
 
-            self.stack.push(children[idx].r#move);
+            self.mid.stack.push(children[idx].r#move);
             let (child_result, child_vbounds, child_work, ran) = self.try_run_job(
                 child_bounds,
                 &children[idx].position,
                 children[idx].entry.clone(),
                 &mut vchild,
             );
-            self.stack.pop();
+            self.mid.stack.pop();
             did_job = ran;
 
             local_work += child_work;
@@ -654,7 +705,7 @@ impl SPDFPNWorker<'_> {
             vdata.children[idx].entry.bounds = child_vbounds;
 
             if children[idx].entry.bounds.delta == 0 {
-                self.stats.winning_child.inc(idx);
+                self.mid.stats.winning_child.inc(idx);
             }
         }
 
@@ -673,7 +724,7 @@ impl SPDFPNWorker<'_> {
             entry: Default::default(),
         };
         loop {
-            let mut root = self.table.lookup(pos.zobrist()).unwrap_or(Entry {
+            let mut root = self.mid.table.lookup(pos.zobrist()).unwrap_or(Entry {
                 bounds: Bounds::unity(),
                 hash: pos.zobrist(),
                 work: 0,
@@ -703,7 +754,7 @@ impl SPDFPNWorker<'_> {
             vroot.entry.bounds = vbounds;
             work += this_work;
 
-            if self.cfg.threads == 1 {
+            if self.mid.cfg.threads == 1 {
                 debug_assert!(self.guard.vtable.is_empty(), "leaking ventries");
                 debug_assert!(root.bounds == vroot.entry.bounds, "vroot differs from root");
                 debug_assert!(
@@ -712,10 +763,10 @@ impl SPDFPNWorker<'_> {
                 );
             }
 
-            if self.cfg.debug > 2 && did_job {
+            if self.mid.cfg.debug > 2 && did_job {
                 eprintln!(
                     "[{}] top root=({},{}) vroot=({},{}) work={}",
-                    self.id,
+                    self.mid.id,
                     root.bounds.phi,
                     root.bounds.delta,
                     vroot.entry.bounds.phi,
@@ -725,20 +776,20 @@ impl SPDFPNWorker<'_> {
             }
 
             let now = Instant::now();
-            if self.cfg.debug > 0 && now > self.guard.tick {
+            if self.mid.cfg.debug > 0 && now > self.guard.tick {
                 let elapsed = now.duration_since(self.guard.start);
                 eprintln!(
                     "[{}]t={}.{:03}s root=({},{}) jobs={} work={}",
-                    self.id,
+                    self.mid.id,
                     elapsed.as_secs(),
                     elapsed.subsec_millis(),
                     root.bounds.phi,
                     root.bounds.delta,
-                    self.stats.jobs,
+                    self.mid.stats.jobs,
                     work,
                 );
                 self.guard.tick = now + TICK_TIME;
-                if let Some(ref p) = self.cfg.write_metrics {
+                if let Some(ref p) = self.mid.cfg.write_metrics {
                     let mut f = fs::OpenOptions::new()
                         .read(false)
                         .append(true)
@@ -749,17 +800,17 @@ impl SPDFPNWorker<'_> {
                         .expect("write_metrics");
                     let e = Metrics {
                         elapsed_ms: elapsed.as_millis(),
-                        stats: &self.stats,
+                        stats: &self.mid.stats,
                     };
                     serde_json::to_writer(&mut f, &e).expect("write json");
                     writeln!(f).expect("write newline");
                 }
             }
 
-            if let Some(_) = self.cfg.dump_table {
+            if let Some(_) = self.mid.cfg.dump_table {
                 if now > self.guard.dump_tick {
-                    dump_table(&self.cfg, &self.table).expect("dump_table failed");
-                    self.guard.dump_tick = now + self.cfg.dump_interval;
+                    dump_table(&self.mid.cfg, &self.mid.table).expect("dump_table failed");
+                    self.guard.dump_tick = now + self.mid.cfg.dump_interval;
                 }
             }
 
@@ -995,27 +1046,35 @@ fn extract_pv<T: table::Table<Entry>>(
     pv
 }
 
-trait DFPNWorker {
-    type Table: table::Table<Entry>;
+struct MID<'a, Table, Probe>
+where
+    Table: table::Table<Entry>,
+    Probe: FnMut(&Stats, &Entry, &Vec<Child>),
+{
+    id: usize,
+    cfg: &'a Config,
+    table: Table,
+    player: game::Player,
+    stack: Vec<game::Move>,
+    probe: Probe,
+    minimax: minimax::Minimax,
+    stats: Stats,
+}
 
-    fn id(&self) -> usize;
-    fn cfg(&self) -> &Config;
-    fn stack(&mut self) -> &mut Vec<game::Move>;
-    fn stats(&mut self) -> &mut Stats;
-    fn player(&self) -> game::Player;
-    fn table(&mut self) -> &mut Self::Table;
-    fn minimax(&mut self) -> &mut minimax::Minimax;
-    fn try_probe(&mut self, data: &Entry, children: &Vec<Child>);
-
+impl<'a, Table, Probe> MID<'a, Table, Probe>
+where
+    Table: table::Table<Entry>,
+    Probe: FnMut(&Stats, &Entry, &Vec<Child>),
+{
     fn try_minimax(&mut self, pos: &game::Game) -> Option<bool> {
-        self.stats().minimax += 1;
-        let (_aipv, aistats) = self.minimax().analyze(pos);
+        self.stats.minimax += 1;
+        let (_aipv, aistats) = self.minimax.analyze(pos);
         if let Some(st) = aistats.last() {
             if st.score >= minimax::EVAL_WON {
-                self.stats().minimax_solve += 1;
+                self.stats.minimax_solve += 1;
                 return Some(true);
             } else if st.score <= minimax::EVAL_LOST {
-                self.stats().minimax_solve += 1;
+                self.stats.minimax_solve += 1;
                 return Some(false);
             }
         }
@@ -1029,30 +1088,30 @@ trait DFPNWorker {
         mut data: Entry,
         pos: &game::Game,
     ) -> (Entry, u64) {
-        let depth = self.stack().len();
-        if self.cfg().debug > 6 {
+        let depth = self.stack.len();
+        if self.cfg.debug > 6 {
             eprintln!(
                 "{:4$}[{}]mid[{}]: mid={} d={} bounds=({}, {}) max_work={}",
                 "",
-                self.id(),
-                self.stack()
+                self.id,
+                self.stack
                     .last()
                     .map(|&m| game::notation::render_move(m))
                     .unwrap_or_else(|| "<root>".to_owned()),
-                self.stats().mid,
+                self.stats.mid,
                 depth,
                 bounds.phi,
                 bounds.delta,
                 max_work,
             );
         }
-        self.stats().mid += 1;
-        self.stats().mid_depth.inc(depth);
+        self.stats.mid += 1;
+        self.stats.mid_depth.inc(depth);
 
         debug_assert!(
             !data.bounds.exceeded(bounds),
             "inconsistent mid call d={}, bounds=({}, {}) me=({}, {}) w={}",
-            self.stack().len(),
+            self.stack.len(),
             bounds.phi,
             bounds.delta,
             data.bounds.phi,
@@ -1062,13 +1121,13 @@ trait DFPNWorker {
 
         let terminal = match pos.game_state() {
             game::BoardState::InPlay => {
-                if pos.bound_depth() <= self.cfg().minimax_cutoff {
+                if pos.bound_depth() <= self.cfg.minimax_cutoff {
                     self.try_minimax(pos)
                 } else {
                     None
                 }
             }
-            game::BoardState::Drawn => Some(pos.player() != self.player()),
+            game::BoardState::Drawn => Some(pos.player() != self.player),
             game::BoardState::Won(p) => Some(p == pos.player()),
         };
         if let Some(v) = terminal {
@@ -1077,9 +1136,9 @@ trait DFPNWorker {
             } else {
                 data.bounds = Bounds::losing();
             }
-            self.stats().terminal += 1;
+            self.stats.terminal += 1;
             data.work = 1;
-            self.table().store(&data);
+            self.table.store(&data);
             return (data, 1);
         }
 
@@ -1100,19 +1159,19 @@ trait DFPNWorker {
             }
         }
 
-        self.stats().branch.inc(children.len());
+        self.stats.branch.inc(children.len());
 
         loop {
             data.bounds = compute_bounds(&children);
-            self.try_probe(&data, &children);
+            (self.probe)(&self.stats, &data, &children);
 
             if local_work >= max_work || data.bounds.exceeded(bounds) {
                 break;
             }
             let (best_idx, child_bounds) =
-                select_child(&children, bounds, &mut data, self.cfg().epsilon);
+                select_child(&children, bounds, &mut data, self.cfg.epsilon);
             let child = &children[best_idx];
-            self.stack().push(children[best_idx].r#move);
+            self.stack.push(children[best_idx].r#move);
             let (child_entry, child_work) = self.mid(
                 child_bounds,
                 max_work - local_work,
@@ -1120,24 +1179,24 @@ trait DFPNWorker {
                 &child.position,
             );
             children[best_idx].entry = child_entry;
-            self.stack().pop();
+            self.stack.pop();
             local_work += child_work;
 
             if children[best_idx].entry.bounds.delta == 0 {
-                self.stats().winning_child.inc(best_idx);
+                self.stats.winning_child.inc(best_idx);
             }
         }
 
         data.work += local_work;
 
         populate_pv(&mut data, &children);
-        let did_store = self.table().store(&data);
-        if self.cfg().debug > 6 {
+        let did_store = self.table.store(&data);
+        if self.cfg.debug > 6 {
             eprintln!(
                 "{:depth$}[{id}]exit mid bounds={bounds:?} local_work={local_work} store={did_store}",
                 "",
-                id=self.id(),
-                depth = self.stack().len(),
+                id=self.id,
+                depth = self.stack.len(),
                 bounds = data.bounds,
                 local_work = local_work,
                 did_store = did_store,
@@ -1147,7 +1206,7 @@ trait DFPNWorker {
     }
 
     fn ttlookup_or_default(&mut self, g: &game::Game) -> Entry {
-        let te = self.table().lookup(g.zobrist());
+        let te = self.table.lookup(g.zobrist());
         te.unwrap_or_else(|| {
             let bounds = match g.game_state() {
                 game::BoardState::Won(p) => {
@@ -1158,7 +1217,7 @@ trait DFPNWorker {
                     }
                 }
                 game::BoardState::Drawn => {
-                    if g.player() == self.player() {
+                    if g.player() == self.player {
                         Bounds::losing()
                     } else {
                         Bounds::winning()
@@ -1173,112 +1232,5 @@ trait DFPNWorker {
                 ..Default::default()
             }
         })
-    }
-}
-
-impl<'a> DFPNWorker for SPDFPNWorker<'a> {
-    type Table = table::ConcurrentTranspositionTableHandle<'a, Entry, typenum::U4>;
-
-    fn id(&self) -> usize {
-        self.id
-    }
-    fn cfg(&self) -> &Config {
-        &self.cfg
-    }
-    fn stack(&mut self) -> &mut Vec<game::Move> {
-        &mut self.stack
-    }
-    fn stats(&mut self) -> &mut Stats {
-        &mut self.stats
-    }
-    fn player(&self) -> game::Player {
-        self.player
-    }
-    fn table(&mut self) -> &mut Self::Table {
-        &mut self.table
-    }
-
-    fn minimax(&mut self) -> &mut minimax::Minimax {
-        &mut self.minimax
-    }
-
-    fn try_probe(&mut self, data: &Entry, children: &Vec<Child>) {
-        let mid = self.stats().mid;
-        if let Some(ref mut p) = self.probe {
-            let r = p.read();
-            if data.hash != r.hash {
-                return;
-            }
-            let now = Instant::now();
-            if now < r.tick && !data.bounds.solved() {
-                return;
-            }
-
-            let mut w = p.write();
-            w.do_probe(now + Duration::from_millis(10), mid, data, children);
-        }
-    }
-}
-
-impl<'a> DFPNWorker for SingleThreadedWorker<'a> {
-    type Table = table::TranspositionTable<Entry, typenum::U4>;
-
-    fn id(&self) -> usize {
-        0
-    }
-    fn cfg(&self) -> &Config {
-        &self.cfg
-    }
-    fn stack(&mut self) -> &mut Vec<game::Move> {
-        &mut self.stack
-    }
-    fn stats(&mut self) -> &mut Stats {
-        &mut self.stats
-    }
-    fn player(&self) -> game::Player {
-        self.player
-    }
-    fn table(&mut self) -> &mut Self::Table {
-        &mut self.table
-    }
-    fn minimax(&mut self) -> &mut minimax::Minimax {
-        &mut self.minimax
-    }
-
-    // TODO: unify with SPDFPNWorker::try_probe
-    fn try_probe(&mut self, data: &Entry, children: &Vec<Child>) {
-        let mid = self.stats().mid;
-        if let Some(ref mut p) = self.probe {
-            if data.hash != p.hash {
-                return;
-            }
-            let now = Instant::now();
-            if now < p.tick && !data.bounds.solved() {
-                return;
-            }
-            p.do_probe(now + Duration::from_millis(10), mid, data, children);
-        }
-    }
-}
-
-impl Probe {
-    fn do_probe(&mut self, tick: Instant, mid: usize, data: &Entry, children: &Vec<Child>) {
-        self.tick = tick;
-
-        for (i, ch) in children.iter().enumerate() {
-            write!(
-                self.out,
-                "{},{},{},{},{},{},{},{}\n",
-                mid,
-                data.work,
-                data.bounds.phi,
-                data.bounds.delta,
-                i,
-                ch.entry.work,
-                ch.entry.bounds.phi,
-                ch.entry.bounds.delta,
-            )
-            .expect("probe line");
-        }
     }
 }
