@@ -268,13 +268,7 @@ impl DFPN {
                 tick: self.start,
                 out: probelog,
             };
-            {
-                write!(
-                    probe.out,
-                    "mid,node_work,node_phi,node_delta,child,work,phi,delta\n"
-                )
-                .expect("probe header");
-            }
+            probe.write_header();
             Some(probe)
         } else {
             None
@@ -495,6 +489,14 @@ struct Probe {
 }
 
 impl Probe {
+    fn write_header(&mut self) {
+        write!(
+            self.out,
+            "mid,node_work,node_phi,node_delta,child,work,phi,delta\n"
+        )
+        .expect("probe header");
+    }
+
     fn do_probe(&mut self, tick: Instant, mid: usize, data: &Entry, children: &Vec<Child>) {
         self.tick = tick;
 
