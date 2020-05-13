@@ -280,7 +280,7 @@ impl DFPN {
             draw_winner: Some(self.root.player().other()),
         };
 
-        if self.cfg.threads == 1 {
+        if self.cfg.threads == 0 {
             let table = if let Some(ref path) = self.cfg.load_table {
                 table::TranspositionTable::<_, typenum::U4>::from_file(path)
                     .expect("invalid table file")
