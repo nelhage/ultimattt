@@ -214,6 +214,8 @@ pub struct Opt {
     #[structopt(long, default_value = "1G", parse(try_from_str=parse_bytesize))]
     table_mem: bytesize::ByteSize,
     #[structopt(long, default_value = "1")]
+    threads: usize,
+    #[structopt(long, default_value = "1")]
     debug: usize,
     #[structopt(subcommand)]
     cmd: Command,
@@ -239,8 +241,26 @@ struct AnalyzeParameters {
     dfpn: bool,
     #[structopt(long)]
     max_nodes: Option<usize>,
+    #[structopt(long)]
+    max_work_per_job: Option<u64>,
     #[structopt(long, default_value = "0.125")]
     epsilon: f64,
+    #[structopt(long)]
+    dump_table: Option<String>,
+    #[structopt(long)]
+    load_table: Option<String>,
+    #[structopt(long)]
+    minimax_cutoff: Option<usize>,
+    #[structopt(long)]
+    write_metrics: Option<String>,
+    #[structopt(long, default_value = "60s", parse(try_from_str=parse_duration))]
+    dump_interval: Duration,
+    #[structopt(long)]
+    probe_hash: Option<u64>,
+    #[structopt(long)]
+    probe: Option<String>,
+    #[structopt(long, default_value = "probe.csv")]
+    probe_log: String,
     position: String,
 }
 
@@ -262,7 +282,7 @@ fn ai_config(opt: &Opt) -> minimax::Config {
         timeout: Some(opt.timeout),
         max_depth: opt.depth,
         debug: opt.debug,
-        table_bytes: opt.table_mem.as_u64() as usize,
+        table_bytes: Some(opt.table_mem.as_u64() as usize),
         ..Default::default()
     }
 }
@@ -395,28 +415,64 @@ fn main() -> Result<(), std::io::Error> {
                     result.allocated,
                 );
             } else if analyze.dfpn {
-                let result = dfpn::DFPN::prove(
-                    &dfpn::Config {
-                        table_size: opt.table_mem.as_u64() as usize,
-                        timeout: Some(opt.timeout),
-                        debug: opt.debug,
-                        epsilon: analyze.epsilon,
-                        ..Default::default()
-                    },
-                    &game,
-                );
+                let probe_hash = match (analyze.probe_hash, analyze.probe.as_ref()) {
+                    (None, None) => None,
+                    (Some(p), None) => Some(p),
+                    (None, Some(moves)) => Some(if moves.len() == 0 {
+                        game.zobrist()
+                    } else {
+                        moves
+                            .split(" ")
+                            .fold(game.clone(), |pos, mv| {
+                                pos.make_move(game::notation::parse_move(mv).expect("parse_move"))
+                                    .expect("make_move")
+                            })
+                            .zobrist()
+                    }),
+                    (Some(_), Some(_)) => panic!("--probe-hash and --probe are incompatible"),
+                };
+                let mut cfg = dfpn::Config {
+                    threads: opt.threads,
+                    table_size: opt.table_mem.as_u64() as usize,
+                    timeout: Some(opt.timeout),
+                    debug: opt.debug,
+                    epsilon: analyze.epsilon,
+                    dump_table: analyze.dump_table.clone(),
+                    load_table: analyze.load_table.clone(),
+                    dump_interval: analyze.dump_interval.clone(),
+                    write_metrics: analyze.write_metrics.clone(),
+                    probe_log: analyze.probe_log.clone(),
+                    probe_hash: probe_hash,
+                    ..Default::default()
+                };
+                if let Some(m) = analyze.max_work_per_job {
+                    cfg.max_work_per_job = m;
+                }
+                if let Some(c) = analyze.minimax_cutoff {
+                    cfg.minimax_cutoff = c;
+                }
+                let result = dfpn::DFPN::prove(&cfg, &game);
                 println!(
-                    "result={:?} time={}.{:03}s pn={} dpn={} mid={} tthit={}/{} ({:.1}%) ttstore={}",
+                    "result={:?} time={}.{:03}s pn={} dpn={} mid={} try={} jobs={} tthit={}/{} ({:.1}%) ttstore={} minimax={}/{}",
                     result.value,
                     result.duration.as_secs(),
                     result.duration.subsec_millis(),
                     result.bounds.phi,
                     result.bounds.delta,
                     result.stats.mid,
-                    result.stats.tthit,
-                    result.stats.ttlookup,
-                    100.0 * (result.stats.tthit as f64 / result.stats.ttlookup as f64),
-                    result.stats.ttstore,
+                    result.stats.try_calls,
+                    result.stats.jobs,
+                    result.stats.tt.hits,
+                    result.stats.tt.lookups,
+                    100.0 * (result.stats.tt.hits as f64 / result.stats.tt.lookups as f64),
+                    result.stats.tt.stores,
+                    result.stats.minimax_solve,
+                    result.stats.minimax,
+                );
+                println!(
+                    "  perf: mid/ms={:.2} job/ms={:.2}",
+                    (result.stats.mid as f64) / (result.duration.as_millis() as f64),
+                    (result.stats.jobs as f64) / (result.duration.as_millis() as f64),
                 );
                 let mut pv = String::new();
                 for m in result.pv.iter() {

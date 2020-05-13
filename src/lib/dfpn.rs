@@ -1,25 +1,93 @@
+extern crate crossbeam;
+extern crate parking_lot;
+
 use crate::game;
+use crate::minimax;
 use crate::prove;
 use crate::table;
+
+use parking_lot::{Condvar, Mutex, MutexGuard, RwLock};
+use serde::Serialize;
 use std::cmp::{max, min};
+use std::collections::hash_map::HashMap;
+use std::io::Write;
+use std::ops::{Deref, DerefMut};
 use std::time::{Duration, Instant};
+use std::{fmt, fs, io};
 use typenum;
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize)]
+pub struct Histogram {
+    pub counts: Vec<usize>,
+}
+
+impl Histogram {
+    pub fn merge(&self, other: &Histogram) -> Histogram {
+        let mut out = Vec::new();
+        out.resize(max(self.counts.len(), other.counts.len()), 0);
+        for (i, n) in self.counts.iter().enumerate() {
+            out[i] += n;
+        }
+        for (i, n) in other.counts.iter().enumerate() {
+            out[i] += n;
+        }
+        Histogram { counts: out }
+    }
+
+    pub fn inc(&mut self, idx: usize) {
+        if self.counts.len() <= idx {
+            self.counts.resize(idx + 1, 0);
+        }
+        self.counts[idx] += 1;
+    }
+}
+
+#[derive(Clone, Debug, Default, Serialize)]
 pub struct Stats {
     pub mid: usize,
-    pub ttlookup: usize,
-    pub tthit: usize,
-    pub ttstore: usize,
     pub terminal: usize,
+    pub try_calls: usize,
+    pub jobs: usize,
+    pub try_depth: Histogram,
+    pub mid_depth: Histogram,
+    pub winning_child: Histogram,
+    pub branch: Histogram,
+    pub minimax: usize,
+    pub minimax_solve: usize,
+    pub tt: table::Stats,
+}
+
+impl Stats {
+    fn merge(&self, other: &Stats) -> Stats {
+        Stats {
+            mid: self.mid + other.mid,
+            terminal: self.terminal + other.terminal,
+            jobs: self.jobs + other.jobs,
+            try_calls: self.try_calls + other.try_calls,
+            minimax: self.minimax + other.minimax,
+            minimax_solve: self.minimax_solve + other.minimax_solve,
+            tt: self.tt.merge(&other.tt),
+            mid_depth: self.mid_depth.merge(&other.mid_depth),
+            try_depth: self.try_depth.merge(&other.try_depth),
+            winning_child: self.winning_child.merge(&other.winning_child),
+            branch: self.branch.merge(&other.branch),
+        }
+    }
 }
 
 const INFINITY: u32 = 1 << 31;
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq)]
+#[repr(C)]
 pub struct Bounds {
     pub phi: u32,
     pub delta: u32,
+}
+
+impl fmt::Debug for Bounds {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "({}, {})", self.phi, self.delta)
+    }
 }
 
 impl Bounds {
@@ -47,14 +115,24 @@ impl Bounds {
             delta: INFINITY,
         }
     }
+
+    fn exceeded(&self, other: Bounds) -> bool {
+        self.phi >= other.phi || self.delta >= other.delta
+    }
+
+    fn solved(&self) -> bool {
+        self.phi == 0 || self.delta == 0
+    }
 }
 
 #[derive(Clone)]
+#[repr(C)]
 struct Entry {
     bounds: Bounds,
     hash: u64,
     work: u64,
     pv: game::Move,
+    child: u8,
 }
 
 impl table::Entry for Entry {
@@ -63,7 +141,12 @@ impl table::Entry for Entry {
     }
 
     fn better_than(&self, other: &Entry) -> bool {
-        self.work > other.work
+        if self.hash == other.hash {
+            if self.bounds.solved() != other.bounds.solved() {
+                return self.bounds.solved();
+            }
+        }
+        self.work >= other.work
     }
 
     fn valid(&self) -> bool {
@@ -78,25 +161,44 @@ impl Default for Entry {
             hash: 0,
             work: std::u64::MAX,
             pv: game::Move::none(),
+            child: std::u8::MAX,
         }
     }
 }
 
 #[derive(Clone)]
 pub struct Config {
+    pub threads: usize,
     pub table_size: usize,
     pub timeout: Option<Duration>,
     pub debug: usize,
     pub epsilon: f64,
+    pub max_work_per_job: u64,
+    pub dump_table: Option<String>,
+    pub load_table: Option<String>,
+    pub dump_interval: Duration,
+    pub minimax_cutoff: usize,
+    pub write_metrics: Option<String>,
+    pub probe_hash: Option<u64>,
+    pub probe_log: String,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Config {
+            threads: 0,
             table_size: table::DEFAULT_TABLE_SIZE,
             timeout: None,
             debug: 0,
             epsilon: 1.0 / 8.0,
+            max_work_per_job: 500,
+            dump_table: None,
+            load_table: None,
+            dump_interval: Duration::from_secs(30),
+            minimax_cutoff: 0,
+            write_metrics: None,
+            probe_hash: None,
+            probe_log: "probe.csv".to_owned(),
         }
     }
 }
@@ -112,14 +214,12 @@ pub struct ProveResult {
 
 pub struct DFPN {
     start: Instant,
-    tick: Instant,
     cfg: Config,
-    table: table::TranspositionTable<Entry, typenum::U4>,
     stats: Stats,
     root: game::Game,
-    stack: Vec<game::Move>,
 }
 
+#[derive(Clone)]
 struct Child {
     position: game::Game,
     r#move: game::Move,
@@ -135,25 +235,10 @@ impl DFPN {
         let mut prover = DFPN {
             root: g.clone(),
             start: start,
-            tick: start,
             cfg: cfg.clone(),
-            table: table::TranspositionTable::with_memory(cfg.table_size),
             stats: Default::default(),
-            stack: Vec::new(),
         };
-        let (result, work) = prover.mid(
-            Bounds {
-                phi: INFINITY / 2,
-                delta: INFINITY / 2,
-            },
-            Entry {
-                bounds: Bounds::unity(),
-                hash: g.zobrist(),
-                work: 0,
-                pv: game::Move::none(),
-            },
-            g,
-        );
+        let (result, pv, work) = prover.run();
         ProveResult {
             value: if result.bounds.phi == 0 {
                 prove::Evaluation::True
@@ -166,76 +251,879 @@ impl DFPN {
             bounds: result.bounds,
             stats: prover.stats.clone(),
             duration: Instant::now().duration_since(prover.start),
-            pv: prover.extract_pv(),
+            pv: pv,
         }
     }
 
-    fn extract_pv(&self) -> Vec<game::Move> {
-        let mut pv = Vec::new();
-        let mut g = self.root.clone();
-        loop {
-            match g.game_state() {
-                game::BoardState::InPlay => (),
-                _ => break,
+    fn run(&mut self) -> (Entry, Vec<game::Move>, u64) {
+        let mut probe = self.cfg.probe_hash.map(|h| {
+            let probelog = fs::OpenOptions::new()
+                .create(true)
+                .truncate(true)
+                .write(true)
+                .open(&self.cfg.probe_log)
+                .expect("open probe log");
+            let mut probe = Probe {
+                hash: h,
+                tick: self.start,
+                out: probelog,
             };
-            if let Some(ent) = self.table.lookup(g.zobrist()) {
-                if ent.bounds.phi != 0 && ent.bounds.delta != 0 {
-                    assert!(
-                        pv.len() == 0,
-                        "PV contains unproven positions d={} bounds=({}, {}) work={}",
-                        pv.len(),
-                        ent.bounds.phi,
-                        ent.bounds.delta,
-                        ent.work,
-                    );
-                    break;
-                }
-                pv.push(ent.pv);
-                g = g.make_move(ent.pv).unwrap_or_else(|_| {
-                    panic!("PV contained illegal move depth={} m={}", pv.len(), ent.pv)
-                });
+            probe.write_header();
+            probe
+        });
+
+        let mmcfg = minimax::Config {
+            max_depth: Some(self.cfg.minimax_cutoff as i64 + 1),
+            timeout: Some(Duration::from_secs(1)),
+            debug: if self.cfg.debug > 6 { 1 } else { 0 },
+            table_bytes: None,
+            draw_winner: Some(self.root.player().other()),
+        };
+
+        if self.cfg.threads == 1 {
+            let table = if let Some(ref path) = self.cfg.load_table {
+                table::TranspositionTable::<_, typenum::U4>::from_file(path)
+                    .expect("invalid table file")
             } else {
+                table::TranspositionTable::<_, typenum::U4>::with_memory(self.cfg.table_size)
+            };
+            let mut worker = MID {
+                id: 0,
+                cfg: &self.cfg,
+                player: self.root.player(),
+                table: table,
+                stats: Default::default(),
+                stack: Vec::new(),
+                minimax: minimax::Minimax::with_config(&mmcfg),
+                probe: |stats: &Stats, data: &Entry, children: &Vec<Child>| {
+                    if let Some(ref mut p) = probe {
+                        if data.hash != p.hash {
+                            return;
+                        }
+                        let now = Instant::now();
+                        if now < p.tick && !data.bounds.solved() {
+                            return;
+                        }
+                        p.do_probe(now + Duration::from_millis(10), stats.mid, data, children);
+                    }
+                },
+            };
+            let root = Entry {
+                hash: self.root.zobrist(),
+                bounds: Bounds::unity(),
+                child: 0xff,
+                pv: game::Move::none(),
+                work: 0,
+            };
+            let (out, work) = worker.mid(
+                Bounds {
+                    phi: INFINITY / 2,
+                    delta: INFINITY / 2,
+                },
+                std::u64::MAX,
+                root,
+                &self.root,
+            );
+            self.stats = worker.stats.clone();
+            let pv = extract_pv(&worker.cfg, &mut worker.table, &self.root);
+            self.stats.tt = worker.table.stats();
+            dump_table(&self.cfg, &worker.table).expect("final dump_table");
+            (out, pv, work)
+        } else {
+            let table = if let Some(ref path) = self.cfg.load_table {
+                table::ConcurrentTranspositionTable::from_file(path).expect("invalid table file")
+            } else {
+                table::ConcurrentTranspositionTable::with_memory(self.cfg.table_size)
+            };
+            let shared = Mutex::new(SharedState {
+                vtable: HashMap::new(),
+                shutdown: false,
+                start: self.start,
+                tick: self.start,
+                dump_tick: self.start + self.cfg.dump_interval,
+            });
+            let cv = Condvar::new();
+
+            let mut rwlock: Option<RwLock<Probe>> = None;
+            let probe = probe.map(|p| {
+                rwlock = Some(RwLock::new(p));
+                rwlock.as_ref().unwrap()
+            });
+            let (work, stats) = crossbeam::scope(|s| {
+                let mut guards = Vec::new();
+                for i in 0..self.cfg.threads {
+                    let player = self.root.player();
+                    let root = &self.root;
+                    let cfg = &self.cfg;
+                    let table = table.handle();
+                    let cref = &cv;
+                    let sref = &shared;
+                    let probe = probe.clone();
+                    let mcref = &mmcfg;
+                    guards.push(
+                        s.builder()
+                            .name(format!("worker-{}", i))
+                            .spawn(move |_| {
+                                let mut worker = SPDFPNWorker {
+                                    mid: MID {
+                                        id: i,
+                                        cfg: cfg,
+                                        player: player,
+                                        table: table,
+                                        stack: Vec::new(),
+                                        minimax: minimax::Minimax::with_config(mcref),
+                                        stats: Default::default(),
+                                        probe:
+                                            |stats: &Stats, data: &Entry, children: &Vec<Child>| {
+                                                if let Some(ref p) = probe {
+                                                    let r = p.read();
+                                                    if data.hash != r.hash {
+                                                        return;
+                                                    }
+                                                    let now = Instant::now();
+                                                    if now < r.tick && !data.bounds.solved() {
+                                                        return;
+                                                    }
+
+                                                    let mut w = p.write();
+                                                    w.do_probe(
+                                                        now + Duration::from_millis(10),
+                                                        stats.mid,
+                                                        data,
+                                                        children,
+                                                    );
+                                                }
+                                            },
+                                    },
+                                    guard: YieldableGuard::new(sref),
+                                    wait: cref,
+                                };
+
+                                (worker.run(root), worker.mid.stats.clone())
+                            })
+                            .unwrap(),
+                    );
+                }
+                guards
+                    .into_iter()
+                    .map(|g| g.join().expect("thread panicked"))
+                    .fold(
+                        (0, Default::default()),
+                        |a: (u64, Stats), b: (u64, Stats)| (a.0 + b.0, a.1.merge(&b.1)),
+                    )
+            })
+            .expect("thread panicked");
+
+            self.stats = self.stats.merge(&stats);
+            let pv = extract_pv(&self.cfg, &mut table.handle(), &self.root);
+            dump_table(&self.cfg, &table.handle()).expect("final dump_table");
+            self.stats.tt = table.stats();
+            (
+                table
+                    .lookup(&mut self.stats.tt, self.root.zobrist())
+                    .expect("no entry for root"),
+                pv,
+                work,
+            )
+        }
+    }
+}
+
+struct YieldableGuard<'a, T> {
+    lock: &'a Mutex<T>,
+    guard: Option<MutexGuard<'a, T>>,
+}
+
+impl<'a, T> YieldableGuard<'a, T> {
+    fn new(lk: &'a Mutex<T>) -> Self {
+        YieldableGuard {
+            lock: lk,
+            guard: Some(lk.lock()),
+        }
+    }
+
+    fn drop_lock(&mut self) {
+        debug_assert!(self.guard.is_some());
+
+        self.guard = None;
+    }
+
+    fn acquire_lock(&mut self) {
+        debug_assert!(self.guard.is_none());
+        self.guard = Some(self.lock.lock());
+    }
+
+    fn wait(&mut self, cond: &Condvar) {
+        cond.wait(self.guard.as_mut().unwrap())
+    }
+}
+
+impl<'a, T> Deref for YieldableGuard<'a, T> {
+    type Target = T;
+
+    fn deref(&self) -> &T {
+        self.guard.as_ref().unwrap().deref()
+    }
+}
+
+impl<'a, T> DerefMut for YieldableGuard<'a, T> {
+    fn deref_mut(&mut self) -> &mut T {
+        self.guard.as_mut().unwrap().deref_mut()
+    }
+}
+
+struct SharedState {
+    vtable: HashMap<u64, VEntry>,
+    shutdown: bool,
+    start: Instant,
+    tick: Instant,
+    dump_tick: Instant,
+}
+
+struct Probe {
+    tick: Instant,
+    hash: u64,
+    out: fs::File,
+}
+
+impl Probe {
+    fn write_header(&mut self) {
+        write!(
+            self.out,
+            "mid,node_work,node_phi,node_delta,child,work,phi,delta\n"
+        )
+        .expect("probe header");
+    }
+
+    fn do_probe(&mut self, tick: Instant, mid: usize, data: &Entry, children: &Vec<Child>) {
+        self.tick = tick;
+
+        for (i, ch) in children.iter().enumerate() {
+            write!(
+                self.out,
+                "{},{},{},{},{},{},{},{}\n",
+                mid,
+                data.work,
+                data.bounds.phi,
+                data.bounds.delta,
+                i,
+                ch.entry.work,
+                ch.entry.bounds.phi,
+                ch.entry.bounds.delta,
+            )
+            .expect("probe line");
+        }
+    }
+}
+
+struct SPDFPNWorker<'a, P>
+where
+    P: FnMut(&Stats, &Entry, &Vec<Child>),
+{
+    mid: MID<'a, table::ConcurrentTranspositionTableHandle<'a, Entry, typenum::U4>, P>,
+    guard: YieldableGuard<'a, SharedState>,
+    wait: &'a Condvar,
+}
+
+#[derive(Serialize)]
+struct Metrics<'a> {
+    elapsed_ms: u128,
+    stats: &'a Stats,
+}
+
+impl<Probe> SPDFPNWorker<'_, Probe>
+where
+    Probe: FnMut(&Stats, &Entry, &Vec<Child>),
+{
+    fn try_run_job(
+        &mut self,
+        bounds: Bounds,
+        pos: &game::Game,
+        mut data: Entry,
+        mut vdata: &mut VPath,
+    ) -> (Entry, Bounds, u64, bool) {
+        if self.mid.cfg.debug > 4 {
+            eprintln!(
+                "{:depth$}[{}]try_run_job: m={} d={depth} bounds=({}, {}) node=({}, {}) vnode=({}, {}) w={}",
+                "",
+                self.mid.id,
+                self.mid.stack
+                    .last()
+                    .map(|&m| game::notation::render_move(m))
+                    .unwrap_or_else(|| "<root>".to_owned()),
+                bounds.phi,
+                bounds.delta,
+                data.bounds.phi,
+                data.bounds.delta,
+                vdata.entry.bounds.phi,
+                vdata.entry.bounds.delta,
+                data.work,
+                depth=vdata.depth(),
+            );
+        }
+        debug_assert!(
+            !vdata.entry.bounds.exceeded(bounds),
+            "inconsistent select_next_job call"
+        );
+
+        self.mid.stats.try_calls += 1;
+        self.mid.stats.try_depth.inc(self.mid.stack.len());
+
+        let mut local_work = 0;
+
+        if data.work < self.mid.cfg.max_work_per_job {
+            let vnode = self.vadd(&vdata.entry);
+            if data.bounds.phi < data.bounds.delta {
+                // TODO: does < / <= matter here?
+                vnode.entry.bounds = Bounds::winning();
+            } else {
+                vnode.entry.bounds = Bounds::losing();
+            }
+
+            self.update_parents(vdata.parent);
+            self.mid.stats.jobs += 1;
+            if self.mid.cfg.debug > 3 {
+                eprintln!(
+                    "{:2$}[{}]try_run_job: mid[d={}]({}, {}) work={}",
+                    "",
+                    self.mid.id,
+                    vdata.depth(),
+                    bounds.phi,
+                    bounds.delta,
+                    data.work,
+                );
+            }
+            self.guard.drop_lock();
+            let (result, local_work) =
+                self.mid
+                    .mid(bounds, self.mid.cfg.max_work_per_job, data, pos);
+            self.guard.acquire_lock();
+
+            self.vremove(pos.zobrist(), result.bounds);
+            let b = result.bounds;
+            return (result, b, local_work, true);
+        }
+
+        // build children
+        let mut children = Vec::new();
+        vdata.children.clear();
+        for m in pos.all_moves() {
+            let g = pos.make_move(m).expect("all_moves returned illegal move");
+            let entry = self.mid.ttlookup_or_default(&g);
+            let child = Child {
+                position: g,
+                r#move: m,
+                entry: entry,
+            };
+            let vchild = self
+                .guard
+                .vtable
+                .get(&child.entry.hash)
+                .map(|ve| Child {
+                    entry: ve.entry.clone(),
+                    r#move: m,
+                    position: child.position.clone(),
+                })
+                .unwrap_or_else(|| child.clone());
+
+            vdata.children.push(vchild);
+            children.push(child);
+        }
+        debug_assert_eq!(vdata.children.len(), children.len());
+
+        self.mid.stats.branch.inc(children.len());
+
+        let mut did_job = false;
+        loop {
+            if did_job {
+                for (i, child) in children.iter_mut().enumerate() {
+                    if let Some(e) = self.mid.table.lookup(child.position.zobrist()) {
+                        child.entry = e;
+                    }
+                    if let Some(v) = self.guard.vtable.get(&child.position.zobrist()) {
+                        vdata.children[i].entry = v.entry.clone();
+                    } else {
+                        vdata.children[i].entry = child.entry.clone();
+                    }
+                }
+            }
+            data.bounds = compute_bounds(&children);
+            vdata.entry.bounds = compute_bounds(&vdata.children);
+            populate_pv(&mut data, &children);
+
+            (self.mid.probe)(&self.mid.stats, &data, &children);
+
+            if self.mid.cfg.debug > 5 {
+                eprintln!(
+                    "{0:1$}[{2}]try_run_job[loop]: node=({3}, {4}) vnode=({5}, {6}) w={7}",
+                    "",
+                    self.mid.stack.len(),
+                    self.mid.id,
+                    data.bounds.phi,
+                    data.bounds.delta,
+                    vdata.entry.bounds.phi,
+                    vdata.entry.bounds.delta,
+                    data.work,
+                );
+            }
+
+            self.mid.table.store(&data);
+            if vdata.entry.bounds.exceeded(bounds) || did_job {
                 break;
             }
+            let (idx, child_bounds) = select_child(
+                &vdata.children,
+                bounds,
+                &mut vdata.entry,
+                self.mid.cfg.epsilon,
+            );
+            let child_data = vdata.children[idx].entry.clone();
+            let mut vchild = VPath {
+                parent: Some(vdata as *mut VPath),
+                children: Vec::new(),
+                entry: child_data,
+            };
+
+            self.mid.stack.push(children[idx].r#move);
+            let (child_result, child_vbounds, child_work, ran) = self.try_run_job(
+                child_bounds,
+                &children[idx].position,
+                children[idx].entry.clone(),
+                &mut vchild,
+            );
+            self.mid.stack.pop();
+            did_job = ran;
+
+            local_work += child_work;
+            data.work += child_work;
+
+            children[idx].entry = child_result;
+            vdata.children[idx].entry.bounds = child_vbounds;
+
+            if children[idx].entry.bounds.delta == 0 {
+                self.mid.stats.winning_child.inc(idx);
+            }
         }
-        pv
+
+        if did_job {
+            self.vremove(data.hash, vdata.entry.bounds);
+        }
+
+        (data, vdata.entry.bounds, local_work, did_job)
     }
 
-    fn mid(&mut self, bounds: Bounds, mut data: Entry, pos: &game::Game) -> (Entry, u64) {
-        if self.cfg.debug > 4 {
+    fn run(&mut self, pos: &game::Game) -> u64 {
+        let mut work = 0;
+        let mut vroot = VPath {
+            parent: None,
+            children: Vec::new(),
+            entry: Default::default(),
+        };
+        loop {
+            let mut root = self.mid.table.lookup(pos.zobrist()).unwrap_or(Entry {
+                bounds: Bounds::unity(),
+                hash: pos.zobrist(),
+                work: 0,
+                ..Default::default()
+            });
+            vroot.entry = self
+                .guard
+                .vtable
+                .get(&root.hash)
+                .map(|v| v.entry.clone())
+                .unwrap_or_else(|| root.clone());
+
+            let (result, vbounds, this_work, did_job) = if vroot.entry.bounds.solved() {
+                (root, vroot.entry.bounds, 0, false)
+            } else {
+                self.try_run_job(
+                    Bounds {
+                        phi: INFINITY / 2,
+                        delta: INFINITY / 2,
+                    },
+                    &pos,
+                    root,
+                    &mut vroot,
+                )
+            };
+            root = result;
+            vroot.entry.bounds = vbounds;
+            work += this_work;
+
+            if self.mid.cfg.threads == 1 {
+                debug_assert!(self.guard.vtable.is_empty(), "leaking ventries");
+                debug_assert!(root.bounds == vroot.entry.bounds, "vroot differs from root");
+                debug_assert!(
+                    did_job || root.bounds.solved(),
+                    "single-threaded no progress"
+                );
+            }
+
+            if self.mid.cfg.debug > 2 && did_job {
+                eprintln!(
+                    "[{}] top root=({},{}) vroot=({},{}) work={}",
+                    self.mid.id,
+                    root.bounds.phi,
+                    root.bounds.delta,
+                    vroot.entry.bounds.phi,
+                    vroot.entry.bounds.delta,
+                    work,
+                );
+            }
+
+            let now = Instant::now();
+            if self.mid.cfg.debug > 0 && now > self.guard.tick {
+                let elapsed = now.duration_since(self.guard.start);
+                eprintln!(
+                    "[{}]t={}.{:03}s root=({},{}) jobs={} work={}",
+                    self.mid.id,
+                    elapsed.as_secs(),
+                    elapsed.subsec_millis(),
+                    root.bounds.phi,
+                    root.bounds.delta,
+                    self.mid.stats.jobs,
+                    work,
+                );
+                self.guard.tick = now + TICK_TIME;
+                if let Some(ref p) = self.mid.cfg.write_metrics {
+                    let mut f = fs::OpenOptions::new()
+                        .read(false)
+                        .append(true)
+                        .write(true)
+                        .truncate(false)
+                        .create(true)
+                        .open(p)
+                        .expect("write_metrics");
+                    let e = Metrics {
+                        elapsed_ms: elapsed.as_millis(),
+                        stats: &self.mid.stats,
+                    };
+                    serde_json::to_writer(&mut f, &e).expect("write json");
+                    writeln!(f).expect("write newline");
+                }
+            }
+
+            if let Some(_) = self.mid.cfg.dump_table {
+                if now > self.guard.dump_tick {
+                    dump_table(&self.mid.cfg, &self.mid.table).expect("dump_table failed");
+                    self.guard.dump_tick = now + self.mid.cfg.dump_interval;
+                }
+            }
+
+            if root.bounds.solved() || self.guard.shutdown {
+                self.guard.shutdown = true;
+                self.wait.notify_all();
+                break;
+            }
+
+            if did_job {
+                self.wait.notify_all();
+            } else {
+                self.guard.wait(&self.wait);
+            }
+        }
+
+        work
+    }
+
+    fn vadd(&mut self, entry: &Entry) -> &mut VEntry {
+        let vnode = self.guard.vtable.entry(entry.hash).or_insert(VEntry {
+            entry: entry.clone(),
+            count: 0,
+        });
+        vnode.count += 1;
+        vnode
+    }
+
+    fn vremove(&mut self, hash: u64, bounds: Bounds) {
+        let entry = self.guard.vtable.get_mut(&hash).unwrap();
+        entry.count -= 1;
+        entry.entry.bounds = bounds;
+        let del = entry.count == 0;
+        if del {
+            self.guard.vtable.remove(&hash);
+        }
+    }
+
+    fn update_parents(&mut self, mut node: Option<*mut VPath>) {
+        while let Some(ptr) = node {
+            let v = unsafe { ptr.as_mut().unwrap() };
+            self.vadd(&v.entry).entry.bounds = compute_bounds(&v.children);
+            node = v.parent;
+        }
+    }
+}
+
+struct VEntry {
+    entry: Entry,
+    count: isize,
+}
+
+struct VPath {
+    parent: Option<*mut VPath>,
+    entry: Entry,
+    children: Vec<Child>,
+}
+
+impl VPath {
+    fn depth(&self) -> usize {
+        let mut d = 0;
+        let mut n = self as *const VPath;
+        while let Some(p) = unsafe { (*n).parent } {
+            d += 1;
+            n = p;
+        }
+        d
+    }
+}
+
+fn compute_bounds(children: &Vec<Child>) -> Bounds {
+    let mut out = Bounds {
+        phi: INFINITY,
+        delta: 0,
+    };
+    for ch in children.iter() {
+        out.phi = min(out.phi, ch.entry.bounds.delta);
+        out.delta = out.delta.saturating_add(ch.entry.bounds.phi);
+    }
+    out.delta = min(out.delta, INFINITY);
+    return out;
+}
+
+// returns (child index, Bounds)
+fn select_child(
+    children: &Vec<Child>,
+    bounds: Bounds,
+    data: &mut Entry,
+    epsilon: f64,
+) -> (usize, Bounds) {
+    let (mut delta_1, mut delta_2) = (INFINITY, INFINITY);
+    let mut idx = children.len();
+    for (i, ch) in children.iter().enumerate() {
+        if ch.entry.bounds.delta < delta_1 {
+            delta_2 = delta_1;
+            delta_1 = ch.entry.bounds.delta;
+            idx = i;
+        } else if ch.entry.bounds.delta < delta_2 {
+            delta_2 = ch.entry.bounds.delta;
+        }
+    }
+    if data.child != std::u8::MAX && data.child != (idx as u8) {
+        let child_bounds = thresholds(
+            epsilon,
+            bounds,
+            data.bounds,
+            children[data.child as usize].entry.bounds.phi,
+            delta_1,
+        );
+        if children[data.child as usize].entry.bounds.delta < child_bounds.delta {
+            return (data.child as usize, child_bounds);
+        }
+    }
+    data.child = idx as u8;
+
+    let child_bounds = thresholds(
+        epsilon,
+        bounds,
+        data.bounds,
+        children[idx].entry.bounds.phi,
+        delta_2,
+    );
+    (idx, child_bounds)
+}
+
+fn thresholds(epsilon: f64, bounds: Bounds, nd: Bounds, phi_1: u32, delta_2: u32) -> Bounds {
+    Bounds {
+        phi: bounds.delta + phi_1 - nd.delta,
+        delta: min(
+            bounds.phi,
+            max(delta_2 + 1, (delta_2 as f64 * (1.0 + epsilon)) as u32),
+        ),
+    }
+}
+
+fn populate_pv(data: &mut Entry, children: &Vec<Child>) {
+    // If the position is solved, store the PV. For winning moves,
+    // find the shortest path to victory; for losing, the
+    // most-delaying
+    if data.bounds.phi == 0 {
+        data.pv = children
+            .iter()
+            .filter(|e| e.entry.bounds.delta == 0)
+            .min_by_key(|e| e.entry.work)
+            .map(|e| e.r#move)
+            .expect("won node, no winning move");
+    } else if data.bounds.delta == 0 {
+        data.pv = children
+            .iter()
+            .max_by_key(|e| e.entry.work)
+            .map(|e| e.r#move)
+            .expect("lost node, no move");
+    }
+}
+
+fn dump_table<'a, T: table::Table<Entry>>(cfg: &Config, table: &T) -> io::Result<()> {
+    if let Some(ref path) = cfg.dump_table {
+        let before = Instant::now();
+        let mut f = fs::File::create(path)?;
+        table.dump(&mut f)?;
+        let elapsed = Instant::now().duration_since(before);
+        if cfg.debug > 0 {
             eprintln!(
-                "mid[{}]: m={} d={} bounds=({}, {})",
+                "Checkpointed table[{}] in {}.{:03}s",
+                path,
+                elapsed.as_secs(),
+                elapsed.subsec_millis(),
+            );
+        }
+    }
+    Ok(())
+}
+
+fn extract_pv<T: table::Table<Entry>>(
+    cfg: &Config,
+    table: &mut T,
+    root: &game::Game,
+) -> Vec<game::Move> {
+    let mut pv = Vec::new();
+    let mut g = root.clone();
+    let mut prev = false;
+    loop {
+        match g.game_state() {
+            game::BoardState::InPlay => (),
+            _ => {
+                if cfg.debug > 0 {
+                    eprintln!("PV terminated depth={} game={:?}", pv.len(), g.game_state());
+                }
+                break;
+            }
+        };
+        if let Some(ent) = table.lookup(g.zobrist()) {
+            if ent.bounds.phi != 0 && ent.bounds.delta != 0 {
+                assert!(
+                    pv.len() == 0,
+                    "PV contains unproven positions d={} bounds=({}, {}) work={}",
+                    pv.len(),
+                    ent.bounds.phi,
+                    ent.bounds.delta,
+                    ent.work,
+                );
+                break;
+            }
+            let won = ent.bounds.phi == 0;
+            if pv.len() != 0 {
+                assert!(
+                    won == !prev,
+                    "inconsistent game tree d={} prev={} bounds=({}, {})",
+                    pv.len(),
+                    prev,
+                    ent.bounds.phi,
+                    ent.bounds.delta
+                );
+            }
+            prev = won;
+            if ent.pv.is_none() {
+                if cfg.debug > 0 {
+                    eprintln!("PV terminated, no move");
+                }
+                break;
+            }
+            pv.push(ent.pv);
+            g = g.make_move(ent.pv).unwrap_or_else(|_| {
+                panic!("PV contained illegal move depth={} m={}", pv.len(), ent.pv)
+            });
+        } else {
+            if cfg.debug > 0 {
+                eprintln!("PV terminated depth={} no entry", pv.len());
+            }
+            break;
+        }
+    }
+    pv
+}
+
+struct MID<'a, Table, Probe>
+where
+    Table: table::Table<Entry>,
+    Probe: FnMut(&Stats, &Entry, &Vec<Child>),
+{
+    id: usize,
+    cfg: &'a Config,
+    table: Table,
+    player: game::Player,
+    stack: Vec<game::Move>,
+    probe: Probe,
+    minimax: minimax::Minimax,
+    stats: Stats,
+}
+
+impl<'a, Table, Probe> MID<'a, Table, Probe>
+where
+    Table: table::Table<Entry>,
+    Probe: FnMut(&Stats, &Entry, &Vec<Child>),
+{
+    fn try_minimax(&mut self, pos: &game::Game) -> Option<bool> {
+        self.stats.minimax += 1;
+        let (_aipv, aistats) = self.minimax.analyze(pos);
+        if let Some(st) = aistats.last() {
+            if st.score >= minimax::EVAL_WON {
+                self.stats.minimax_solve += 1;
+                return Some(true);
+            } else if st.score <= minimax::EVAL_LOST {
+                self.stats.minimax_solve += 1;
+                return Some(false);
+            }
+        }
+        return None;
+    }
+
+    fn mid(
+        &mut self,
+        bounds: Bounds,
+        max_work: u64,
+        mut data: Entry,
+        pos: &game::Game,
+    ) -> (Entry, u64) {
+        let depth = self.stack.len();
+        if self.cfg.debug > 6 {
+            eprintln!(
+                "{:4$}[{}]mid[{}]: mid={} d={} bounds=({}, {}) max_work={}",
+                "",
+                self.id,
                 self.stack
                     .last()
                     .map(|&m| game::notation::render_move(m))
                     .unwrap_or_else(|| "<root>".to_owned()),
                 self.stats.mid,
-                self.stack.len(),
+                depth,
                 bounds.phi,
-                bounds.delta
+                bounds.delta,
+                max_work,
             );
         }
         self.stats.mid += 1;
-        if self.stats.mid % CHECK_TICK_INTERVAL == 0
-            && self.cfg.debug > 0
-            && Instant::now() > self.tick
-        {
-            self.tick += TICK_TIME;
-            let elapsed = Instant::now().duration_since(self.start);
-            eprintln!(
-                "t={}.{:03}s mid={} mid/ms={:.1}",
-                elapsed.as_secs(),
-                elapsed.subsec_millis(),
-                self.stats.mid,
-                (self.stats.mid as f64) / (elapsed.as_millis() as f64),
-            );
-        }
-        if (data.bounds.phi >= bounds.phi) || (data.bounds.delta >= bounds.delta) {
-            return (data, 0);
-        }
+        self.stats.mid_depth.inc(depth);
+
+        debug_assert!(
+            !data.bounds.exceeded(bounds),
+            "inconsistent mid call d={}, bounds=({}, {}) me=({}, {}) w={}",
+            self.stack.len(),
+            bounds.phi,
+            bounds.delta,
+            data.bounds.phi,
+            data.bounds.delta,
+            data.work,
+        );
+
         let terminal = match pos.game_state() {
-            game::BoardState::InPlay => None,
-            game::BoardState::Drawn => Some(false),
+            game::BoardState::InPlay => {
+                if pos.bound_depth() <= self.cfg.minimax_cutoff {
+                    self.try_minimax(pos)
+                } else {
+                    None
+                }
+            }
+            game::BoardState::Drawn => Some(pos.player() != self.player),
             game::BoardState::Won(p) => Some(p == pos.player()),
         };
         if let Some(v) = terminal {
@@ -246,9 +1134,7 @@ impl DFPN {
             }
             self.stats.terminal += 1;
             data.work = 1;
-            if self.table.store(&data) {
-                self.stats.ttstore += 1;
-            }
+            self.table.store(&data);
             return (data, 1);
         }
 
@@ -257,30 +1143,7 @@ impl DFPN {
         let mut children = Vec::new();
         for m in pos.all_moves() {
             let g = pos.make_move(m).expect("all_moves returned illegal move");
-            self.stats.ttlookup += 1;
-            let te = self.table.lookup(g.zobrist()).cloned();
-            if let Some(_) = te {
-                self.stats.tthit += 1;
-            }
-            let data = te.unwrap_or_else(|| {
-                let bounds = match g.game_state() {
-                    game::BoardState::Won(p) => {
-                        if p == g.player() {
-                            Bounds::winning()
-                        } else {
-                            Bounds::losing()
-                        }
-                    }
-                    game::BoardState::Drawn => Bounds::losing(),
-                    game::BoardState::InPlay => Bounds::unity(),
-                };
-                Entry {
-                    bounds: bounds,
-                    hash: g.zobrist(),
-                    work: 0,
-                    pv: game::Move::none(),
-                }
-            });
+            let data = self.ttlookup_or_default(&g);
             let bounds = data.bounds;
             children.push(Child {
                 position: g,
@@ -292,86 +1155,78 @@ impl DFPN {
             }
         }
 
-        // recurse
+        self.stats.branch.inc(children.len());
 
         loop {
-            data.bounds = self.compute_bounds(&children);
-            if data.bounds.phi >= bounds.phi || data.bounds.delta >= bounds.delta {
+            data.bounds = compute_bounds(&children);
+            (self.probe)(&self.stats, &data, &children);
+
+            if local_work >= max_work || data.bounds.exceeded(bounds) {
                 break;
             }
-            let (best_idx, delta_2) = self.select_child(&children);
+            let (best_idx, child_bounds) =
+                select_child(&children, bounds, &mut data, self.cfg.epsilon);
             let child = &children[best_idx];
-            let child_bounds = Bounds {
-                phi: bounds.delta + child.entry.bounds.phi - data.bounds.delta,
-                delta: min(
-                    bounds.phi,
-                    max(
-                        delta_2 + 1,
-                        (delta_2 as f64 * (1.0 + self.cfg.epsilon)) as u32,
-                    ),
-                ),
-            };
             self.stack.push(children[best_idx].r#move);
             let (child_entry, child_work) = self.mid(
                 child_bounds,
+                max_work - local_work,
                 children[best_idx].entry.clone(),
                 &child.position,
             );
             children[best_idx].entry = child_entry;
             self.stack.pop();
             local_work += child_work;
+
+            if children[best_idx].entry.bounds.delta == 0 {
+                self.stats.winning_child.inc(best_idx);
+            }
         }
 
         data.work += local_work;
-        // If the position is solved, store the PV. For winning moves,
-        // find the shortest path to victory; for losing, the
-        // most-delaying
-        if data.bounds.phi == 0 {
-            data.pv = children
-                .iter()
-                .filter(|e| e.entry.bounds.delta == 0)
-                .min_by_key(|e| e.entry.work)
-                .map(|e| e.r#move)
-                .expect("won node, no winning move");
-        } else if data.bounds.delta == 0 {
-            data.pv = children
-                .iter()
-                .max_by_key(|e| e.entry.work)
-                .map(|e| e.r#move)
-                .expect("lost node, no move");
-        }
-        if self.table.store(&data) {
-            self.stats.ttstore += 1;
+
+        populate_pv(&mut data, &children);
+        let did_store = self.table.store(&data);
+        if self.cfg.debug > 6 {
+            eprintln!(
+                "{:depth$}[{id}]exit mid bounds={bounds:?} local_work={local_work} store={did_store}",
+                "",
+                id=self.id,
+                depth = self.stack.len(),
+                bounds = data.bounds,
+                local_work = local_work,
+                did_store = did_store,
+            );
         }
         (data, local_work)
     }
 
-    fn compute_bounds(&self, children: &Vec<Child>) -> Bounds {
-        let mut out = Bounds {
-            phi: INFINITY,
-            delta: 0,
-        };
-        for ch in children.iter() {
-            out.phi = min(out.phi, ch.entry.bounds.delta);
-            out.delta = out.delta.saturating_add(ch.entry.bounds.phi);
-        }
-        out.delta = min(out.delta, INFINITY);
-        return out;
-    }
-
-    // returns (child index, delta_2)
-    fn select_child(&self, children: &Vec<Child>) -> (usize, u32) {
-        let (mut delta_1, mut delta_2) = (INFINITY, INFINITY);
-        let mut idx = children.len();
-        for (i, ch) in children.iter().enumerate() {
-            if ch.entry.bounds.delta < delta_1 {
-                delta_2 = delta_1;
-                delta_1 = ch.entry.bounds.delta;
-                idx = i;
-            } else if ch.entry.bounds.delta < delta_2 {
-                delta_2 = ch.entry.bounds.delta;
+    fn ttlookup_or_default(&mut self, g: &game::Game) -> Entry {
+        let te = self.table.lookup(g.zobrist());
+        te.unwrap_or_else(|| {
+            let bounds = match g.game_state() {
+                game::BoardState::Won(p) => {
+                    if p == g.player() {
+                        Bounds::winning()
+                    } else {
+                        Bounds::losing()
+                    }
+                }
+                game::BoardState::Drawn => {
+                    if g.player() == self.player {
+                        Bounds::losing()
+                    } else {
+                        Bounds::winning()
+                    }
+                }
+                game::BoardState::InPlay => Bounds::unity(),
+            };
+            Entry {
+                bounds: bounds,
+                hash: g.zobrist(),
+                work: 0,
+                ..Default::default()
             }
-        }
-        (idx, delta_2)
+        })
     }
 }

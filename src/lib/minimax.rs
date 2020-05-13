@@ -23,7 +23,7 @@ pub trait AI {
 #[derive(Clone)]
 pub struct Stats {
     depth: i64,
-    score: i64,
+    pub score: i64,
     visited: i64,
     terminal: i64,
     cuts: i64,
@@ -68,7 +68,8 @@ pub struct Config {
     pub max_depth: Option<i64>,
     pub timeout: Option<Duration>,
     pub debug: usize,
-    pub table_bytes: usize,
+    pub table_bytes: Option<usize>,
+    pub draw_winner: Option<game::Player>,
 }
 
 impl Default for Config {
@@ -77,7 +78,8 @@ impl Default for Config {
             max_depth: None,
             timeout: None,
             debug: 0,
-            table_bytes: table::DEFAULT_TABLE_SIZE,
+            table_bytes: Some(table::DEFAULT_TABLE_SIZE),
+            draw_winner: None,
         }
     }
 }
@@ -180,11 +182,11 @@ pub struct Minimax {
     config: Config,
     stats: Stats,
     response: [ResponseTable; 2],
-    table: table::TranspositionTable<Entry, typenum::U1>,
+    table: Option<table::TranspositionTable<Entry, typenum::U1>>,
 }
 
-const EVAL_WON: i64 = 1 << 60;
-const EVAL_LOST: i64 = -(1 << 60);
+pub const EVAL_WON: i64 = 1 << 60;
+pub const EVAL_LOST: i64 = -(1 << 60);
 const EVAL_PARTIAL_ONE: i64 = 1;
 const EVAL_PARTIAL_TWO: i64 = 3;
 
@@ -198,7 +200,9 @@ impl Minimax {
             config: config.clone(),
             stats: Default::default(),
             response: Default::default(),
-            table: table::TranspositionTable::with_memory(config.table_bytes),
+            table: config
+                .table_bytes
+                .map(|b| table::TranspositionTable::with_memory(b)),
         }
     }
 
@@ -265,11 +269,20 @@ impl Minimax {
     }
 
     pub fn evaluate(&self, g: &game::Game) -> i64 {
-        match g.game_state() {
-            game::BoardState::Drawn => (),
-            game::BoardState::InPlay => (),
-            game::BoardState::Won(p) => return if p == g.player() { EVAL_WON } else { EVAL_LOST },
+        let winner = match g.game_state() {
+            game::BoardState::Drawn => {
+                if let Some(w) = self.config.draw_winner {
+                    Some(w)
+                } else {
+                    return 0;
+                }
+            }
+            game::BoardState::InPlay => None,
+            game::BoardState::Won(p) => Some(p),
         };
+        if let Some(p) = winner {
+            return if p == g.player() { EVAL_WON } else { EVAL_LOST };
+        }
 
         let mut board_scores: [i64; 9] = [0; 9];
         for board in 0..9 {
@@ -339,7 +352,7 @@ impl Minimax {
         let mut localpv: SmallVec<[game::Move; 10]> =
             SmallVec::from_elem(game::Move::none(), (depth - 1) as usize);
 
-        let te = self.table.lookup(g.zobrist()).map(|e| e.clone());
+        let te = self.table.as_mut().map(|t| t.lookup(g.zobrist())).flatten();
         if let Some(ref e) = te {
             self.stats.tt_hit += 1;
             if e.depth as i64 >= depth {
@@ -376,18 +389,20 @@ impl Minimax {
                 }
             }
         }
-        self.table.store(&Entry {
-            depth: depth as u8,
-            hash: g.zobrist(),
-            pv: pv[0],
-            value: alpha,
-            bound: if !improved {
-                Bound::AtMost
-            } else if alpha >= beta {
-                Bound::AtLeast
-            } else {
-                Bound::Exact
-            },
+        self.table.as_mut().map(|t| {
+            t.store(&Entry {
+                depth: depth as u8,
+                hash: g.zobrist(),
+                pv: pv[0],
+                value: alpha,
+                bound: if !improved {
+                    Bound::AtMost
+                } else if alpha >= beta {
+                    Bound::AtLeast
+                } else {
+                    Bound::Exact
+                },
+            })
         });
         alpha
     }

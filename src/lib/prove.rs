@@ -214,7 +214,7 @@ impl Prover {
             root.parent = NodeID::none();
             prover.root = root.id;
             prover.evaluate(&mut root);
-            prover.set_proof_numbers(&mut *root);
+            prover.set_proof_numbers(root.id, &mut *root);
         }
         prover.search(prover.root, prover.config.max_nodes);
 
@@ -235,10 +235,17 @@ impl Prover {
 
     fn evaluate(&self, node: &mut node_pool::AllocedNode<Node>) {
         let player = self.player();
-        let res = self.cursor.position(node.id).game_state();
+        let pos = self.cursor.position(node.id);
+        let res = pos.game_state();
         node.value = match res {
             game::BoardState::InPlay => Evaluation::Unknown,
-            game::BoardState::Drawn => Evaluation::False,
+            game::BoardState::Drawn => {
+                if pos.player() == player {
+                    Evaluation::False
+                } else {
+                    Evaluation::True
+                }
+            }
             game::BoardState::Won(p) => {
                 if p == player {
                     Evaluation::True
@@ -249,13 +256,13 @@ impl Prover {
         }
     }
 
-    fn set_proof_numbers(&self, node: &mut Node) {
-        let (phi, delta) = self.calc_proof_numbers(node);
+    fn set_proof_numbers(&self, nid: NodeID, node: &mut Node) {
+        let (phi, delta) = self.calc_proof_numbers(nid, node);
         node.phi = phi;
         node.delta = delta;
     }
 
-    fn calc_proof_numbers(&self, node: &Node) -> (u32, u32) {
+    fn calc_proof_numbers(&self, _nid: NodeID, node: &Node) -> (u32, u32) {
         let mut phi: u32;
         let mut delta: u32;
         if node.flag(FLAG_EXPANDED) {
@@ -282,6 +289,8 @@ impl Prover {
                 Evaluation::Unknown => {
                     phi = 1;
                     delta = 1;
+                    // delta = self.cursor.position(nid).all_moves().count() as u32;
+                    // delta = self.cursor.position(nid).bound_depth() as u32;
                 }
             }
         }
@@ -387,7 +396,7 @@ impl Prover {
             alloc.r#move = m;
             self.cursor.descend(alloc.id, &*alloc);
             self.evaluate(&mut alloc);
-            self.set_proof_numbers(&mut *alloc);
+            self.set_proof_numbers(alloc.id, &mut *alloc);
             self.cursor.ascend();
             alloc.sibling = last_child;
             last_child = alloc.id;
@@ -440,7 +449,7 @@ impl Prover {
             let ref node = self.nodes.get(nid);
             debug_assert!(node.flag(FLAG_EXPANDED));
             let (oldphi, olddelta) = (node.phi, node.delta);
-            let (phi, delta) = self.calc_proof_numbers(node);
+            let (phi, delta) = self.calc_proof_numbers(nid, node);
             if phi == oldphi && delta == olddelta {
                 return nid;
             }
