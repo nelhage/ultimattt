@@ -461,10 +461,6 @@ impl<'a, T> YieldableGuard<'a, T> {
         self.guard = Some(self.lock.lock());
     }
 
-    fn take(&mut self) -> MutexGuard<'a, T> {
-        self.guard.take().unwrap()
-    }
-
     fn wait(&mut self, cond: &Condvar) {
         cond.wait(self.guard.as_mut().unwrap())
     }
