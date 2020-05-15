@@ -1,7 +1,7 @@
-use super::{Bounds, Child, Config, Entry, Probe, Stats};
-
 use crate::game;
 use crate::minimax;
+use crate::prove::dfpn;
+use crate::prove::dfpn::{Bounds, Child, Config, Entry, Probe, Stats};
 use crate::table;
 
 use parking_lot::{Condvar, Mutex, MutexGuard, RwLock};
@@ -64,7 +64,7 @@ struct SPDFPNWorker<'a, P>
 where
     P: FnMut(&Stats, &Entry, &Vec<Child>),
 {
-    mid: super::MID<'a, table::ConcurrentTranspositionTableHandle<'a, Entry, typenum::U4>, P>,
+    mid: dfpn::MID<'a, table::ConcurrentTranspositionTableHandle<'a, Entry, typenum::U4>, P>,
     guard: YieldableGuard<'a, SharedState>,
     wait: &'a Condvar,
 }
@@ -185,9 +185,9 @@ where
                     }
                 }
             }
-            data.bounds = super::compute_bounds(&children);
-            vdata.entry.bounds = super::compute_bounds(&vdata.children);
-            super::populate_pv(&mut data, &children);
+            data.bounds = dfpn::compute_bounds(&children);
+            vdata.entry.bounds = dfpn::compute_bounds(&vdata.children);
+            dfpn::populate_pv(&mut data, &children);
 
             (self.mid.probe)(&self.mid.stats, &data, &children);
 
@@ -209,7 +209,7 @@ where
             if vdata.entry.bounds.exceeded(bounds) || did_job {
                 break;
             }
-            let (idx, child_bounds) = super::select_child(
+            let (idx, child_bounds) = dfpn::select_child(
                 &vdata.children,
                 bounds,
                 &mut vdata.entry,
@@ -276,8 +276,8 @@ where
             } else {
                 self.try_run_job(
                     Bounds {
-                        phi: super::INFINITY / 2,
-                        delta: super::INFINITY / 2,
+                        phi: dfpn::INFINITY / 2,
+                        delta: dfpn::INFINITY / 2,
                     },
                     &pos,
                     root,
@@ -322,14 +322,14 @@ where
                     self.mid.stats.jobs,
                     work,
                 );
-                self.guard.tick = now + super::TICK_TIME;
-                super::dump_metrics(&self.mid.cfg, elapsed, &self.mid.stats)
+                self.guard.tick = now + dfpn::TICK_TIME;
+                dfpn::dump_metrics(&self.mid.cfg, elapsed, &self.mid.stats)
                     .expect("dump_metrics failed");
             }
 
             if let Some(_) = self.mid.cfg.dump_table {
                 if now > self.guard.dump_tick {
-                    super::dump_table(&self.mid.cfg, &self.mid.table).expect("dump_table failed");
+                    dfpn::dump_table(&self.mid.cfg, &self.mid.table).expect("dump_table failed");
                     self.guard.dump_tick = now + self.mid.cfg.dump_interval;
                 }
             }
@@ -372,7 +372,7 @@ where
     fn update_parents(&mut self, mut node: Option<*mut VPath>) {
         while let Some(ptr) = node {
             let v = unsafe { ptr.as_mut().unwrap() };
-            self.vadd(&v.entry).entry.bounds = super::compute_bounds(&v.children);
+            self.vadd(&v.entry).entry.bounds = dfpn::compute_bounds(&v.children);
             node = v.parent;
         }
     }
@@ -401,7 +401,7 @@ impl VPath {
     }
 }
 
-pub(in crate) fn run(
+pub(in crate::prove) fn run(
     start: Instant,
     cfg: &Config,
     root: &game::Game,
@@ -449,7 +449,7 @@ pub(in crate) fn run(
                     .name(format!("worker-{}", i))
                     .spawn(move |_| {
                         let mut worker = SPDFPNWorker {
-                            mid: super::MID {
+                            mid: dfpn::MID {
                                 id: i,
                                 cfg: cfg,
                                 player: player,
@@ -497,8 +497,8 @@ pub(in crate) fn run(
     })
     .expect("thread panicked");
 
-    let pv = super::extract_pv(cfg, &mut table.handle(), root);
-    super::dump_table(cfg, &table.handle()).expect("final dump_table");
+    let pv = dfpn::extract_pv(cfg, &mut table.handle(), root);
+    dfpn::dump_table(cfg, &table.handle()).expect("final dump_table");
     stats.tt = table.stats();
     let root = table
         .lookup(&mut stats.tt, root.zobrist())

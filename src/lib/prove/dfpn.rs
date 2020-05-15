@@ -3,7 +3,8 @@ extern crate parking_lot;
 
 use crate::game;
 use crate::minimax;
-use crate::prove;
+use crate::prove::pn;
+use crate::prove::spdfpn;
 use crate::table;
 
 use serde::Serialize;
@@ -12,8 +13,6 @@ use std::io::Write;
 use std::time::{Duration, Instant};
 use std::{fmt, fs, io};
 use typenum;
-
-mod spdfpn;
 
 #[derive(Clone, Debug, Default, Serialize)]
 pub struct Histogram {
@@ -57,7 +56,7 @@ pub struct Stats {
 }
 
 impl Stats {
-    fn merge(&self, other: &Stats) -> Stats {
+    pub fn merge(&self, other: &Stats) -> Stats {
         Stats {
             mid: self.mid + other.mid,
             terminal: self.terminal + other.terminal,
@@ -74,7 +73,7 @@ impl Stats {
     }
 }
 
-const INFINITY: u32 = 1 << 31;
+pub const INFINITY: u32 = 1 << 31;
 
 #[derive(Copy, Clone, PartialEq, Eq)]
 #[repr(C)]
@@ -90,48 +89,48 @@ impl fmt::Debug for Bounds {
 }
 
 impl Bounds {
-    fn winning() -> Self {
+    pub fn winning() -> Self {
         Bounds {
             phi: 0,
             delta: INFINITY,
         }
     }
 
-    fn losing() -> Self {
+    pub fn losing() -> Self {
         Bounds {
             phi: INFINITY,
             delta: 0,
         }
     }
 
-    fn unity() -> Self {
+    pub fn unity() -> Self {
         Bounds { phi: 1, delta: 1 }
     }
 
-    fn infinity() -> Self {
+    pub fn infinity() -> Self {
         Bounds {
             phi: INFINITY,
             delta: INFINITY,
         }
     }
 
-    fn exceeded(&self, other: Bounds) -> bool {
+    pub fn exceeded(&self, other: Bounds) -> bool {
         self.phi >= other.phi || self.delta >= other.delta
     }
 
-    fn solved(&self) -> bool {
+    pub fn solved(&self) -> bool {
         self.phi == 0 || self.delta == 0
     }
 }
 
 #[derive(Clone)]
 #[repr(C)]
-pub(in crate) struct Entry {
-    bounds: Bounds,
-    hash: u64,
-    work: u64,
-    pv: game::Move,
-    child: u8,
+pub(in crate::prove) struct Entry {
+    pub(in crate::prove) bounds: Bounds,
+    pub(in crate::prove) hash: u64,
+    pub(in crate::prove) work: u64,
+    pub(in crate::prove) pv: game::Move,
+    pub(in crate::prove) child: u8,
 }
 
 impl table::Entry for Entry {
@@ -203,7 +202,7 @@ impl Default for Config {
 }
 
 pub struct ProveResult {
-    pub value: prove::Evaluation,
+    pub value: pn::Evaluation,
     pub bounds: Bounds,
     pub stats: Stats,
     pub duration: Duration,
@@ -219,14 +218,14 @@ pub struct DFPN {
 }
 
 #[derive(Clone)]
-struct Child {
-    position: game::Game,
-    r#move: game::Move,
-    entry: Entry,
+pub(in crate::prove) struct Child {
+    pub(in crate::prove) position: game::Game,
+    pub(in crate::prove) r#move: game::Move,
+    pub(in crate::prove) entry: Entry,
 }
 
 const CHECK_TICK_WORK: u64 = 500000;
-static TICK_TIME: Duration = Duration::from_millis(500);
+pub static TICK_TIME: Duration = Duration::from_millis(500);
 
 impl DFPN {
     pub fn prove(cfg: &Config, g: &game::Game) -> ProveResult {
@@ -240,11 +239,11 @@ impl DFPN {
         let (result, pv, work) = prover.run();
         ProveResult {
             value: if result.bounds.phi == 0 {
-                prove::Evaluation::True
+                pn::Evaluation::True
             } else if result.bounds.delta == 0 {
-                prove::Evaluation::False
+                pn::Evaluation::False
             } else {
-                prove::Evaluation::Unknown
+                pn::Evaluation::Unknown
             },
             work: work,
             bounds: result.bounds,
@@ -361,10 +360,10 @@ impl DFPN {
     }
 }
 
-pub(in crate) struct Probe {
-    tick: Instant,
-    hash: u64,
-    out: fs::File,
+pub(in crate::prove) struct Probe {
+    pub(in crate::prove) tick: Instant,
+    pub(in crate::prove) hash: u64,
+    pub(in crate::prove) out: fs::File,
 }
 
 impl Probe {
@@ -376,7 +375,13 @@ impl Probe {
         .expect("probe header");
     }
 
-    fn do_probe(&mut self, tick: Instant, mid: usize, data: &Entry, children: &Vec<Child>) {
+    pub(in crate::prove) fn do_probe(
+        &mut self,
+        tick: Instant,
+        mid: usize,
+        data: &Entry,
+        children: &Vec<Child>,
+    ) {
         self.tick = tick;
 
         for (i, ch) in children.iter().enumerate() {
@@ -403,7 +408,7 @@ struct Metrics<'a> {
     stats: &'a Stats,
 }
 
-fn compute_bounds(children: &Vec<Child>) -> Bounds {
+pub(in crate::prove) fn compute_bounds(children: &Vec<Child>) -> Bounds {
     let mut out = Bounds {
         phi: INFINITY,
         delta: 0,
@@ -417,7 +422,7 @@ fn compute_bounds(children: &Vec<Child>) -> Bounds {
 }
 
 // returns (child index, Bounds)
-fn select_child(
+pub(in crate::prove) fn select_child(
     children: &Vec<Child>,
     bounds: Bounds,
     data: &mut Entry,
@@ -468,7 +473,7 @@ fn thresholds(epsilon: f64, bounds: Bounds, nd: Bounds, phi_1: u32, delta_2: u32
     }
 }
 
-fn populate_pv(data: &mut Entry, children: &Vec<Child>) {
+pub(in crate::prove) fn populate_pv(data: &mut Entry, children: &Vec<Child>) {
     // If the position is solved, store the PV. For winning moves,
     // find the shortest path to victory; for losing, the
     // most-delaying
@@ -488,7 +493,10 @@ fn populate_pv(data: &mut Entry, children: &Vec<Child>) {
     }
 }
 
-fn dump_table<T: table::Table<Entry>>(cfg: &Config, table: &T) -> io::Result<()> {
+pub(in crate::prove) fn dump_table<T: table::Table<Entry>>(
+    cfg: &Config,
+    table: &T,
+) -> io::Result<()> {
     if let Some(ref path) = cfg.dump_table {
         let before = Instant::now();
         let mut f = fs::File::create(path)?;
@@ -506,7 +514,11 @@ fn dump_table<T: table::Table<Entry>>(cfg: &Config, table: &T) -> io::Result<()>
     Ok(())
 }
 
-fn dump_metrics(cfg: &Config, elapsed: Duration, stats: &Stats) -> io::Result<()> {
+pub(in crate::prove) fn dump_metrics(
+    cfg: &Config,
+    elapsed: Duration,
+    stats: &Stats,
+) -> io::Result<()> {
     if let Some(ref p) = cfg.write_metrics {
         let mut f = fs::OpenOptions::new()
             .read(false)
@@ -526,7 +538,7 @@ fn dump_metrics(cfg: &Config, elapsed: Duration, stats: &Stats) -> io::Result<()
     Ok(())
 }
 
-fn extract_pv<T: table::Table<Entry>>(
+pub(in crate::prove) fn extract_pv<T: table::Table<Entry>>(
     cfg: &Config,
     table: &mut T,
     root: &game::Game,
@@ -588,19 +600,19 @@ fn extract_pv<T: table::Table<Entry>>(
     pv
 }
 
-struct MID<'a, Table, Probe>
+pub(in crate::prove) struct MID<'a, Table, Probe>
 where
     Table: table::Table<Entry>,
     Probe: FnMut(&Stats, &Entry, &Vec<Child>),
 {
-    id: usize,
-    cfg: &'a Config,
-    table: Table,
-    player: game::Player,
-    stack: Vec<game::Move>,
-    probe: Probe,
-    minimax: minimax::Minimax,
-    stats: Stats,
+    pub(in crate::prove) id: usize,
+    pub(in crate::prove) cfg: &'a Config,
+    pub(in crate::prove) table: Table,
+    pub(in crate::prove) player: game::Player,
+    pub(in crate::prove) stack: Vec<game::Move>,
+    pub(in crate::prove) probe: Probe,
+    pub(in crate::prove) minimax: minimax::Minimax,
+    pub(in crate::prove) stats: Stats,
 }
 
 impl<'a, Table, Probe> MID<'a, Table, Probe>
@@ -623,7 +635,7 @@ where
         return None;
     }
 
-    fn mid(
+    pub(in crate::prove) fn mid(
         &mut self,
         bounds: Bounds,
         max_work: u64,
@@ -747,7 +759,7 @@ where
         (data, local_work)
     }
 
-    fn ttlookup_or_default(&mut self, g: &game::Game) -> Entry {
+    pub(in crate::prove) fn ttlookup_or_default(&mut self, g: &game::Game) -> Entry {
         let te = self.table.lookup(g.zobrist());
         te.unwrap_or_else(|| {
             let bounds = match g.game_state() {

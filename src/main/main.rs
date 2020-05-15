@@ -18,7 +18,6 @@ use std::process::exit;
 use std::str::FromStr;
 use std::time::Duration;
 use structopt::StructOpt;
-use ultimattt::dfpn;
 use ultimattt::game;
 use ultimattt::minimax;
 use ultimattt::minimax::AI;
@@ -413,8 +412,8 @@ fn main() -> Result<(), std::io::Error> {
             };
             match analyze.engine {
                 Engine::PN => {
-                    let result = prove::Prover::prove(
-                        &prove::Config {
+                    let result = prove::pn::Prover::prove(
+                        &prove::pn::Config {
                             debug: opt.debug,
                             timeout: Some(opt.timeout),
                             max_nodes: analyze.max_nodes,
@@ -451,7 +450,7 @@ fn main() -> Result<(), std::io::Error> {
                         }),
                         (Some(_), Some(_)) => panic!("--probe-hash and --probe are incompatible"),
                     };
-                    let mut cfg = dfpn::Config {
+                    let mut cfg = prove::dfpn::Config {
                         threads: if let Engine::DFPN = analyze.engine {
                             0
                         } else {
@@ -475,7 +474,7 @@ fn main() -> Result<(), std::io::Error> {
                     if let Some(c) = analyze.minimax_cutoff {
                         cfg.minimax_cutoff = c;
                     }
-                    let result = dfpn::DFPN::prove(&cfg, &game);
+                    let result = prove::dfpn::DFPN::prove(&cfg, &game);
                     println!(
                     "result={:?} time={}.{:03}s pn={} dpn={} mid={} try={} jobs={} tthit={}/{} ({:.1}%) ttstore={} minimax={}/{}",
                     result.value,
