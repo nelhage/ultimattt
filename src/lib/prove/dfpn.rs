@@ -3,15 +3,16 @@ extern crate parking_lot;
 
 use crate::game;
 use crate::minimax;
-use crate::prove::pn;
+use crate::prove;
 use crate::prove::spdfpn;
+use crate::prove::{Bounds, INFINITY};
 use crate::table;
 
 use serde::Serialize;
 use std::cmp::{max, min};
 use std::io::Write;
 use std::time::{Duration, Instant};
-use std::{fmt, fs, io};
+use std::{fs, io};
 use typenum;
 
 #[derive(Clone, Debug, Default, Serialize)]
@@ -70,56 +71,6 @@ impl Stats {
             winning_child: self.winning_child.merge(&other.winning_child),
             branch: self.branch.merge(&other.branch),
         }
-    }
-}
-
-pub const INFINITY: u32 = 1 << 31;
-
-#[derive(Copy, Clone, PartialEq, Eq)]
-#[repr(C)]
-pub struct Bounds {
-    pub phi: u32,
-    pub delta: u32,
-}
-
-impl fmt::Debug for Bounds {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "({}, {})", self.phi, self.delta)
-    }
-}
-
-impl Bounds {
-    pub fn winning() -> Self {
-        Bounds {
-            phi: 0,
-            delta: INFINITY,
-        }
-    }
-
-    pub fn losing() -> Self {
-        Bounds {
-            phi: INFINITY,
-            delta: 0,
-        }
-    }
-
-    pub fn unity() -> Self {
-        Bounds { phi: 1, delta: 1 }
-    }
-
-    pub fn infinity() -> Self {
-        Bounds {
-            phi: INFINITY,
-            delta: INFINITY,
-        }
-    }
-
-    pub fn exceeded(&self, other: Bounds) -> bool {
-        self.phi >= other.phi || self.delta >= other.delta
-    }
-
-    pub fn solved(&self) -> bool {
-        self.phi == 0 || self.delta == 0
     }
 }
 
@@ -202,7 +153,7 @@ impl Default for Config {
 }
 
 pub struct ProveResult {
-    pub value: pn::Evaluation,
+    pub value: prove::Evaluation,
     pub bounds: Bounds,
     pub stats: Stats,
     pub duration: Duration,
@@ -239,11 +190,11 @@ impl DFPN {
         let (result, pv, work) = prover.run();
         ProveResult {
             value: if result.bounds.phi == 0 {
-                pn::Evaluation::True
+                prove::Evaluation::True
             } else if result.bounds.delta == 0 {
-                pn::Evaluation::False
+                prove::Evaluation::False
             } else {
-                pn::Evaluation::Unknown
+                prove::Evaluation::Unknown
             },
             work: work,
             bounds: result.bounds,

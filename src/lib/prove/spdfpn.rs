@@ -1,7 +1,8 @@
 use crate::game;
 use crate::minimax;
 use crate::prove::dfpn;
-use crate::prove::dfpn::{Bounds, Child, Config, Entry, Probe, Stats};
+use crate::prove::dfpn::{Child, Config, Entry, Probe, Stats};
+use crate::prove::{Bounds, INFINITY};
 use crate::table;
 
 use parking_lot::{Condvar, Mutex, MutexGuard, RwLock};
@@ -276,8 +277,8 @@ where
             } else {
                 self.try_run_job(
                     Bounds {
-                        phi: dfpn::INFINITY / 2,
-                        delta: dfpn::INFINITY / 2,
+                        phi: INFINITY / 2,
+                        delta: INFINITY / 2,
                     },
                     &pos,
                     root,

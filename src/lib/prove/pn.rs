@@ -3,6 +3,7 @@ extern crate bytesize;
 
 use crate::prove::node_pool;
 use crate::prove::node_pool::{NodeID, Pool};
+use crate::prove::{Bounds, Evaluation};
 
 use bytesize::ByteSize;
 use std::cmp::min;
@@ -37,14 +38,6 @@ pub struct Stats {
     pub expanded: usize,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-#[repr(u8)]
-pub enum Evaluation {
-    True,
-    False,
-    Unknown,
-}
-
 const FLAG_EXPANDED: u16 = 1 << 0;
 const FLAG_AND: u16 = 1 << 1;
 const FLAG_FREE: u16 = 1 << 2;
@@ -52,8 +45,7 @@ const FLAG_FREE: u16 = 1 << 2;
 struct Node {
     parent: NodeID,
 
-    phi: u32,
-    delta: u32,
+    bounds: Bounds,
 
     value: Evaluation,
     r#move: game::Move,
@@ -73,17 +65,17 @@ impl Node {
 
     fn proof(&self) -> u32 {
         if self.flag(FLAG_AND) {
-            self.delta
+            self.bounds.delta
         } else {
-            self.phi
+            self.bounds.phi
         }
     }
 
     fn disproof(&self) -> u32 {
         if self.flag(FLAG_AND) {
-            self.phi
+            self.bounds.phi
         } else {
-            self.delta
+            self.bounds.delta
         }
     }
 }
@@ -93,8 +85,7 @@ impl node_pool::Node for Node {
         ptr.write(MaybeUninit::new(Node {
             parent: free,
             r#move: game::Move::none(),
-            phi: 0,
-            delta: 0,
+            bounds: Bounds::unity(),
             value: Evaluation::Unknown,
             flags: FLAG_FREE,
             first_child: NodeID::none(),
@@ -106,9 +97,7 @@ impl node_pool::Node for Node {
         debug_assert!(self.flag(FLAG_FREE));
         debug_assert!(!self.first_child.exists());
         self.parent = NodeID::none();
-        // self.pos = pos.clone();
-        self.phi = 0;
-        self.delta = 0;
+        self.bounds = Bounds { phi: 0, delta: 0 };
         self.value = Evaluation::Unknown;
         self.flags = 0;
     }
@@ -256,44 +245,41 @@ impl Prover {
     }
 
     fn set_proof_numbers(&self, nid: NodeID, node: &mut Node) {
-        let (phi, delta) = self.calc_proof_numbers(nid, node);
-        node.phi = phi;
-        node.delta = delta;
+        let bounds = self.calc_proof_numbers(nid, node);
+        node.bounds = bounds;
     }
 
-    fn calc_proof_numbers(&self, _nid: NodeID, node: &Node) -> (u32, u32) {
-        let mut phi: u32;
-        let mut delta: u32;
+    fn calc_proof_numbers(&self, _nid: NodeID, node: &Node) -> Bounds {
         if node.flag(FLAG_EXPANDED) {
-            delta = 0;
-            phi = std::u32::MAX;
+            let mut out = Bounds {
+                delta: 0,
+                phi: std::u32::MAX,
+            };
+
             let mut c = node.first_child;
             while c.exists() {
                 let node = self.nodes.get(c);
-                delta = delta.saturating_add(node.phi);
-                phi = min(phi, node.delta);
+                out.delta = out.delta.saturating_add(node.bounds.phi);
+                out.phi = min(out.phi, node.bounds.delta);
                 c = node.sibling;
             }
+            out
         } else {
             match node.value {
                 Evaluation::True | Evaluation::False => {
                     if node.flag(FLAG_AND) == (node.value == Evaluation::True) {
-                        phi = std::u32::MAX;
-                        delta = 0;
+                        Bounds::losing()
                     } else {
-                        phi = 0;
-                        delta = std::u32::MAX;
+                        Bounds::winning()
                     }
                 }
                 Evaluation::Unknown => {
-                    phi = 1;
-                    delta = 1;
+                    Bounds::unity()
                     // delta = self.cursor.position(nid).all_moves().count() as u32;
                     // delta = self.cursor.position(nid).bound_depth() as u32;
                 }
             }
         }
-        (phi, delta)
     }
 
     fn search(&mut self, root: NodeID, limit: Option<usize>) {
@@ -301,7 +287,7 @@ impl Prover {
         let mut i = 0;
         while {
             let ref nd = self.nodes.get(root);
-            nd.phi != 0 && nd.delta != 0
+            !nd.bounds.solved()
         } {
             let next = self.select_most_proving(current);
             self.expand(next);
@@ -342,7 +328,7 @@ impl Prover {
         while self.nodes.get(nid).flag(FLAG_EXPANDED) {
             let ref node = self.nodes.get(nid);
             debug_assert!(
-                node.phi != 0,
+                node.bounds.phi != 0,
                 format!(
                     "expand phi=0, root=({}, {}), depth={}",
                     self.nodes.get(self.root).proof(),
@@ -354,7 +340,7 @@ impl Prover {
             let mut c = node.first_child;
             while c.exists() {
                 let ch = self.nodes.get(c);
-                if ch.delta == node.phi {
+                if ch.bounds.delta == node.bounds.phi {
                     child = c;
                     break;
                 }
@@ -381,7 +367,7 @@ impl Prover {
             game::BoardState::InPlay => (),
             _ => debug_assert!(
                 false,
-                format!("expanding a terminal node! ({}, {})", node.phi, node.delta)
+                format!("expanding a terminal node! {:?}", node.bounds)
             ),
         };
         debug_assert!(!node.flag(FLAG_EXPANDED));
@@ -399,7 +385,7 @@ impl Prover {
             self.cursor.ascend();
             alloc.sibling = last_child;
             last_child = alloc.id;
-            if alloc.delta == 0 {
+            if alloc.bounds.delta == 0 {
                 break;
             }
         }
@@ -447,17 +433,16 @@ impl Prover {
         loop {
             let ref node = self.nodes.get(nid);
             debug_assert!(node.flag(FLAG_EXPANDED));
-            let (oldphi, olddelta) = (node.phi, node.delta);
-            let (phi, delta) = self.calc_proof_numbers(nid, node);
-            if phi == oldphi && delta == olddelta {
+            let prev = node.bounds;
+            let bounds = self.calc_proof_numbers(nid, node);
+            if bounds == prev {
                 return nid;
             }
             let mut free_child = NodeID::none();
             {
                 let ref mut node_mut = self.nodes.get_mut(nid);
-                node_mut.phi = phi;
-                node_mut.delta = delta;
-                if phi == 0 || delta == 0 {
+                node_mut.bounds = bounds;
+                if bounds.solved() {
                     free_child = node_mut.first_child;
                     node_mut.first_child = NodeID::none();
                 }
