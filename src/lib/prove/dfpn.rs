@@ -613,16 +613,9 @@ where
         self.stats.mid += 1;
         self.stats.mid_depth.inc(depth);
 
-        debug_assert!(
-            !data.bounds.exceeded(bounds),
-            "inconsistent mid call d={}, bounds=({}, {}) me=({}, {}) w={}",
-            self.stack.len(),
-            bounds.phi,
-            bounds.delta,
-            data.bounds.phi,
-            data.bounds.delta,
-            data.work,
-        );
+        if data.bounds.exceeded(bounds) {
+            return (data, 0);
+        }
 
         let terminal = match pos.game_state() {
             game::BoardState::InPlay => {
