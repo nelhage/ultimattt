@@ -1,6 +1,7 @@
 pub mod dfpn;
 pub mod node_pool;
 pub mod pn;
+pub mod pn_dfpn;
 pub mod spdfpn;
 
 use std::fmt;
