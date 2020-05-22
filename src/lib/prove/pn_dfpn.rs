@@ -382,7 +382,7 @@ impl Prover {
         (bounds, vbounds, work)
     }
 
-    fn search<'a>(
+    fn search(
         &mut self,
         jobs: channel::Sender<Job>,
         results: channel::Receiver<JobResult>,
