@@ -204,13 +204,13 @@ where
                 },
                 &job.pos,
             );
-            self.results
-                .send(JobResult {
-                    nid: job.nid,
-                    work: work,
-                    bounds: entry.bounds,
-                })
-                .unwrap();
+            if let Err(_) = self.results.send(JobResult {
+                nid: job.nid,
+                work: work,
+                bounds: entry.bounds,
+            }) {
+                break;
+            }
         }
     }
 }
@@ -391,8 +391,12 @@ impl Prover {
             !nd.bounds.solved()
         } {
             while inflight < self.cfg.dfpn.threads {
-                jobs.send(self.select_job()).unwrap();
-                inflight += 1;
+                if let Some(job) = self.select_job() {
+                    jobs.send(job).unwrap();
+                    inflight += 1;
+                } else {
+                    break;
+                }
             }
             for result in results.try_iter() {
                 self.handle_result(result);
@@ -401,31 +405,30 @@ impl Prover {
         }
     }
 
-    fn select_job<'a>(&'a mut self) -> Job {
-        let (mut mpn, mut bounds) = self.select_most_proving(self.root, Bounds::root());
+    fn select_job<'a>(&'a mut self) -> Option<Job> {
+        let (mut mpn, mut bounds) = self.select_most_proving(self.root, Bounds::root())?;
         let mut did_split = false;
-        if self.nodes.get(mpn).work > self.cfg.split_threshold {
+        if self.nodes.get(mpn).work >= self.cfg.split_threshold {
             self.expand(mpn);
-            let (mpn2, bounds2) = self.select_most_proving(mpn, bounds);
+            let (mpn2, bounds2) = self.select_most_proving(mpn, bounds)?;
+
             mpn = mpn2;
             bounds = bounds2;
             did_split = true;
         }
 
+        let node = self.nodes.get_mut(mpn);
+        if node.vbounds.exceeded(bounds) {
+            return None;
+        }
+
         if self.cfg.debug > 2 {
             println!(
-                "Select mpn nid={:?} d={} node={:?} bounds={:?} vbounds={:?} work={} split={}",
-                mpn,
-                self.depth(mpn),
-                self.nodes.get(mpn).bounds,
-                bounds,
-                self.nodes.get(mpn).vbounds,
-                self.nodes.get(mpn).work,
-                did_split,
+                "Select mpn nid={:?} bounds={:?} node={:?} vnode={:?} work={} split={}",
+                mpn, bounds, node.bounds, node.vbounds, node.work, did_split,
             )
         }
 
-        let node = self.nodes.get_mut(mpn);
         let job = Job {
             nid: mpn,
             node: node.bounds,
@@ -441,7 +444,7 @@ impl Prover {
         if parent.exists() {
             self.update_ancestors(parent);
         }
-        job
+        Some(job)
     }
 
     fn handle_result(&mut self, res: JobResult) {
@@ -465,17 +468,22 @@ impl Prover {
         }
     }
 
-    fn select_most_proving(&mut self, mut nid: NodeID, mut bounds: Bounds) -> (NodeID, Bounds) {
+    fn select_most_proving(
+        &mut self,
+        mut nid: NodeID,
+        mut bounds: Bounds,
+    ) -> Option<(NodeID, Bounds)> {
         while self.nodes.get(nid).flag(FLAG_EXPANDED) {
             let ref node = self.nodes.get(nid);
+            if node.vbounds.solved() {
+                return None;
+            }
             debug_assert!(
-                node.vbounds.phi != 0 && node.bounds.phi != 0,
-                format!(
-                    "expand phi=0, root=({}, {}), depth={}",
-                    self.nodes.get(self.root).proof(),
-                    self.nodes.get(self.root).disproof(),
-                    self.depth(self.root),
-                )
+                node.bounds.phi != 0,
+                "select mpn phi=0, node={:?} vnode={:?} depth={}",
+                node.bounds,
+                node.vbounds,
+                self.depth(nid),
             );
             if self.cfg.dfpn.threads == 1 {
                 debug_assert!(
@@ -501,13 +509,14 @@ impl Prover {
                 c = ch.sibling;
             }
             debug_assert!(child.exists(), "found a child");
+            let cn = self.nodes.get(child);
             bounds = Bounds {
-                phi: bounds.delta + self.nodes.get(child).vbounds.phi - node.vbounds.delta,
+                phi: bounds.delta + cn.vbounds.phi - node.vbounds.delta,
                 delta: min(bounds.phi, delta_2 + 1),
             };
             nid = child;
         }
-        (nid, bounds)
+        Some((nid, bounds))
     }
 
     fn expand(&mut self, nid: NodeID) {
