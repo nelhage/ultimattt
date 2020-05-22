@@ -148,12 +148,12 @@ where
     }
 
     pub fn get(&self, nd: NodeID) -> &T {
+        debug_assert!(nd.exists());
         if self.allocating.get() == nd {
             panic!(format!(
                 "get(): Can't get a node while it is being allocated"
             ));
         }
-        debug_assert!(nd.exists());
         unsafe {
             &*(*self.slabs.get())[(nd.0 as usize) / PAGE_SIZE][(nd.0 as usize) & PAGE_MASK].get()
         }

@@ -3,7 +3,6 @@ extern crate typenum;
 use crate::game;
 use crate::table;
 
-use rand;
 use smallvec::SmallVec;
 use std::cmp::max;
 use std::mem::MaybeUninit;
@@ -177,8 +176,6 @@ impl Default for Entry {
 
 #[allow(dead_code)]
 pub struct Minimax {
-    rng: rand::rngs::ThreadRng,
-
     config: Config,
     stats: Stats,
     response: [ResponseTable; 2],
@@ -196,7 +193,6 @@ const OVERALL_PARTIAL_WIN: i64 = 20;
 impl Minimax {
     pub fn with_config(config: &Config) -> Self {
         Self {
-            rng: rand::thread_rng(),
             config: config.clone(),
             stats: Default::default(),
             response: Default::default(),

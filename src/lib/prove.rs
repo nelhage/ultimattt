@@ -55,6 +55,13 @@ impl Bounds {
         }
     }
 
+    pub fn root() -> Self {
+        Bounds {
+            phi: INFINITY / 2,
+            delta: INFINITY / 2,
+        }
+    }
+
     pub fn exceeded(&self, other: Bounds) -> bool {
         self.phi >= other.phi || self.delta >= other.delta
     }

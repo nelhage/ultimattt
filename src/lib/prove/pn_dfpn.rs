@@ -1,12 +1,16 @@
 use crate::game;
-extern crate bytesize;
 
+use crate::minimax;
 use crate::prove::dfpn;
 use crate::prove::node_pool;
 use crate::prove::node_pool::{NodeID, Pool};
-use crate::prove::{Bounds, Evaluation};
+use crate::prove::{Bounds, Evaluation, INFINITY};
+use crate::table;
 
 use bytesize::ByteSize;
+use crossbeam;
+use crossbeam::channel;
+
 use std::cmp::min;
 use std::mem;
 use std::mem::MaybeUninit;
@@ -18,6 +22,7 @@ pub struct Config {
     pub debug: usize,
     pub max_nodes: Option<usize>,
     pub timeout: Option<Duration>,
+    pub split_threshold: u64,
     pub dfpn: dfpn::Config,
 }
 
@@ -28,6 +33,7 @@ impl Default for Config {
             max_nodes: None,
             timeout: None,
             dfpn: Default::default(),
+            split_threshold: 1_000_000,
         }
     }
 }
@@ -37,6 +43,7 @@ pub struct Stats {
     pub proved: usize,
     pub disproved: usize,
     pub expanded: usize,
+    pub mid: dfpn::Stats,
 }
 
 const FLAG_EXPANDED: u16 = 1 << 0;
@@ -129,7 +136,7 @@ impl node_pool::Node for Node {
 }
 
 pub struct Prover {
-    config: Config,
+    cfg: Config,
     stats: Stats,
     nodes: Pool<Node>,
 
@@ -139,6 +146,19 @@ pub struct Prover {
 
     position: game::Game,
     root: NodeID,
+}
+
+struct Job {
+    nid: NodeID,
+    pos: game::Game,
+    bounds: Bounds,
+    node: Bounds,
+}
+
+struct JobResult {
+    nid: NodeID,
+    work: u64,
+    bounds: Bounds,
 }
 
 pub struct ProofResult {
@@ -154,6 +174,47 @@ pub struct ProofResult {
 const PROGRESS_INTERVAL: isize = 10000;
 static TICK_INTERVAL: Duration = Duration::from_millis(100);
 
+struct Worker<'a, Table, Probe>
+where
+    Table: table::Table<dfpn::Entry>,
+    Probe: FnMut(&dfpn::Stats, &dfpn::Entry, &Vec<dfpn::Child>),
+{
+    cfg: &'a Config,
+    jobs: crossbeam::Receiver<Job>,
+    results: crossbeam::Sender<JobResult>,
+    mid: dfpn::MID<'a, Table, Probe>,
+}
+
+impl<'a, Table, Probe> Worker<'a, Table, Probe>
+where
+    Table: table::Table<dfpn::Entry>,
+    Probe: FnMut(&dfpn::Stats, &dfpn::Entry, &Vec<dfpn::Child>),
+{
+    fn run(&mut self) {
+        for job in self.jobs.iter() {
+            let (entry, work) = self.mid.mid(
+                job.bounds,
+                self.cfg.split_threshold,
+                dfpn::Entry {
+                    hash: job.pos.zobrist(),
+                    bounds: job.node,
+                    child: 0xff,
+                    pv: game::Move::none(),
+                    work: 0,
+                },
+                &job.pos,
+            );
+            self.results
+                .send(JobResult {
+                    nid: job.nid,
+                    work: work,
+                    bounds: entry.bounds,
+                })
+                .unwrap();
+        }
+    }
+}
+
 impl Prover {
     pub fn prove(cfg: &Config, pos: &game::Game) -> ProofResult {
         if cfg.debug > 1 {
@@ -161,7 +222,7 @@ impl Prover {
         }
         let start = Instant::now();
         let mut prover = Prover {
-            config: cfg.clone(),
+            cfg: cfg.clone(),
             stats: Default::default(),
             nodes: Pool::new(),
             start: start,
@@ -178,9 +239,56 @@ impl Prover {
             root.pos = pos.clone();
             prover.root = root.id;
             prover.evaluate(&mut root);
-            prover.set_proof_numbers(root.id, &mut *root);
         }
-        prover.search(prover.root, prover.config.max_nodes);
+        crossbeam::scope(|s| {
+            let (job_send, job_recv) = channel::bounded(cfg.dfpn.threads);
+            let (res_send, res_recv) = channel::bounded(cfg.dfpn.threads);
+            let mmcfg = minimax::Config {
+                max_depth: Some(cfg.dfpn.minimax_cutoff as i64 + 1),
+                timeout: Some(Duration::from_secs(1)),
+                debug: if cfg.debug > 6 { 1 } else { 0 },
+                table_bytes: None,
+                draw_winner: Some(pos.player().other()),
+            };
+
+            let handles = (0..cfg.dfpn.threads)
+                .map(|i| {
+                    let mut worker = Worker {
+                        cfg: cfg,
+                        jobs: job_recv.clone(),
+                        results: res_send.clone(),
+                        mid: dfpn::MID {
+                            id: i,
+                            cfg: &cfg.dfpn,
+                            table:
+                                table::TranspositionTable::<dfpn::Entry, typenum::U4>::with_memory(
+                                    cfg.dfpn.table_size,
+                                ),
+                            player: pos.player(),
+                            stack: Vec::new(),
+                            probe: |_, _, _| {},
+                            minimax: minimax::Minimax::with_config(&mmcfg),
+                            stats: Default::default(),
+                        },
+                    };
+                    s.spawn(move |_| {
+                        worker.run();
+                        worker.mid.stats.tt = worker.mid.table.stats();
+                        worker.mid.stats
+                    })
+                })
+                .collect::<Vec<_>>();
+
+            mem::drop(job_recv);
+
+            prover.search(job_send, res_recv, prover.root, prover.cfg.max_nodes);
+
+            prover.stats.mid = handles
+                .into_iter()
+                .map(|h| h.join().unwrap())
+                .fold(Default::default(), |l, r| l.merge(&r));
+        })
+        .unwrap();
 
         let ref root = prover.nodes.get(prover.root);
         ProofResult {
@@ -216,98 +324,152 @@ impl Prover {
                     Evaluation::False
                 }
             }
-        }
+        };
+        let bounds = match node.value {
+            Evaluation::True | Evaluation::False => {
+                if node.flag(FLAG_AND) == (node.value == Evaluation::True) {
+                    Bounds::losing()
+                } else {
+                    Bounds::winning()
+                }
+            }
+            Evaluation::Unknown => {
+                Bounds::unity()
+                // delta = self.cursor.position(nid).all_moves().count() as u32;
+                // delta = self.cursor.position(nid).bound_depth() as u32;
+            }
+        };
+        node.bounds = bounds;
+        node.vbounds = bounds;
     }
 
+    /*
     fn set_proof_numbers(&self, nid: NodeID, node: &mut Node) {
-        let (bounds, work) = self.calc_proof_numbers(nid, node);
+        let (bounds, vbounds, work) = self.calc_proof_numbers(nid, node);
         node.bounds = bounds;
+        node.vbounds = vbounds;
         node.work = work;
     }
+    */
 
-    fn calc_proof_numbers(&self, _nid: NodeID, node: &Node) -> (Bounds, u64) {
-        if node.flag(FLAG_EXPANDED) {
-            let mut work = 0;
-            let mut out = Bounds {
-                delta: 0,
-                phi: std::u32::MAX,
-            };
+    fn calc_proof_numbers(&self, _nid: NodeID, node: &Node) -> (Bounds, Bounds, u64) {
+        debug_assert!(node.flag(FLAG_EXPANDED));
+        let mut work = 0;
+        let mut bounds = Bounds {
+            delta: 0,
+            phi: std::u32::MAX,
+        };
 
-            let mut c = node.first_child;
-            while c.exists() {
-                let node = self.nodes.get(c);
-                out.delta = out.delta.saturating_add(node.bounds.phi);
-                out.phi = min(out.phi, node.bounds.delta);
-                c = node.sibling;
-                work += node.work;
-            }
-            (out, work)
-        } else {
-            let bounds = match node.value {
-                Evaluation::True | Evaluation::False => {
-                    if node.flag(FLAG_AND) == (node.value == Evaluation::True) {
-                        Bounds::losing()
-                    } else {
-                        Bounds::winning()
-                    }
-                }
-                Evaluation::Unknown => {
-                    Bounds::unity()
-                    // delta = self.cursor.position(nid).all_moves().count() as u32;
-                    // delta = self.cursor.position(nid).bound_depth() as u32;
-                }
-            };
-            (bounds, 0)
+        let mut vbounds = Bounds {
+            delta: 0,
+            phi: std::u32::MAX,
+        };
+
+        let mut c = node.first_child;
+        while c.exists() {
+            let node = self.nodes.get(c);
+            bounds.delta = bounds.delta.saturating_add(node.bounds.phi);
+            bounds.phi = min(bounds.phi, node.bounds.delta);
+            vbounds.delta = vbounds.delta.saturating_add(node.vbounds.phi);
+            vbounds.phi = min(vbounds.phi, node.vbounds.delta);
+            c = node.sibling;
+            work += node.work;
         }
+        (bounds, vbounds, work)
     }
 
-    fn search(&mut self, root: NodeID, limit: Option<usize>) {
-        let mut current = root;
-        let mut i = 0;
+    fn search<'a>(
+        &mut self,
+        jobs: channel::Sender<Job>,
+        results: channel::Receiver<JobResult>,
+        root: NodeID,
+        _limit: Option<usize>,
+    ) {
+        let mut inflight = 0;
         while {
             let ref nd = self.nodes.get(root);
             !nd.bounds.solved()
         } {
-            let next = self.select_most_proving(current);
-            self.expand(next);
-            current = self.update_ancestors(next);
-            i += 1;
-            if i % PROGRESS_INTERVAL == 0 {
-                let now = Instant::now();
-                if now > self.tick && self.config.debug > 0 {
-                    let elapsed = now.duration_since(self.start);
-                    eprintln!(
-                        "t={}.{:03}s nodes={}/{} proved={} disproved={} root=({}, {}) n/ms={:.0} rss={}",
-                        elapsed.as_secs(),
-                        elapsed.subsec_millis(),
-                        self.nodes.stats.live(),
-                        self.nodes.stats.allocated.get(),
-                        self.stats.proved,
-                        self.stats.disproved,
-                        self.nodes.get(self.root).proof(),
-                        self.nodes.get(self.root).disproof(),
-                        (self.nodes.stats.allocated.get() as f64) / (elapsed.as_millis() as f64),
-                        read_rss(),
-                    );
-                    self.tick = now + TICK_INTERVAL;
-                }
-                if let Some(limit) = self.limit {
-                    if now > limit {
-                        break;
-                    }
-                }
-                if limit.map(|n| self.nodes.stats.live() > n).unwrap_or(false) {
-                    break;
-                }
+            while inflight < self.cfg.dfpn.threads {
+                jobs.send(self.select_job()).unwrap();
+                inflight += 1;
+            }
+            for result in results.try_iter() {
+                self.handle_result(result);
+                inflight -= 1;
             }
         }
     }
 
-    fn select_most_proving(&mut self, mut nid: NodeID) -> NodeID {
+    fn select_job<'a>(&'a mut self) -> Job {
+        let (mut mpn, mut bounds) = self.select_most_proving(self.root, Bounds::root());
+        let mut did_split = false;
+        if self.nodes.get(mpn).work > self.cfg.split_threshold {
+            self.expand(mpn);
+            let (mpn2, bounds2) = self.select_most_proving(mpn, bounds);
+            mpn = mpn2;
+            bounds = bounds2;
+            did_split = true;
+        }
+
+        if self.cfg.debug > 2 {
+            println!(
+                "Select mpn nid={:?} d={} node={:?} bounds={:?} vbounds={:?} work={} split={}",
+                mpn,
+                self.depth(mpn),
+                self.nodes.get(mpn).bounds,
+                bounds,
+                self.nodes.get(mpn).vbounds,
+                self.nodes.get(mpn).work,
+                did_split,
+            )
+        }
+
+        let node = self.nodes.get_mut(mpn);
+        let job = Job {
+            nid: mpn,
+            node: node.bounds,
+            bounds: bounds,
+            pos: node.pos.clone(),
+        };
+        node.vbounds = if node.bounds.phi < node.bounds.delta {
+            Bounds::winning()
+        } else {
+            Bounds::losing()
+        };
+        let parent = node.parent;
+        if parent.exists() {
+            self.update_ancestors(parent);
+        }
+        job
+    }
+
+    fn handle_result(&mut self, res: JobResult) {
+        if self.cfg.debug > 2 {
+            println!(
+                "Got result nid={:?} d={} bounds={:?} work={}",
+                res.nid,
+                self.depth(res.nid),
+                res.bounds,
+                res.work,
+            );
+        }
+        let node = self.nodes.get_mut(res.nid);
+        debug_assert!(!node.flag(FLAG_EXPANDED));
+        node.bounds = res.bounds;
+        node.vbounds = res.bounds;
+        node.work += res.work;
+        let parent = node.parent;
+        if parent.exists() {
+            self.update_ancestors(parent);
+        }
+    }
+
+    fn select_most_proving(&mut self, mut nid: NodeID, mut bounds: Bounds) -> (NodeID, Bounds) {
         while self.nodes.get(nid).flag(FLAG_EXPANDED) {
             let ref node = self.nodes.get(nid);
             debug_assert!(
-                node.bounds.phi != 0,
+                node.vbounds.phi != 0 && node.bounds.phi != 0,
                 format!(
                     "expand phi=0, root=({}, {}), depth={}",
                     self.nodes.get(self.root).proof(),
@@ -315,20 +477,37 @@ impl Prover {
                     self.depth(self.root),
                 )
             );
+            if self.cfg.dfpn.threads == 1 {
+                debug_assert!(
+                    node.bounds == node.vbounds,
+                    "single-threaded inconsistent bounds={:?} vbounds={:?} d={}",
+                    node.bounds,
+                    node.vbounds,
+                    self.depth(nid)
+                );
+            }
             let mut child = NodeID::none();
+            let (mut delta_1, mut delta_2) = (INFINITY, INFINITY);
             let mut c = node.first_child;
             while c.exists() {
                 let ch = self.nodes.get(c);
-                if ch.bounds.delta == node.bounds.phi {
+                if ch.vbounds.delta < delta_1 {
+                    delta_2 = delta_1;
+                    delta_1 = ch.vbounds.delta;
                     child = c;
-                    break;
+                } else if ch.vbounds.delta < delta_2 {
+                    delta_2 = ch.vbounds.delta;
                 }
                 c = ch.sibling;
             }
             debug_assert!(child.exists(), "found a child");
+            bounds = Bounds {
+                phi: bounds.delta + self.nodes.get(child).vbounds.phi - node.vbounds.delta,
+                delta: min(bounds.phi, delta_2 + 1),
+            };
             nid = child;
         }
-        nid
+        (nid, bounds)
     }
 
     fn expand(&mut self, nid: NodeID) {
@@ -354,7 +533,6 @@ impl Prover {
             alloc.pos = pos.make_move(m).unwrap();
             alloc.r#move = m;
             self.evaluate(&mut alloc);
-            self.set_proof_numbers(alloc.id, &mut *alloc);
             alloc.sibling = last_child;
             last_child = alloc.id;
             if alloc.bounds.delta == 0 {
@@ -365,32 +543,42 @@ impl Prover {
             let ref mut node_mut = self.nodes.get_mut(nid);
             node_mut.set_flag(FLAG_EXPANDED);
             node_mut.first_child = last_child;
-            node_mut.work = 1;
         }
     }
 
     fn update_ancestors(&mut self, mut nid: NodeID) -> NodeID {
+        debug_assert!(nid.exists());
         loop {
             let ref node = self.nodes.get(nid);
-            debug_assert!(node.flag(FLAG_EXPANDED));
-            let prev = node.bounds;
-            let (bounds, work) = self.calc_proof_numbers(nid, node);
-            if bounds == prev {
+            debug_assert!(
+                node.flag(FLAG_EXPANDED),
+                "expected expanded node: {:?}",
+                nid
+            );
+            let (bounds, vbounds, work) = self.calc_proof_numbers(nid, node);
+            if bounds == node.bounds && vbounds == node.vbounds {
                 return nid;
             }
+            /*
             let mut free_child = NodeID::none();
+            */
             {
                 let ref mut node_mut = self.nodes.get_mut(nid);
                 node_mut.bounds = bounds;
+                node_mut.vbounds = vbounds;
                 node_mut.work = work;
+                /*
                 if bounds.solved() {
                     free_child = node_mut.first_child;
                     node_mut.first_child = NodeID::none();
                 }
+                */
             }
+            /*
             if free_child.exists() {
                 self.free_siblings(free_child);
             }
+            */
             {
                 let ref node = self.nodes.get(nid);
                 if node.proof() == 0 {

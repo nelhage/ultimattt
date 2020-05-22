@@ -239,6 +239,8 @@ enum Engine {
     PN,
     DFPN,
     SPDFPN,
+    #[allow(non_camel_case_types)]
+    PN_DFPN,
 }
 
 impl FromStr for Engine {
@@ -249,6 +251,7 @@ impl FromStr for Engine {
             "pn" => Ok(Engine::PN),
             "dfpn" => Ok(Engine::DFPN),
             "spdfpn" => Ok(Engine::SPDFPN),
+            "pn-dfpn" => Ok(Engine::PN_DFPN),
             _ => Err(format!("Unknown engine: `{}`", s)),
         }
     }
@@ -280,6 +283,8 @@ struct AnalyzeParameters {
     probe: Option<String>,
     #[structopt(long, default_value = "probe.csv")]
     probe_log: String,
+    #[structopt(long)]
+    split_threshold: Option<u64>,
     position: String,
 }
 
@@ -304,6 +309,46 @@ fn ai_config(opt: &Opt) -> minimax::Config {
         table_bytes: Some(opt.table_mem.as_u64() as usize),
         ..Default::default()
     }
+}
+
+fn dfpn_config(opt: &Opt, analyze: &AnalyzeParameters, pos: &game::Game) -> prove::dfpn::Config {
+    let probe_hash = match (analyze.probe_hash, analyze.probe.as_ref()) {
+        (None, None) => None,
+        (Some(p), None) => Some(p),
+        (None, Some(moves)) => Some(if moves.len() == 0 {
+            pos.zobrist()
+        } else {
+            moves
+                .split(" ")
+                .fold(pos.clone(), |pos, mv| {
+                    pos.make_move(game::notation::parse_move(mv).expect("parse_move"))
+                        .expect("make_move")
+                })
+                .zobrist()
+        }),
+        (Some(_), Some(_)) => panic!("--probe-hash and --probe are incompatible"),
+    };
+    let mut cfg = prove::dfpn::Config {
+        threads: opt.threads,
+        table_size: opt.table_mem.as_u64() as usize,
+        timeout: Some(opt.timeout),
+        debug: opt.debug,
+        epsilon: analyze.epsilon,
+        dump_table: analyze.dump_table.clone(),
+        load_table: analyze.load_table.clone(),
+        dump_interval: analyze.dump_interval.clone(),
+        write_metrics: analyze.write_metrics.clone(),
+        probe_log: analyze.probe_log.clone(),
+        probe_hash: probe_hash,
+        ..Default::default()
+    };
+    if let Some(m) = analyze.max_work_per_job {
+        cfg.max_work_per_job = m;
+    }
+    if let Some(c) = analyze.minimax_cutoff {
+        cfg.minimax_cutoff = c;
+    };
+    cfg
 }
 
 fn make_ai(opt: &Opt) -> minimax::Minimax {
@@ -432,49 +477,12 @@ fn main() -> Result<(), std::io::Error> {
                     );
                 }
                 Engine::DFPN | Engine::SPDFPN => {
-                    let probe_hash = match (analyze.probe_hash, analyze.probe.as_ref()) {
-                        (None, None) => None,
-                        (Some(p), None) => Some(p),
-                        (None, Some(moves)) => Some(if moves.len() == 0 {
-                            game.zobrist()
-                        } else {
-                            moves
-                                .split(" ")
-                                .fold(game.clone(), |pos, mv| {
-                                    pos.make_move(
-                                        game::notation::parse_move(mv).expect("parse_move"),
-                                    )
-                                    .expect("make_move")
-                                })
-                                .zobrist()
-                        }),
-                        (Some(_), Some(_)) => panic!("--probe-hash and --probe are incompatible"),
+                    let mut dfpn_cfg = dfpn_config(&opt, &analyze, &game);
+                    if let Engine::DFPN = analyze.engine {
+                        dfpn_cfg.threads = 0;
                     };
-                    let mut cfg = prove::dfpn::Config {
-                        threads: if let Engine::DFPN = analyze.engine {
-                            0
-                        } else {
-                            opt.threads
-                        },
-                        table_size: opt.table_mem.as_u64() as usize,
-                        timeout: Some(opt.timeout),
-                        debug: opt.debug,
-                        epsilon: analyze.epsilon,
-                        dump_table: analyze.dump_table.clone(),
-                        load_table: analyze.load_table.clone(),
-                        dump_interval: analyze.dump_interval.clone(),
-                        write_metrics: analyze.write_metrics.clone(),
-                        probe_log: analyze.probe_log.clone(),
-                        probe_hash: probe_hash,
-                        ..Default::default()
-                    };
-                    if let Some(m) = analyze.max_work_per_job {
-                        cfg.max_work_per_job = m;
-                    }
-                    if let Some(c) = analyze.minimax_cutoff {
-                        cfg.minimax_cutoff = c;
-                    }
-                    let result = prove::dfpn::DFPN::prove(&cfg, &game);
+
+                    let result = prove::dfpn::DFPN::prove(&dfpn_cfg, &game);
                     println!(
                     "result={:?} time={}.{:03}s pn={} dpn={} mid={} try={} jobs={} tthit={}/{} ({:.1}%) ttstore={} minimax={}/{}",
                     result.value,
@@ -502,6 +510,49 @@ fn main() -> Result<(), std::io::Error> {
                         write!(&mut pv, "{} ", m).unwrap();
                     }
                     println!(" pv={}", pv.trim_end());
+                }
+                Engine::PN_DFPN => {
+                    let cfg = {
+                        let dfpn_cfg = prove::dfpn::Config {
+                            debug: opt.debug.saturating_sub(10),
+                            ..dfpn_config(&opt, &analyze, &game)
+                        };
+                        let mut cfg = prove::pn_dfpn::Config {
+                            debug: opt.debug,
+                            timeout: Some(opt.timeout),
+                            max_nodes: analyze.max_nodes,
+                            dfpn: dfpn_cfg,
+                            ..Default::default()
+                        };
+                        if let Some(st) = analyze.split_threshold {
+                            cfg.split_threshold = st;
+                        }
+                        cfg
+                    };
+                    let result = prove::pn_dfpn::Prover::prove(&cfg, &game);
+                    println!(
+                        "result={:?} time={}.{:03}s pn={} dpn={} searched={}",
+                        result.result,
+                        result.duration.as_secs(),
+                        result.duration.subsec_millis(),
+                        result.proof,
+                        result.disproof,
+                        result.allocated,
+                    );
+                    println!(
+                        "  mid={} try={} jobs={} tthit={}/{} ({:.1}%) ttstore={} minimax={}/{}",
+                        result.stats.mid.mid,
+                        result.stats.mid.try_calls,
+                        result.stats.mid.jobs,
+                        result.stats.mid.tt.hits,
+                        result.stats.mid.tt.lookups,
+                        100.0
+                            * (result.stats.mid.tt.hits as f64
+                                / result.stats.mid.tt.lookups as f64),
+                        result.stats.mid.tt.stores,
+                        result.stats.mid.minimax_solve,
+                        result.stats.mid.minimax,
+                    );
                 }
                 Engine::Minimax => {
                     let mut ai = make_ai(&opt);
