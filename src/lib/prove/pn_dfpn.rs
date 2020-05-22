@@ -240,6 +240,11 @@ impl Prover {
             prover.root = root.id;
             prover.evaluate(&mut root);
         }
+
+        let table = table::ConcurrentTranspositionTable::<dfpn::Entry, typenum::U4>::with_memory(
+            cfg.dfpn.table_size,
+        );
+
         crossbeam::scope(|s| {
             let (job_send, job_recv) = channel::bounded(cfg.dfpn.threads);
             let (res_send, res_recv) = channel::bounded(cfg.dfpn.threads);
@@ -260,10 +265,7 @@ impl Prover {
                         mid: dfpn::MID {
                             id: i,
                             cfg: &cfg.dfpn,
-                            table:
-                                table::TranspositionTable::<dfpn::Entry, typenum::U4>::with_memory(
-                                    cfg.dfpn.table_size,
-                                ),
+                            table: table.handle(),
                             player: pos.player(),
                             stack: Vec::new(),
                             probe: |_, _, _| {},
@@ -273,7 +275,6 @@ impl Prover {
                     };
                     s.spawn(move |_| {
                         worker.run();
-                        worker.mid.stats.tt = worker.mid.table.stats();
                         worker.mid.stats
                     })
                 })
@@ -289,6 +290,8 @@ impl Prover {
                 .fold(Default::default(), |l, r| l.merge(&r));
         })
         .unwrap();
+
+        prover.stats.mid.tt = table.stats();
 
         let ref root = prover.nodes.get(prover.root);
         ProofResult {
