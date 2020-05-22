@@ -172,7 +172,7 @@ pub struct ProofResult {
 }
 
 const PROGRESS_INTERVAL: isize = 10000;
-static TICK_INTERVAL: Duration = Duration::from_millis(100);
+static TICK_INTERVAL: Duration = Duration::from_millis(1000);
 
 struct Worker<'a, Table, Probe>
 where
@@ -386,13 +386,40 @@ impl Prover {
         jobs: channel::Sender<Job>,
         results: channel::Receiver<JobResult>,
         root: NodeID,
-        _limit: Option<usize>,
+        limit: Option<usize>,
     ) {
         let mut inflight = 0;
         while {
             let ref nd = self.nodes.get(root);
             !nd.bounds.solved()
         } {
+            let now = Instant::now();
+            if now > self.tick && self.cfg.debug > 0 {
+                let elapsed = now.duration_since(self.start);
+                eprintln!(
+                    "t={}.{:03}s nodes={}/{} proved={} disproved={} root=({}, {}) n/s={:.0} rss={}",
+                    elapsed.as_secs(),
+                    elapsed.subsec_millis(),
+                    self.nodes.stats.live(),
+                    self.nodes.stats.allocated.get(),
+                    self.stats.proved,
+                    self.stats.disproved,
+                    self.nodes.get(self.root).proof(),
+                    self.nodes.get(self.root).disproof(),
+                    (self.nodes.stats.allocated.get() as f64) / (elapsed.as_secs() as f64),
+                    read_rss(),
+                );
+                self.tick = now + TICK_INTERVAL;
+            }
+            if let Some(limit) = self.limit {
+                if now > limit {
+                    break;
+                }
+            }
+            if limit.map(|n| self.nodes.stats.live() > n).unwrap_or(false) {
+                break;
+            }
+
             while inflight < self.cfg.dfpn.threads {
                 if let Some(job) = self.select_job() {
                     jobs.send(job).unwrap();
