@@ -43,6 +43,8 @@ pub struct Stats {
     pub proved: usize,
     pub disproved: usize,
     pub expanded: usize,
+    pub jobs: usize,
+    pub recv: usize,
     pub mid: dfpn::Stats,
 }
 
@@ -171,7 +173,6 @@ pub struct ProofResult {
     pub stats: Stats,
 }
 
-const PROGRESS_INTERVAL: isize = 10000;
 static TICK_INTERVAL: Duration = Duration::from_millis(1000);
 
 struct Worker<'a, Table, Probe>
@@ -422,15 +423,23 @@ impl Prover {
 
             while inflight < self.cfg.dfpn.threads {
                 if let Some(job) = self.select_job() {
+                    self.stats.jobs += 1;
                     jobs.send(job).unwrap();
                     inflight += 1;
                 } else {
                     break;
                 }
             }
+
+            self.stats.recv += 1;
+            self.handle_result(results.recv().unwrap());
+            inflight -= 1;
+
+            self.stats.recv += 1;
             for result in results.try_iter() {
                 self.handle_result(result);
                 inflight -= 1;
+                self.stats.recv += 1;
             }
         }
     }

@@ -531,12 +531,14 @@ fn main() -> Result<(), std::io::Error> {
                     };
                     let result = prove::pn_dfpn::Prover::prove(&cfg, &game);
                     println!(
-                        "result={:?} time={}.{:03}s pn={} dpn={} searched={}",
+                        "result={:?} time={}.{:03}s pn={} dpn={} jobs={} recv={} searched={}",
                         result.result,
                         result.duration.as_secs(),
                         result.duration.subsec_millis(),
                         result.proof,
                         result.disproof,
+                        result.stats.jobs,
+                        result.stats.recv,
                         result.allocated,
                     );
                     println!(
