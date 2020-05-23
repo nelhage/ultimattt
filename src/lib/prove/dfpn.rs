@@ -16,41 +16,11 @@ use std::{fs, io};
 use typenum;
 
 #[derive(Clone, Debug, Default, Serialize)]
-pub struct Histogram {
-    pub counts: Vec<usize>,
-}
-
-impl Histogram {
-    pub fn merge(&self, other: &Histogram) -> Histogram {
-        let mut out = Vec::new();
-        out.resize(max(self.counts.len(), other.counts.len()), 0);
-        for (i, n) in self.counts.iter().enumerate() {
-            out[i] += n;
-        }
-        for (i, n) in other.counts.iter().enumerate() {
-            out[i] += n;
-        }
-        Histogram { counts: out }
-    }
-
-    pub fn inc(&mut self, idx: usize) {
-        if self.counts.len() <= idx {
-            self.counts.resize(idx + 1, 0);
-        }
-        self.counts[idx] += 1;
-    }
-}
-
-#[derive(Clone, Debug, Default, Serialize)]
 pub struct Stats {
     pub mid: usize,
     pub terminal: usize,
     pub try_calls: usize,
     pub jobs: usize,
-    pub try_depth: Histogram,
-    pub mid_depth: Histogram,
-    pub winning_child: Histogram,
-    pub branch: Histogram,
     pub minimax: usize,
     pub minimax_solve: usize,
     pub tt: table::Stats,
@@ -66,10 +36,6 @@ impl Stats {
             minimax: self.minimax + other.minimax,
             minimax_solve: self.minimax_solve + other.minimax_solve,
             tt: self.tt.merge(&other.tt),
-            mid_depth: self.mid_depth.merge(&other.mid_depth),
-            try_depth: self.try_depth.merge(&other.try_depth),
-            winning_child: self.winning_child.merge(&other.winning_child),
-            branch: self.branch.merge(&other.branch),
         }
     }
 }
@@ -611,7 +577,6 @@ where
             );
         }
         self.stats.mid += 1;
-        self.stats.mid_depth.inc(depth);
 
         if data.bounds.exceeded(bounds) {
             return (data, 0);
@@ -657,8 +622,6 @@ where
             }
         }
 
-        self.stats.branch.inc(children.len());
-
         loop {
             data.bounds = compute_bounds(&children);
             (self.probe)(&self.stats, &data, &children);
@@ -679,10 +642,6 @@ where
             children[best_idx].entry = child_entry;
             self.stack.pop();
             local_work += child_work;
-
-            if children[best_idx].entry.bounds.delta == 0 {
-                self.stats.winning_child.inc(best_idx);
-            }
         }
 
         data.work += local_work;

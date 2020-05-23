@@ -106,7 +106,6 @@ where
         );
 
         self.mid.stats.try_calls += 1;
-        self.mid.stats.try_depth.inc(self.mid.stack.len());
 
         let mut local_work = 0;
 
@@ -169,8 +168,6 @@ where
             children.push(child);
         }
         debug_assert_eq!(vdata.children.len(), children.len());
-
-        self.mid.stats.branch.inc(children.len());
 
         let mut did_job = false;
         loop {
@@ -238,10 +235,6 @@ where
 
             children[idx].entry = child_result;
             vdata.children[idx].entry.bounds = child_vbounds;
-
-            if children[idx].entry.bounds.delta == 0 {
-                self.mid.stats.winning_child.inc(idx);
-            }
         }
 
         if did_job {
