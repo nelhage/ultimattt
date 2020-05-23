@@ -1,5 +1,4 @@
 use crate::game;
-
 use crate::minimax;
 use crate::prove::dfpn;
 use crate::prove::node_pool;
@@ -10,6 +9,7 @@ use crate::table;
 use bytesize::ByteSize;
 use crossbeam;
 use crossbeam::channel;
+use hdrhistogram::Histogram;
 
 use std::cmp::min;
 use std::mem;
@@ -38,7 +38,7 @@ impl Default for Config {
     }
 }
 
-#[derive(Clone, Default, Debug)]
+#[derive(Clone)]
 pub struct Stats {
     pub proved: usize,
     pub disproved: usize,
@@ -46,6 +46,21 @@ pub struct Stats {
     pub jobs: usize,
     pub recv: usize,
     pub mid: dfpn::Stats,
+    pub worker: WorkerStats,
+}
+
+impl Default for Stats {
+    fn default() -> Self {
+        Stats {
+            proved: 0,
+            disproved: 0,
+            expanded: 0,
+            jobs: 0,
+            recv: 0,
+            mid: Default::default(),
+            worker: Default::default(),
+        }
+    }
 }
 
 const FLAG_EXPANDED: u16 = 1 << 0;
@@ -175,6 +190,36 @@ pub struct ProofResult {
 
 static TICK_INTERVAL: Duration = Duration::from_millis(1000);
 
+#[derive(Clone)]
+pub struct WorkerStats {
+    pub work_per_job: Histogram<u64>,
+    pub us_per_job: Histogram<u64>,
+}
+
+fn hdrmerge<T: hdrhistogram::Counter>(l: &Histogram<T>, r: &Histogram<T>) -> Histogram<T> {
+    let mut out = l.clone();
+    out.add(r).unwrap();
+    out
+}
+
+impl Default for WorkerStats {
+    fn default() -> Self {
+        WorkerStats {
+            work_per_job: Histogram::new(3).unwrap(),
+            us_per_job: Histogram::new(3).unwrap(),
+        }
+    }
+}
+
+impl WorkerStats {
+    fn merge(&self, rhs: &Self) -> Self {
+        WorkerStats {
+            work_per_job: hdrmerge(&self.work_per_job, &rhs.work_per_job),
+            us_per_job: hdrmerge(&self.us_per_job, &rhs.us_per_job),
+        }
+    }
+}
+
 struct Worker<'a, Table, Probe>
 where
     Table: table::Table<dfpn::Entry>,
@@ -184,6 +229,7 @@ where
     jobs: crossbeam::Receiver<Job>,
     results: crossbeam::Sender<JobResult>,
     mid: dfpn::MID<'a, Table, Probe>,
+    stats: WorkerStats,
 }
 
 impl<'a, Table, Probe> Worker<'a, Table, Probe>
@@ -193,6 +239,7 @@ where
 {
     fn run(&mut self) {
         for job in self.jobs.iter() {
+            let start = Instant::now();
             let (entry, work) = self.mid.mid(
                 job.bounds,
                 self.cfg.split_threshold,
@@ -205,6 +252,9 @@ where
                 },
                 &job.pos,
             );
+            let t = Instant::now().duration_since(start);
+            self.stats.us_per_job.record(t.as_micros() as u64).unwrap();
+            self.stats.work_per_job.record(work).unwrap();
             if let Err(_) = self.results.send(JobResult {
                 nid: job.nid,
                 work: work,
@@ -273,10 +323,11 @@ impl Prover {
                             minimax: minimax::Minimax::with_config(&mmcfg),
                             stats: Default::default(),
                         },
+                        stats: Default::default(),
                     };
                     s.spawn(move |_| {
                         worker.run();
-                        worker.mid.stats
+                        (worker.mid.stats, worker.stats)
                     })
                 })
                 .collect::<Vec<_>>();
@@ -285,10 +336,14 @@ impl Prover {
 
             prover.search(job_send, res_recv, prover.root, prover.cfg.max_nodes);
 
-            prover.stats.mid = handles
-                .into_iter()
-                .map(|h| h.join().unwrap())
-                .fold(Default::default(), |l, r| l.merge(&r));
+            let (mid_stats, worker_stats) = handles.into_iter().map(|h| h.join().unwrap()).fold(
+                Default::default(),
+                |l: (dfpn::Stats, WorkerStats), r: (dfpn::Stats, WorkerStats)| {
+                    (l.0.merge(&r.0), l.1.merge(&r.1))
+                },
+            );
+            prover.stats.mid = mid_stats;
+            prover.stats.worker = worker_stats;
         })
         .unwrap();
 

@@ -548,6 +548,24 @@ fn main() -> Result<(), std::io::Error> {
                         result.stats.mid.minimax_solve,
                         result.stats.mid.minimax,
                     );
+                    if cfg.debug > 0 {
+                        println!(
+                            " us/job   mean={:.1} p10={} p50={} p90={} p99={}",
+                            result.stats.worker.us_per_job.mean(),
+                            result.stats.worker.us_per_job.value_at_quantile(0.1),
+                            result.stats.worker.us_per_job.value_at_quantile(0.5),
+                            result.stats.worker.us_per_job.value_at_quantile(0.9),
+                            result.stats.worker.us_per_job.value_at_quantile(0.99),
+                        );
+                        println!(
+                            " work/job mean={:.1} p10={} p50={} p90={} p99={}",
+                            result.stats.worker.work_per_job.mean(),
+                            result.stats.worker.work_per_job.value_at_quantile(0.1),
+                            result.stats.worker.work_per_job.value_at_quantile(0.5),
+                            result.stats.worker.work_per_job.value_at_quantile(0.9),
+                            result.stats.worker.work_per_job.value_at_quantile(0.99),
+                        );
+                    }
                 }
                 Engine::Minimax => {
                     let mut ai = make_ai(&opt);
