@@ -1,11 +1,10 @@
 use crate::game;
-extern crate bytesize;
-
 use crate::prove::node_pool;
 use crate::prove::node_pool::{NodeID, Pool};
 use crate::prove::{Bounds, Evaluation};
 
 use bytesize::ByteSize;
+
 use std::cmp::min;
 use std::mem;
 use std::mem::MaybeUninit;

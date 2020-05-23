@@ -1,9 +1,9 @@
-extern crate smallvec;
-extern crate typenum;
 use crate::game;
 use crate::table;
 
 use smallvec::SmallVec;
+use typenum;
+
 use std::cmp::max;
 use std::mem::MaybeUninit;
 use std::time::{Duration, Instant};

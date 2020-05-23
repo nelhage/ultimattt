@@ -1,6 +1,3 @@
-extern crate crossbeam;
-extern crate parking_lot;
-
 use crate::game;
 use crate::minimax;
 use crate::prove;

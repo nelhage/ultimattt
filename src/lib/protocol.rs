@@ -1,4 +1,4 @@
-extern crate serde;
+use serde;
 use serde::{Deserialize, Serialize};
 
 use std::time::Duration;

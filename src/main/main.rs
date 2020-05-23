@@ -1,10 +1,3 @@
-extern crate ansi_term;
-extern crate bytesize;
-extern crate rand;
-extern crate regex;
-extern crate serde_json;
-extern crate structopt;
-
 mod epsilon_greedy;
 mod selfplay;
 mod subprocess;
