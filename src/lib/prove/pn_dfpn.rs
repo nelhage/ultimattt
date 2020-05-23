@@ -24,6 +24,7 @@ pub struct Config {
     pub timeout: Option<Duration>,
     pub split_threshold: u64,
     pub dfpn: dfpn::Config,
+    pub queue_depth: usize,
 }
 
 impl Default for Config {
@@ -34,6 +35,7 @@ impl Default for Config {
             timeout: None,
             dfpn: Default::default(),
             split_threshold: 1_000_000,
+            queue_depth: 0,
         }
     }
 }
@@ -317,8 +319,8 @@ impl Prover {
         );
 
         crossbeam::scope(|s| {
-            let (job_send, job_recv) = channel::bounded(cfg.dfpn.threads);
-            let (res_send, res_recv) = channel::bounded(cfg.dfpn.threads);
+            let (job_send, job_recv) = channel::bounded(prover.queue_depth());
+            let (res_send, res_recv) = channel::bounded(prover.queue_depth());
             let mmcfg = minimax::Config {
                 max_depth: Some(cfg.dfpn.minimax_cutoff as i64 + 1),
                 timeout: Some(Duration::from_secs(1)),
@@ -384,6 +386,13 @@ impl Prover {
         }
     }
 
+    fn queue_depth(&self) -> usize {
+        if self.cfg.queue_depth > 0 {
+            self.cfg.queue_depth
+        } else {
+            self.cfg.dfpn.threads
+        }
+    }
     fn evaluate(&self, node: &mut node_pool::AllocedNode<Node>) {
         let player = self.player();
         let res = node.pos.game_state();
@@ -496,7 +505,7 @@ impl Prover {
                 break;
             }
 
-            while inflight < self.cfg.dfpn.threads {
+            while inflight < self.queue_depth() {
                 probe_label!(enter_select_job);
                 let candidate = self.select_job();
                 probe_label!(exit_select_job);

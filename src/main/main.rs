@@ -278,6 +278,8 @@ struct AnalyzeParameters {
     probe_log: String,
     #[structopt(long)]
     split_threshold: Option<u64>,
+    #[structopt(long)]
+    queue_depth: Option<usize>,
     position: String,
 }
 
@@ -519,6 +521,9 @@ fn main() -> Result<(), std::io::Error> {
                         };
                         if let Some(st) = analyze.split_threshold {
                             cfg.split_threshold = st;
+                        }
+                        if let Some(q) = analyze.queue_depth {
+                            cfg.queue_depth = q;
                         }
                         cfg
                     };
