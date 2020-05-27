@@ -11,3 +11,4 @@ pub mod protocol;
 pub mod prove;
 
 pub mod table;
+pub mod util;

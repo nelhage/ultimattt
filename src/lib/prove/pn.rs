@@ -2,13 +2,11 @@ use crate::game;
 use crate::prove::node_pool;
 use crate::prove::node_pool::{NodeID, Pool};
 use crate::prove::{Bounds, Evaluation};
-
-use bytesize::ByteSize;
+use crate::util;
 
 use std::cmp::min;
 use std::mem;
 use std::mem::MaybeUninit;
-use std::path::Path;
 use std::time::{Duration, Instant};
 
 #[derive(Clone, Debug)]
@@ -307,7 +305,7 @@ impl Prover {
                         self.nodes.get(self.root).proof(),
                         self.nodes.get(self.root).disproof(),
                         (self.nodes.stats.allocated.get() as f64) / (elapsed.as_millis() as f64),
-                        read_rss(),
+                        util::read_rss(),
                     );
                     self.tick = now + TICK_INTERVAL;
                 }
@@ -492,13 +490,4 @@ impl Prover {
         }
         depth
     }
-}
-
-fn read_rss() -> ByteSize {
-    let path = Path::new("/proc/")
-        .join(std::process::id().to_string())
-        .join("stat");
-    let stat = std::fs::read_to_string(path).unwrap();
-    let mut bits = stat.split(' ');
-    ByteSize::kib(4 * bits.nth(23).unwrap().parse::<u64>().unwrap())
 }

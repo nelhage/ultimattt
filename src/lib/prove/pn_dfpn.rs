@@ -5,8 +5,8 @@ use crate::prove::node_pool;
 use crate::prove::node_pool::{NodeID, Pool};
 use crate::prove::{Bounds, Evaluation, INFINITY};
 use crate::table;
+use crate::util;
 
-use bytesize::ByteSize;
 use crossbeam;
 use crossbeam::channel;
 use hdrhistogram::Histogram;
@@ -14,7 +14,6 @@ use hdrhistogram::Histogram;
 use std::cmp::min;
 use std::mem;
 use std::mem::MaybeUninit;
-use std::path::Path;
 use std::time::{Duration, Instant};
 
 #[derive(Clone)]
@@ -492,7 +491,7 @@ impl Prover {
                     self.nodes.get(self.root).proof(),
                     self.nodes.get(self.root).disproof(),
                     (self.nodes.stats.allocated.get() as f64) / (elapsed.as_secs() as f64),
-                    read_rss(),
+                    util::read_rss(),
                 );
                 self.tick = now + TICK_INTERVAL;
             }
@@ -757,13 +756,4 @@ impl Prover {
         }
         depth
     }
-}
-
-fn read_rss() -> ByteSize {
-    let path = Path::new("/proc/")
-        .join(std::process::id().to_string())
-        .join("stat");
-    let stat = std::fs::read_to_string(path).unwrap();
-    let mut bits = stat.split(' ');
-    ByteSize::kib(4 * bits.nth(23).unwrap().parse::<u64>().unwrap())
 }
