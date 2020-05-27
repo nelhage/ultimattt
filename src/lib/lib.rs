@@ -1,4 +1,5 @@
 #![feature(new_uninit)]
+#![feature(asm)]
 
 #[allow(dead_code)]
 pub mod game;

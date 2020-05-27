@@ -1,0 +1,34 @@
+#!/usr/bin/env python3
+import os
+import sys
+import subprocess
+import re
+
+def main(argv):
+    ROOT = os.path.realpath(os.path.join(os.path.dirname(sys.argv[0]), ".."))
+    binary = os.path.join(ROOT, 'target/release/ultimattt')
+    subprocess.check_call(['cargo', 'build', '--release'], cwd=ROOT)
+    symbols = subprocess.check_output([
+        'objdump', '-t', '-j', '.text', binary]).decode('utf-8')
+    probes = []
+    for line in symbols.split("\n"):
+        if 'probe_' not in line:
+            continue
+        addr, flag, section, _, sym = re.split(r'\s+', line)
+        addr = int(addr, 16)
+        probes.append((sym.replace('.', '_'), addr))
+    probespec = "\n".join([
+        "p:pndfpn/{} {}:0x{:x}".format(probe, binary, addr) for (probe, addr) in probes
+    ]).encode('ascii') + b'\n'
+    subprocess.run([
+        'sudo',
+        'tee',
+        '/sys/kernel/tracing/uprobe_events'
+    ], input=probespec)
+    events = [arg for (event, _) in probes for arg in ('-e', "pndfpn:{}".format(event))]
+    cmdline = ['perf', 'record'] + events + [binary] + argv
+    print("Running: {}".format(cmdline))
+    os.execvp('perf', cmdline)
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

@@ -232,6 +232,23 @@ where
     stats: WorkerStats,
 }
 
+macro_rules! probe_label {
+    ($label:ident) => {
+        unsafe {
+            asm!(concat!(
+                "probe_",
+                stringify!($label),
+                ".${:uid}",
+                ":\n",
+                ".globl probe_",
+                stringify!($label),
+                ".${:uid}",
+                "\n"
+            ) : : : : "volatile");
+        }
+    };
+}
+
 impl<'a, Table, Probe> Worker<'a, Table, Probe>
 where
     Table: table::Table<dfpn::Entry>,
@@ -239,6 +256,7 @@ where
 {
     fn run(&mut self) {
         for job in self.jobs.iter() {
+            probe_label!(enter_run_job);
             let start = Instant::now();
             let (entry, work) = self.mid.mid(
                 job.bounds,
@@ -255,6 +273,8 @@ where
             let t = Instant::now().duration_since(start);
             self.stats.us_per_job.record(t.as_micros() as u64).unwrap();
             self.stats.work_per_job.record(work).unwrap();
+            probe_label!(exit_run_job);
+
             if let Err(_) = self.results.send(JobResult {
                 nid: job.nid,
                 work: work,
@@ -477,7 +497,11 @@ impl Prover {
             }
 
             while inflight < self.cfg.dfpn.threads {
-                if let Some(job) = self.select_job() {
+                probe_label!(enter_select_job);
+                let candidate = self.select_job();
+                probe_label!(exit_select_job);
+
+                if let Some(job) = candidate {
                     self.stats.jobs += 1;
                     jobs.send(job).unwrap();
                     inflight += 1;
