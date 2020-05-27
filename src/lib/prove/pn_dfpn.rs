@@ -10,6 +10,7 @@ use crate::util;
 use crossbeam;
 use crossbeam::channel;
 use hdrhistogram::Histogram;
+use serde::Serialize;
 
 use std::cmp::min;
 use std::mem;
@@ -39,7 +40,7 @@ impl Default for Config {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Serialize)]
 pub struct Stats {
     pub proved: usize,
     pub disproved: usize,
@@ -49,6 +50,7 @@ pub struct Stats {
     pub mid: dfpn::Stats,
     pub allocated: usize,
     pub freed: usize,
+    #[serde(flatten)]
     pub worker: WorkerStats,
 }
 
@@ -189,15 +191,16 @@ pub struct ProofResult {
     pub proof: u32,
     pub disproof: u32,
 
-    pub allocated: usize,
     pub stats: Stats,
 }
 
 static TICK_INTERVAL: Duration = Duration::from_millis(1000);
 
-#[derive(Clone)]
+#[derive(Clone, Serialize)]
 pub struct WorkerStats {
+    #[serde(serialize_with = "util::serialize_histogram")]
     pub work_per_job: Histogram<u64>,
+    #[serde(serialize_with = "util::serialize_histogram")]
     pub us_per_job: Histogram<u64>,
 }
 

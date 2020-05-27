@@ -20,6 +20,7 @@ pub struct Stats {
     pub jobs: usize,
     pub minimax: usize,
     pub minimax_solve: usize,
+    #[serde(flatten)]
     pub tt: table::Stats,
 }
 
@@ -90,7 +91,6 @@ pub struct Config {
     pub load_table: Option<String>,
     pub dump_interval: Duration,
     pub minimax_cutoff: usize,
-    pub write_metrics: Option<String>,
     pub probe_hash: Option<u64>,
     pub probe_log: String,
 }
@@ -108,7 +108,6 @@ impl Default for Config {
             load_table: None,
             dump_interval: Duration::from_secs(30),
             minimax_cutoff: 0,
-            write_metrics: None,
             probe_hash: None,
             probe_log: "probe.csv".to_owned(),
         }
@@ -251,7 +250,6 @@ impl DFPN {
                         worker.stats.mid,
                         root.bounds,
                     );
-                    dump_metrics(&worker.cfg, elapsed, &worker.stats).expect("dump_metrics failed");
                 }
 
                 if let Some(_) = self.cfg.dump_table {
@@ -314,12 +312,6 @@ impl Probe {
             .expect("probe line");
         }
     }
-}
-
-#[derive(Serialize)]
-struct Metrics<'a> {
-    elapsed_ms: u128,
-    stats: &'a Stats,
 }
 
 pub(in crate::prove) fn compute_bounds(children: &Vec<Child>) -> Bounds {
@@ -424,30 +416,6 @@ pub(in crate::prove) fn dump_table<T: table::Table<Entry>>(
                 elapsed.subsec_millis(),
             );
         }
-    }
-    Ok(())
-}
-
-pub(in crate::prove) fn dump_metrics(
-    cfg: &Config,
-    elapsed: Duration,
-    stats: &Stats,
-) -> io::Result<()> {
-    if let Some(ref p) = cfg.write_metrics {
-        let mut f = fs::OpenOptions::new()
-            .read(false)
-            .append(true)
-            .write(true)
-            .truncate(false)
-            .create(true)
-            .open(p)
-            .expect("write_metrics");
-        let e = Metrics {
-            elapsed_ms: elapsed.as_millis(),
-            stats: stats,
-        };
-        serde_json::to_writer(&mut f, &e)?;
-        writeln!(f)?;
     }
     Ok(())
 }

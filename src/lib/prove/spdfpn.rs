@@ -317,8 +317,6 @@ where
                     work,
                 );
                 self.guard.tick = now + dfpn::TICK_TIME;
-                dfpn::dump_metrics(&self.mid.cfg, elapsed, &self.mid.stats)
-                    .expect("dump_metrics failed");
             }
 
             if let Some(_) = self.mid.cfg.dump_table {

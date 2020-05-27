@@ -5,16 +5,21 @@ mod worker;
 
 use ansi_term::Style;
 use regex::Regex;
-use std::fmt::Write;
-use std::io;
-use std::process::exit;
-use std::str::FromStr;
-use std::time::Duration;
+use serde;
+use serde::Serialize;
+use serde_json;
 use structopt::StructOpt;
 use ultimattt::game;
 use ultimattt::minimax;
 use ultimattt::minimax::AI;
 use ultimattt::prove;
+
+use std::fs;
+use std::io;
+use std::io::Write;
+use std::process::exit;
+use std::str::FromStr;
+use std::time::Duration;
 
 fn cell(g: game::CellState) -> &'static str {
     match g {
@@ -332,7 +337,6 @@ fn dfpn_config(opt: &Opt, analyze: &AnalyzeParameters, pos: &game::Game) -> prov
         dump_table: analyze.dump_table.clone(),
         load_table: analyze.load_table.clone(),
         dump_interval: analyze.dump_interval.clone(),
-        write_metrics: analyze.write_metrics.clone(),
         probe_log: analyze.probe_log.clone(),
         probe_hash: probe_hash,
         ..Default::default()
@@ -400,6 +404,13 @@ fn build_selfplay_player<'a>(
     } else {
         Ok(Box::new(player))
     }
+}
+
+#[derive(Serialize)]
+struct Metrics<T: Serialize> {
+    duration_ms: u128,
+    #[serde(flatten)]
+    stats: T,
 }
 
 fn main() -> Result<(), std::io::Error> {
@@ -502,7 +513,7 @@ fn main() -> Result<(), std::io::Error> {
                     );
                     let mut pv = String::new();
                     for m in result.pv.iter() {
-                        write!(&mut pv, "{} ", m).unwrap();
+                        write!(&mut pv as &mut dyn std::fmt::Write, "{} ", m).unwrap();
                     }
                     println!(" pv={}", pv.trim_end());
                 }
@@ -570,6 +581,22 @@ fn main() -> Result<(), std::io::Error> {
                             result.stats.worker.work_per_job.value_at_quantile(0.9),
                             result.stats.worker.work_per_job.value_at_quantile(0.99),
                         );
+                    }
+                    if let Some(ref p) = analyze.write_metrics {
+                        let metrics = Metrics {
+                            duration_ms: result.duration.as_millis(),
+                            stats: result.stats.clone(),
+                        };
+                        let mut f = fs::OpenOptions::new()
+                            .read(false)
+                            .append(true)
+                            .write(true)
+                            .truncate(false)
+                            .create(true)
+                            .open(p)
+                            .expect("write_metrics");
+                        serde_json::to_writer(&mut f, &metrics)?;
+                        f.write_all(b"\n")?;
                     }
                 }
                 Engine::Minimax => {
