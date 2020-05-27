@@ -47,6 +47,8 @@ pub struct Stats {
     pub jobs: usize,
     pub recv: usize,
     pub mid: dfpn::Stats,
+    pub allocated: usize,
+    pub freed: usize,
     pub worker: WorkerStats,
 }
 
@@ -58,6 +60,8 @@ impl Default for Stats {
             expanded: 0,
             jobs: 0,
             recv: 0,
+            allocated: 0,
+            freed: 0,
             mid: Default::default(),
             worker: Default::default(),
         }
@@ -369,6 +373,8 @@ impl Prover {
         .unwrap();
 
         prover.stats.mid.tt = table.stats();
+        prover.stats.allocated = prover.nodes.stats.allocated.get();
+        prover.stats.freed = prover.nodes.stats.freed.get();
 
         let ref root = prover.nodes.get(prover.root);
         ProofResult {
@@ -381,7 +387,6 @@ impl Prover {
             proof: root.proof(),
             disproof: root.disproof(),
             stats: prover.stats.clone(),
-            allocated: prover.nodes.stats.allocated.get(),
         }
     }
 

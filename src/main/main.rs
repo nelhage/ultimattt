@@ -537,7 +537,7 @@ fn main() -> Result<(), std::io::Error> {
                         result.disproof,
                         result.stats.jobs,
                         result.stats.recv,
-                        result.allocated,
+                        result.stats.allocated,
                     );
                     println!(
                         "  mid={} try={} jobs={} tthit={}/{} ({:.1}%) ttstore={} minimax={}/{}",
