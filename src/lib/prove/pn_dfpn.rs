@@ -397,7 +397,7 @@ impl Prover {
         if self.cfg.queue_depth > 0 {
             self.cfg.queue_depth
         } else {
-            self.cfg.dfpn.threads
+            self.cfg.dfpn.threads + 1
         }
     }
     fn evaluate(&self, node: &mut node_pool::AllocedNode<Node>) {
