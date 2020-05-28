@@ -15,6 +15,7 @@ use serde::Serialize;
 use std::cmp::min;
 use std::mem;
 use std::mem::MaybeUninit;
+use std::sync::atomic::AtomicU32;
 use std::time::{Duration, Instant};
 
 #[derive(Clone)]
@@ -275,6 +276,7 @@ where
                     child: 0xff,
                     pv: game::Move::none(),
                     work: 0,
+                    sync: AtomicU32::new(0),
                 },
                 &job.pos,
             );

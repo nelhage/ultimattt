@@ -2,11 +2,15 @@ use typenum;
 
 use parking_lot::Mutex;
 use serde::Serialize;
+
 use std::cell::UnsafeCell;
 use std::marker::PhantomData;
 use std::mem::MaybeUninit;
-use std::sync::atomic::{fence, AtomicU32, AtomicUsize, Ordering};
-use std::{fs, io, mem, ptr, slice, thread};
+use std::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
+use std::{fs, io, mem, ptr, slice};
+
+mod entry_mutex;
+use entry_mutex::EntryMutex;
 
 #[derive(Default, Clone, Debug, Serialize)]
 pub struct Stats {
@@ -27,7 +31,7 @@ impl Stats {
 
 pub struct TranspositionTable<E, N>
 where
-    E: Entry + Default + Clone,
+    E: Entry + Default,
     N: typenum::Unsigned,
 {
     index: Box<[u8]>,
@@ -195,19 +199,20 @@ where
     }
 }
 
-const ENTRIES_PER_LOCK: usize = 16;
+pub trait AtomicEntry: Entry + Sized {
+    unsafe fn lock(e: *const Self) -> *const AtomicU32;
+    unsafe fn write(dst: *mut Self, v: &Self);
+}
 
 pub struct ConcurrentTranspositionTable<E, N>
 where
-    E: Entry + Default + Clone,
+    E: AtomicEntry + Default,
     N: typenum::Unsigned,
 {
     index: Box<[UnsafeCell<u8>]>,
     entries: Box<[UnsafeCell<E>]>,
-    counters: Box<[AtomicU32]>,
 
     len: usize,
-    write: Mutex<()>,
 
     handles: AtomicUsize,
     stats: Mutex<Stats>,
@@ -217,21 +222,21 @@ where
 
 unsafe impl<E, N> Sync for ConcurrentTranspositionTable<E, N>
 where
-    E: Entry + Default + Clone,
+    E: AtomicEntry + Default,
     N: typenum::Unsigned,
 {
 }
 
 unsafe impl<E, N> Send for ConcurrentTranspositionTable<E, N>
 where
-    E: Entry + Default + Clone,
+    E: AtomicEntry + Default,
     N: typenum::Unsigned,
 {
 }
 
 impl<E, N> ConcurrentTranspositionTable<E, N>
 where
-    E: Entry + Default + Clone,
+    E: AtomicEntry + Default + Clone,
     N: typenum::Unsigned,
 {
     pub fn new() -> Self {
@@ -246,9 +251,7 @@ where
         Self {
             index: new_default_slice(len),
             entries: new_default_slice(len),
-            counters: new_default_slice(len / ENTRIES_PER_LOCK),
             len: len,
-            write: Mutex::new(()),
             n: PhantomData,
             handles: AtomicUsize::new(0),
             stats: Default::default(),
@@ -269,8 +272,6 @@ where
             index: unsafe { mem::transmute(t.index) },
             entries: unsafe { mem::transmute(t.entries) },
             len: entries,
-            counters: new_default_slice(entries / ENTRIES_PER_LOCK),
-            write: Mutex::new(()),
             n: PhantomData,
             handles: AtomicUsize::new(0),
             stats: Default::default(),
@@ -294,68 +295,61 @@ where
         None
     }
 
+    fn mutex<'a>(&self, i: usize) -> EntryMutex<'a> {
+        unsafe { EntryMutex(E::lock(self.entries[i].get()).as_ref().unwrap()) }
+    }
+
     fn entry(&self, i: usize) -> E {
-        let counter = &self.counters[i % self.counters.len()];
-        loop {
-            let seq1 = counter.load(Ordering::Acquire);
-            if seq1 & 1 == 1 {
-                // Currently writing, bail
-                thread::yield_now();
-                continue;
-            }
-
-            let e = unsafe { ptr::read_volatile(self.entries[i].get()) };
-
-            fence(Ordering::Acquire);
-            let seq2 = counter.load(Ordering::Relaxed);
-            if seq1 != seq2 {
-                continue;
-            }
-            return e;
-        }
+        let lk = self.mutex(i);
+        lk.read(|| unsafe { ptr::read_volatile(self.entries[i].get()) })
     }
 
     pub fn store(&self, stats: &mut Stats, ent: &E) -> bool {
-        let _lk = self.write.lock();
         debug_assert!(ent.valid());
-        let mut worst: Option<usize> = None;
+        let mut worst: Option<(usize, E)> = None;
+
         let base = ent.hash() as usize;
         for j in 0..N::to_usize() {
             let i = (base + j) % self.entries.len();
-            let ei = unsafe { self.entries[i].get().as_ref().unwrap() };
+            let ei = self.entry(i);
             if !ei.valid() || ei.hash() == ent.hash() {
-                worst = Some(i);
+                worst = Some((i, ei));
                 break;
-            } else if let Some(w) = worst {
-                if (unsafe { self.entries[w].get().as_ref().unwrap() }).better_than(&ei) {
-                    worst = Some(i);
+            } else if let Some((_, ref we)) = worst {
+                if we.better_than(&ei) {
+                    worst = Some((i, ei));
                 }
             } else {
-                worst = Some(i);
+                worst = Some((i, ei));
             }
         }
-        let idx = worst.unwrap();
+        let (idx, _) = worst.unwrap();
+        let lk = self.mutex(idx);
+        let guard = lk.lock();
+
         let dst = unsafe { self.entries[idx].get().as_mut().unwrap() };
-
-        if !dst.valid() || ent.better_than(&dst) {
-            let seq = &self.counters[idx % self.counters.len()];
-            seq.fetch_add(1, Ordering::Relaxed);
-            fence(Ordering::Release);
-
+        let did_write = if !dst.valid() || ent.better_than(&dst) {
             unsafe {
+                E::write(self.entries[idx].get(), ent);
                 ptr::write(self.index[idx].get(), (ent.hash() & 0xff) as u8);
-                ptr::write(self.entries[idx].get(), ent.clone());
             }
-
-            seq.fetch_add(1, Ordering::Release);
 
             stats.stores += 1;
             true
         } else {
+            guard.abort();
             false
-        }
-    }
+        };
 
+        did_write
+    }
+}
+
+impl<E, N> ConcurrentTranspositionTable<E, N>
+where
+    E: AtomicEntry + Default,
+    N: typenum::Unsigned,
+{
     pub fn dump(&self, w: &mut dyn io::Write) -> io::Result<()> {
         let header = Header {
             version: DUMPFILE_VERSION,
@@ -382,7 +376,7 @@ where
 
 pub struct ConcurrentTranspositionTableHandle<'a, E, N>
 where
-    E: Entry + Default + Clone,
+    E: AtomicEntry + Default,
     N: typenum::Unsigned,
 {
     table: &'a ConcurrentTranspositionTable<E, N>,
@@ -391,7 +385,7 @@ where
 
 impl<'a, E, N> ConcurrentTranspositionTableHandle<'a, E, N>
 where
-    E: Entry + Default + Clone,
+    E: AtomicEntry + Default + Clone,
     N: typenum::Unsigned,
 {
     pub fn lookup(&mut self, h: u64) -> Option<E> {
@@ -409,7 +403,7 @@ where
 
 impl<'a, E, N> Drop for ConcurrentTranspositionTableHandle<'a, E, N>
 where
-    E: Entry + Default + Clone,
+    E: AtomicEntry + Default,
     N: typenum::Unsigned,
 {
     fn drop(&mut self) {
@@ -421,7 +415,7 @@ where
 
 impl<'a, E, N> Clone for ConcurrentTranspositionTableHandle<'a, E, N>
 where
-    E: Entry + Default + Clone,
+    E: AtomicEntry + Default,
     N: typenum::Unsigned,
 {
     fn clone(&self) -> Self {
@@ -431,7 +425,7 @@ where
 
 pub trait Table<E>
 where
-    E: Entry + Default + Clone,
+    E: Entry + Default,
 {
     fn lookup(&mut self, h: u64) -> Option<E>;
     fn store(&mut self, e: &E) -> bool;
@@ -458,7 +452,7 @@ where
 
 impl<'a, E, N> Table<E> for ConcurrentTranspositionTableHandle<'a, E, N>
 where
-    E: Entry + Default + Clone,
+    E: AtomicEntry + Default + Clone,
     N: typenum::Unsigned,
 {
     fn lookup(&mut self, h: u64) -> Option<E> {

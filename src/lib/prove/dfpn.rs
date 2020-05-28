@@ -6,11 +6,13 @@ use crate::prove::{Bounds, INFINITY};
 use crate::table;
 
 use serde::Serialize;
+use typenum;
+
 use std::cmp::{max, min};
 use std::io::Write;
+use std::sync::atomic::AtomicU32;
 use std::time::{Duration, Instant};
 use std::{fs, io};
-use typenum;
 
 #[derive(Clone, Debug, Default, Serialize)]
 pub struct Stats {
@@ -38,14 +40,27 @@ impl Stats {
     }
 }
 
-#[derive(Clone)]
 #[repr(C)]
 pub(in crate::prove) struct Entry {
-    pub(in crate::prove) bounds: Bounds, // 8
-    pub(in crate::prove) hash: u64,      // 8
-    pub(in crate::prove) work: u64,      // 8
-    pub(in crate::prove) pv: game::Move, // 1
-    pub(in crate::prove) child: u8,      // 1
+    pub(in crate::prove) bounds: Bounds,  // 8
+    pub(in crate::prove) hash: u64,       // 8
+    pub(in crate::prove) work: u64,       // 8
+    pub(in crate::prove) sync: AtomicU32, // 4
+    pub(in crate::prove) pv: game::Move,  // 1
+    pub(in crate::prove) child: u8,       // 1
+}
+
+impl Clone for Entry {
+    fn clone(&self) -> Self {
+        Entry {
+            bounds: self.bounds.clone(),
+            hash: self.hash,
+            work: self.work,
+            sync: AtomicU32::new(0),
+            pv: self.pv,
+            child: self.child,
+        }
+    }
 }
 
 impl table::Entry for Entry {
@@ -67,6 +82,20 @@ impl table::Entry for Entry {
     }
 }
 
+impl table::AtomicEntry for Entry {
+    unsafe fn lock(e: *const Self) -> *const AtomicU32 {
+        &(*e).sync
+    }
+
+    unsafe fn write(dst: *mut Self, v: &Self) {
+        (*dst).bounds = v.bounds;
+        (*dst).hash = v.hash;
+        (*dst).work = v.work;
+        (*dst).pv = v.pv;
+        (*dst).child = v.child;
+    }
+}
+
 impl Default for Entry {
     fn default() -> Self {
         Entry {
@@ -75,6 +104,7 @@ impl Default for Entry {
             work: std::u64::MAX,
             pv: game::Move::none(),
             child: std::u8::MAX,
+            sync: AtomicU32::new(0),
         }
     }
 }
@@ -225,6 +255,7 @@ impl DFPN {
                 child: 0xff,
                 pv: game::Move::none(),
                 work: 0,
+                sync: AtomicU32::new(0),
             };
             let mut work = 0;
             let mut dump_tick = self.start + self.cfg.dump_interval;

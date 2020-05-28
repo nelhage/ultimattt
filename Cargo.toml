@@ -34,6 +34,7 @@ bytesize = "1.0.0"
 typenum = "1.11.2"
 crossbeam = "0.7.3"
 parking_lot = "0.10.2"
+parking_lot_core = "0.7.2"
 hdrhistogram = "7.1.0"
 
 [dev-dependencies]
