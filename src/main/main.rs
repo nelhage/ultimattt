@@ -584,6 +584,13 @@ fn main() -> Result<(), std::io::Error> {
                         result.stats.mid.minimax,
                     );
                     if cfg.debug > 0 {
+                        let thread_ms =
+                            result.duration.as_millis() as f64 * opt.global.threads as f64;
+                        println!(
+                            " job/ms/thread={:.1} mid/ms/thread={:.1}",
+                            (result.stats.jobs as f64) / thread_ms,
+                            (result.stats.mid.mid as f64) / thread_ms,
+                        );
                         println!(
                             " us/job   mean={:.1} p10={} p50={} p90={} p99={}",
                             result.stats.worker.us_per_job.mean(),
