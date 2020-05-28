@@ -4,11 +4,13 @@ mod subprocess;
 mod worker;
 
 use ansi_term::Style;
+use bytesize::ByteSize;
 use regex::Regex;
 use serde;
-use serde::Serialize;
+use serde::{Serialize, Serializer};
 use serde_json;
 use structopt::StructOpt;
+
 use ultimattt::game;
 use ultimattt::minimax;
 use ultimattt::minimax::AI;
@@ -202,19 +204,30 @@ fn parse_bytesize(arg: &str) -> Result<bytesize::ByteSize, io::Error> {
     }
 }
 
-#[derive(Debug, StructOpt)]
-#[structopt(name = "ultimatett", about = "Ultimate Tic Tac Toe")]
-pub struct Opt {
+fn serialize_bytesize<S: Serializer>(bs: &ByteSize, serializer: S) -> Result<S::Ok, S::Error> {
+    serializer.serialize_u64(bs.as_u64())
+}
+
+#[derive(Debug, StructOpt, Serialize)]
+struct GlobalOptions {
     #[structopt(long, default_value = "1s", parse(try_from_str=parse_duration))]
     timeout: Duration,
     #[structopt(long)]
     depth: Option<i64>,
     #[structopt(long, default_value = "1G", parse(try_from_str=parse_bytesize))]
+    #[serde(serialize_with = "serialize_bytesize")]
     table_mem: bytesize::ByteSize,
     #[structopt(long, default_value = "1")]
     threads: usize,
     #[structopt(long, default_value = "1")]
     debug: usize,
+}
+
+#[derive(Debug, StructOpt)]
+#[structopt(name = "ultimatett", about = "Ultimate Tic Tac Toe")]
+pub struct Opt {
+    #[structopt(flatten)]
+    global: GlobalOptions,
     #[structopt(subcommand)]
     cmd: Command,
 }
@@ -231,7 +244,7 @@ struct SelfplayParameters {
     epsilon: f64,
 }
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, StructOpt, Serialize)]
 enum Engine {
     Minimax,
     PN,
@@ -255,7 +268,7 @@ impl FromStr for Engine {
     }
 }
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, StructOpt, Serialize)]
 struct AnalyzeParameters {
     #[structopt(long, default_value = "minimax")]
     engine: Engine,
@@ -301,7 +314,7 @@ enum Command {
     Worker {},
 }
 
-fn ai_config(opt: &Opt) -> minimax::Config {
+fn ai_config(opt: &GlobalOptions) -> minimax::Config {
     minimax::Config {
         timeout: Some(opt.timeout),
         max_depth: opt.depth,
@@ -311,7 +324,11 @@ fn ai_config(opt: &Opt) -> minimax::Config {
     }
 }
 
-fn dfpn_config(opt: &Opt, analyze: &AnalyzeParameters, pos: &game::Game) -> prove::dfpn::Config {
+fn dfpn_config(
+    opt: &GlobalOptions,
+    analyze: &AnalyzeParameters,
+    pos: &game::Game,
+) -> prove::dfpn::Config {
     let probe_hash = match (analyze.probe_hash, analyze.probe.as_ref()) {
         (None, None) => None,
         (Some(p), None) => Some(p),
@@ -350,12 +367,12 @@ fn dfpn_config(opt: &Opt, analyze: &AnalyzeParameters, pos: &game::Game) -> prov
     cfg
 }
 
-fn make_ai(opt: &Opt) -> minimax::Minimax {
+fn make_ai(opt: &GlobalOptions) -> minimax::Minimax {
     minimax::Minimax::with_config(&ai_config(opt))
 }
 
 fn parse_player<'a>(
-    opt: &Opt,
+    opt: &GlobalOptions,
     player: game::Player,
     spec: &str,
 ) -> Result<Box<dyn minimax::AI + 'a>, std::io::Error> {
@@ -407,10 +424,12 @@ fn build_selfplay_player<'a>(
 }
 
 #[derive(Serialize)]
-struct Metrics<T: Serialize> {
+struct Metrics<'a, T: Serialize> {
     duration_ms: u128,
     #[serde(flatten)]
     stats: T,
+    config: &'a GlobalOptions,
+    analyze: &'a AnalyzeParameters,
 }
 
 fn main() -> Result<(), std::io::Error> {
@@ -423,8 +442,8 @@ fn main() -> Result<(), std::io::Error> {
             ..
         } => {
             let mut g = game::Game::new();
-            let mut player_x = parse_player(&opt, game::Player::X, playerx)?;
-            let mut player_o = parse_player(&opt, game::Player::O, playero)?;
+            let mut player_x = parse_player(&opt.global, game::Player::X, playerx)?;
+            let mut player_o = parse_player(&opt.global, game::Player::O, playero)?;
             loop {
                 render(&mut stdout, &g)?;
                 let m = match g.player() {
@@ -465,8 +484,8 @@ fn main() -> Result<(), std::io::Error> {
                 Engine::PN => {
                     let result = prove::pn::Prover::prove(
                         &prove::pn::Config {
-                            debug: opt.debug,
-                            timeout: Some(opt.timeout),
+                            debug: opt.global.debug,
+                            timeout: Some(opt.global.timeout),
                             max_nodes: analyze.max_nodes,
                             ..Default::default()
                         },
@@ -483,7 +502,7 @@ fn main() -> Result<(), std::io::Error> {
                     );
                 }
                 Engine::DFPN | Engine::SPDFPN => {
-                    let mut dfpn_cfg = dfpn_config(&opt, &analyze, &game);
+                    let mut dfpn_cfg = dfpn_config(&opt.global, &analyze, &game);
                     if let Engine::DFPN = analyze.engine {
                         dfpn_cfg.threads = 0;
                     };
@@ -520,12 +539,12 @@ fn main() -> Result<(), std::io::Error> {
                 Engine::PN_DFPN => {
                     let cfg = {
                         let dfpn_cfg = prove::dfpn::Config {
-                            debug: opt.debug.saturating_sub(10),
-                            ..dfpn_config(&opt, &analyze, &game)
+                            debug: opt.global.debug.saturating_sub(10),
+                            ..dfpn_config(&opt.global, &analyze, &game)
                         };
                         let mut cfg = prove::pn_dfpn::Config {
-                            debug: opt.debug,
-                            timeout: Some(opt.timeout),
+                            debug: opt.global.debug,
+                            timeout: Some(opt.global.timeout),
                             max_nodes: analyze.max_nodes,
                             dfpn: dfpn_cfg,
                             ..Default::default()
@@ -586,6 +605,8 @@ fn main() -> Result<(), std::io::Error> {
                         let metrics = Metrics {
                             duration_ms: result.duration.as_millis(),
                             stats: result.stats.clone(),
+                            config: &opt.global,
+                            analyze: analyze,
                         };
                         let mut f = fs::OpenOptions::new()
                             .read(false)
@@ -600,7 +621,7 @@ fn main() -> Result<(), std::io::Error> {
                     }
                 }
                 Engine::Minimax => {
-                    let mut ai = make_ai(&opt);
+                    let mut ai = make_ai(&opt.global);
                     let m = ai.select_move(&game).map_err(|e| {
                         io::Error::new(io::ErrorKind::Other, format!("analyzing: {:?}", e))
                     })?;
@@ -616,7 +637,7 @@ fn main() -> Result<(), std::io::Error> {
             worker.run()?;
         }
         Command::Selfplay(ref params) => {
-            let config = ai_config(&opt);
+            let config = ai_config(&opt.global);
             let builder1 = |p| build_selfplay_player(p, &config, &params.player1, params.epsilon);
             let builder2 = |p| build_selfplay_player(p, &config, &params.player2, params.epsilon);
             let mut engine = selfplay::Executor::new(builder1, builder2);
