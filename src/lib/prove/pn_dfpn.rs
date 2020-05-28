@@ -34,7 +34,7 @@ impl Default for Config {
             max_nodes: None,
             timeout: None,
             dfpn: Default::default(),
-            split_threshold: 1_000_000,
+            split_threshold: 1_000,
             queue_depth: 0,
         }
     }
