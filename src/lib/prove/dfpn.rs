@@ -41,11 +41,11 @@ impl Stats {
 #[derive(Clone)]
 #[repr(C)]
 pub(in crate::prove) struct Entry {
-    pub(in crate::prove) bounds: Bounds,
-    pub(in crate::prove) hash: u64,
-    pub(in crate::prove) work: u64,
-    pub(in crate::prove) pv: game::Move,
-    pub(in crate::prove) child: u8,
+    pub(in crate::prove) bounds: Bounds, // 8
+    pub(in crate::prove) hash: u64,      // 8
+    pub(in crate::prove) work: u64,      // 8
+    pub(in crate::prove) pv: game::Move, // 1
+    pub(in crate::prove) child: u8,      // 1
 }
 
 impl table::Entry for Entry {
