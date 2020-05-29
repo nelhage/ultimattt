@@ -76,18 +76,15 @@ const FLAG_AND: u16 = 1 << 1;
 const FLAG_FREE: u16 = 1 << 2;
 
 struct Node {
-    parent: NodeID,
-
-    bounds: Bounds,
-    vbounds: Bounds,
-
-    value: Evaluation,
-    r#move: game::Move,
-    pos: game::Game,
-    flags: u16,
-    first_child: NodeID,
-    sibling: NodeID,
-    work: u64,
+    parent: NodeID,      // 4
+    bounds: Bounds,      // 8
+    vbounds: Bounds,     // 8
+    value: Evaluation,   // 1
+    r#move: game::Move,  // 1
+    flags: u16,          // 2
+    first_child: NodeID, // 4
+    sibling: NodeID,     // 4
+    work: u64,           // 8
 }
 
 impl Node {
@@ -121,7 +118,6 @@ impl node_pool::Node for Node {
         ptr.write(MaybeUninit::new(Node {
             parent: free,
             r#move: game::Move::none(),
-            pos: MaybeUninit::zeroed().assume_init(),
             bounds: Bounds::unity(),
             vbounds: Bounds::unity(),
             value: Evaluation::Unknown,
@@ -296,6 +292,12 @@ where
     }
 }
 
+struct Cursor {
+    nid: NodeID,
+    pos: game::Game,
+    bounds: Bounds,
+}
+
 impl Prover {
     pub fn prove(cfg: &Config, pos: &game::Game) -> ProofResult {
         if cfg.debug > 1 {
@@ -317,9 +319,8 @@ impl Prover {
             let mut root = prover.nodes.alloc();
 
             root.parent = NodeID::none();
-            root.pos = pos.clone();
             prover.root = root.id;
-            prover.evaluate(&mut root);
+            prover.evaluate(&mut root, pos);
         }
 
         let table = table::ConcurrentTranspositionTable::<dfpn::Entry, typenum::U4>::with_memory(
@@ -402,13 +403,13 @@ impl Prover {
             self.cfg.dfpn.threads + 1
         }
     }
-    fn evaluate(&self, node: &mut node_pool::AllocedNode<Node>) {
+    fn evaluate(&self, node: &mut node_pool::AllocedNode<Node>, pos: &game::Game) {
         let player = self.player();
-        let res = node.pos.game_state();
+        let res = pos.game_state();
         node.value = match res {
             game::BoardState::InPlay => Evaluation::Unknown,
             game::BoardState::Drawn => {
-                if node.pos.player() == player {
+                if pos.player() == player {
                     Evaluation::False
                 } else {
                     Evaluation::True
@@ -432,8 +433,8 @@ impl Prover {
             }
             Evaluation::Unknown => {
                 Bounds::unity()
-                // delta = self.cursor.position(nid).all_moves().count() as u32;
-                // delta = self.cursor.position(nid).bound_depth() as u32;
+                // delta = pos.all_moves().count() as u32;
+                // delta = pos.bound_depth() as u32;
             }
         };
         node.bounds = bounds;
@@ -542,34 +543,35 @@ impl Prover {
     }
 
     fn select_job<'a>(&'a mut self) -> Option<Job> {
-        let (mut mpn, mut bounds) = self.select_most_proving(self.root, Bounds::root())?;
+        let mut mpn = self.select_most_proving(Cursor {
+            nid: self.root,
+            pos: self.position.clone(),
+            bounds: Bounds::root(),
+        })?;
         let mut did_split = false;
-        if self.nodes.get(mpn).work >= self.cfg.split_threshold {
-            self.expand(mpn);
-            let (mpn2, bounds2) = self.select_most_proving(mpn, bounds)?;
-
-            mpn = mpn2;
-            bounds = bounds2;
+        if self.nodes.get(mpn.nid).work >= self.cfg.split_threshold {
+            self.expand(&mpn);
+            mpn = self.select_most_proving(mpn)?;
             did_split = true;
         }
 
-        let node = self.nodes.get_mut(mpn);
-        if node.vbounds.exceeded(bounds) {
+        let node = self.nodes.get_mut(mpn.nid);
+        if node.vbounds.exceeded(mpn.bounds) {
             return None;
         }
 
         if self.cfg.debug > 2 {
             println!(
                 "Select mpn nid={:?} bounds={:?} node={:?} vnode={:?} work={} split={}",
-                mpn, bounds, node.bounds, node.vbounds, node.work, did_split,
+                mpn.nid, mpn.bounds, node.bounds, node.vbounds, node.work, did_split,
             )
         }
 
         let job = Job {
-            nid: mpn,
+            nid: mpn.nid,
             node: node.bounds,
-            bounds: bounds,
-            pos: node.pos.clone(),
+            bounds: mpn.bounds,
+            pos: mpn.pos,
         };
         node.vbounds = if node.bounds.phi < node.bounds.delta {
             Bounds::winning()
@@ -604,13 +606,9 @@ impl Prover {
         }
     }
 
-    fn select_most_proving(
-        &mut self,
-        mut nid: NodeID,
-        mut bounds: Bounds,
-    ) -> Option<(NodeID, Bounds)> {
-        while self.nodes.get(nid).flag(FLAG_EXPANDED) {
-            let ref node = self.nodes.get(nid);
+    fn select_most_proving(&mut self, mut root: Cursor) -> Option<Cursor> {
+        while self.nodes.get(root.nid).flag(FLAG_EXPANDED) {
+            let ref node = self.nodes.get(root.nid);
             if node.vbounds.solved() {
                 return None;
             }
@@ -619,7 +617,7 @@ impl Prover {
                 "select mpn phi=0, node={:?} vnode={:?} depth={}",
                 node.bounds,
                 node.vbounds,
-                self.depth(nid),
+                self.depth(root.nid),
             );
             if self.cfg.dfpn.threads == 1 {
                 debug_assert!(
@@ -627,7 +625,7 @@ impl Prover {
                     "single-threaded inconsistent bounds={:?} vbounds={:?} d={}",
                     node.bounds,
                     node.vbounds,
-                    self.depth(nid)
+                    self.depth(root.nid)
                 );
             }
             let mut child = NodeID::none();
@@ -646,21 +644,22 @@ impl Prover {
             }
             debug_assert!(child.exists(), "found a child");
             let cn = self.nodes.get(child);
-            bounds = Bounds {
-                phi: bounds.delta + cn.vbounds.phi - node.vbounds.delta,
-                delta: min(bounds.phi, delta_2 + 1),
+            root.bounds = Bounds {
+                phi: root.bounds.delta + cn.vbounds.phi - node.vbounds.delta,
+                delta: min(root.bounds.phi, delta_2 + 1),
             };
-            nid = child;
+            root.pos = root.pos.make_move(cn.r#move).unwrap();
+            root.nid = child;
         }
-        Some((nid, bounds))
+        Some(root)
     }
 
-    fn expand(&mut self, nid: NodeID) {
+    fn expand(&mut self, cursor: &Cursor) {
         self.stats.expanded += 1;
 
         let mut last_child = NodeID::none();
-        let ref node = self.nodes.get(nid);
-        match node.pos.game_state() {
+        let ref node = self.nodes.get(cursor.nid);
+        match cursor.pos.game_state() {
             game::BoardState::InPlay => (),
             _ => debug_assert!(
                 false,
@@ -668,16 +667,15 @@ impl Prover {
             ),
         };
         debug_assert!(!node.flag(FLAG_EXPANDED));
-        let pos = node.pos.clone();
-        for m in pos.all_moves() {
+        for m in cursor.pos.all_moves() {
             let mut alloc = self.nodes.alloc();
-            alloc.parent = nid;
+            alloc.parent = cursor.nid;
             if !node.flag(FLAG_AND) {
                 alloc.set_flag(FLAG_AND)
             }
-            alloc.pos = pos.make_move(m).unwrap();
+            let child_pos = cursor.pos.make_move(m).unwrap();
             alloc.r#move = m;
-            self.evaluate(&mut alloc);
+            self.evaluate(&mut alloc, &child_pos);
             alloc.sibling = last_child;
             last_child = alloc.id;
             if alloc.bounds.delta == 0 {
@@ -685,7 +683,7 @@ impl Prover {
             }
         }
         {
-            let ref mut node_mut = self.nodes.get_mut(nid);
+            let ref mut node_mut = self.nodes.get_mut(cursor.nid);
             node_mut.set_flag(FLAG_EXPANDED);
             node_mut.first_child = last_child;
         }
