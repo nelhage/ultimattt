@@ -1,1 +1,4 @@
 STACKS*
+*.json
+*.json.gz
+*.csv
