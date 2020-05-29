@@ -12,7 +12,7 @@ use crossbeam::channel;
 use hdrhistogram::Histogram;
 use serde::Serialize;
 
-use std::cmp::min;
+use std::cmp::{max, min};
 use std::mem;
 use std::mem::MaybeUninit;
 use std::sync::atomic::AtomicU32;
@@ -646,7 +646,13 @@ impl Prover {
             let cn = self.nodes.get(child);
             root.bounds = Bounds {
                 phi: root.bounds.delta + cn.vbounds.phi - node.vbounds.delta,
-                delta: min(root.bounds.phi, delta_2 + 1),
+                delta: min(
+                    root.bounds.phi,
+                    max(
+                        delta_2 + 1,
+                        (delta_2 as f64 * (1.0 + self.cfg.dfpn.epsilon)) as u32,
+                    ),
+                ),
             };
             root.pos = root.pos.make_move(cn.r#move).unwrap();
             root.nid = child;
