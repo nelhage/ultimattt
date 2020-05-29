@@ -71,28 +71,29 @@ impl Default for Stats {
     }
 }
 
-const FLAG_EXPANDED: u16 = 1 << 0;
-const FLAG_AND: u16 = 1 << 1;
-const FLAG_FREE: u16 = 1 << 2;
+const FLAG_EXPANDED: u8 = 1 << 0;
+const FLAG_AND: u8 = 1 << 1;
+const FLAG_FREE: u8 = 1 << 2;
 
 struct Node {
-    parent: NodeID,      // 4
     bounds: Bounds,      // 8
     vbounds: Bounds,     // 8
-    value: Evaluation,   // 1
-    r#move: game::Move,  // 1
-    flags: u16,          // 2
+    work: u64,           // 8
+    parent: NodeID,      // 4
     first_child: NodeID, // 4
     sibling: NodeID,     // 4
-    work: u64,           // 8
+    value: Evaluation,   // 1
+    r#move: game::Move,  // 1
+    pv: game::Move,      // 1
+    flags: u8,           // 1
 }
 
 impl Node {
-    fn flag(&self, flag: u16) -> bool {
+    fn flag(&self, flag: u8) -> bool {
         (self.flags & flag) != 0
     }
 
-    fn set_flag(&mut self, flag: u16) {
+    fn set_flag(&mut self, flag: u8) {
         self.flags |= flag;
     }
 
@@ -118,6 +119,7 @@ impl node_pool::Node for Node {
         ptr.write(MaybeUninit::new(Node {
             parent: free,
             r#move: game::Move::none(),
+            pv: game::Move::none(),
             bounds: Bounds::unity(),
             vbounds: Bounds::unity(),
             value: Evaluation::Unknown,
