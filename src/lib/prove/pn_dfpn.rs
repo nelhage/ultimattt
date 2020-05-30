@@ -11,6 +11,7 @@ use crossbeam;
 use crossbeam::channel;
 use hdrhistogram::Histogram;
 use serde::Serialize;
+use probe::probe;
 
 use std::cmp::{max, min};
 use std::mem;
@@ -239,22 +240,6 @@ where
     stats: WorkerStats,
 }
 
-macro_rules! probe_label {
-    ($label:ident) => {
-        unsafe {
-            asm!(concat!(
-                "probe_",
-                stringify!($label),
-                ".${:uid}",
-                ":\n",
-                ".globl probe_",
-                stringify!($label),
-                ".${:uid}",
-                "\n"
-            ) : : : : "volatile");
-        }
-    };
-}
 
 impl<'a, Table, Probe> Worker<'a, Table, Probe>
 where
@@ -263,7 +248,7 @@ where
 {
     fn run(&mut self) {
         for job in self.jobs.iter() {
-            probe_label!(enter_run_job);
+            probe!(pndfpn, enter_run_job);
             let start = Instant::now();
             let (entry, work) = self.mid.mid(
                 job.bounds,
@@ -281,7 +266,7 @@ where
             let t = Instant::now().duration_since(start);
             self.stats.us_per_job.record(t.as_micros() as u64).unwrap();
             self.stats.work_per_job.record(work).unwrap();
-            probe_label!(exit_run_job);
+            probe!(pndfpn, exit_run_job);
 
             if let Err(_) = self.results.send(JobResult {
                 nid: job.nid,
@@ -518,9 +503,9 @@ impl Prover {
             }
 
             while inflight < self.queue_depth() {
-                probe_label!(enter_select_job);
+                probe!(pndfpn, enter_select_job);
                 let candidate = self.select_job();
-                probe_label!(exit_select_job);
+                probe!(pndfpn, exit_select_job);
 
                 if let Some(job) = candidate {
                     self.stats.jobs += 1;
