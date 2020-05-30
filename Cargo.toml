@@ -13,7 +13,7 @@ name = "ultimattt"
 path = "src/lib/lib.rs"
 
 [[bench]]
-name = "bench_ultimatett"
+name = "bench_ultimattt"
 path = "src/bench.rs"
 harness = false
 
