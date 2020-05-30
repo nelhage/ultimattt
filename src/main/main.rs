@@ -311,6 +311,9 @@ enum Command {
     },
     Analyze(AnalyzeParameters),
     Selfplay(SelfplayParameters),
+    PP {
+        position: String,
+    },
     Worker {},
 }
 
@@ -672,6 +675,16 @@ fn main() -> Result<(), std::io::Error> {
                 p1_o.1,
                 p1_o.2,
             );
+        }
+        Command::PP { ref position } => {
+            let game = match game::notation::parse(position) {
+                Ok(g) => g,
+                Err(e) => {
+                    println!("Parsing position: {:?}", e);
+                    exit(1)
+                }
+            };
+            println!("{}", &game);
         }
     }
     Ok(())
