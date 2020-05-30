@@ -1,6 +1,7 @@
 #![feature(new_uninit)]
 #![feature(asm)]
 
+pub mod endgame;
 #[allow(dead_code)]
 pub mod game;
 #[allow(dead_code)]
