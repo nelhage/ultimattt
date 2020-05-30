@@ -10,8 +10,8 @@ use crate::util;
 use crossbeam;
 use crossbeam::channel;
 use hdrhistogram::Histogram;
-use serde::Serialize;
 use probe::probe;
+use serde::Serialize;
 
 use std::cmp::{max, min};
 use std::mem;
@@ -239,7 +239,6 @@ where
     mid: dfpn::MID<'a, Table, Probe>,
     stats: WorkerStats,
 }
-
 
 impl<'a, Table, Probe> Worker<'a, Table, Probe>
 where
