@@ -9,7 +9,7 @@ pub fn serialize_histogram<S: serde::Serializer, T: hdrhistogram::Counter>(
     hist: &Histogram<T>,
     serializer: S,
 ) -> Result<S::Ok, S::Error> {
-    let mut state = serializer.serialize_struct("histogram", 2)?;
+    let mut state = serializer.serialize_struct("histogram", 5)?;
     {
         let f = hist.mean();
         state.serialize_field("mean", &f)?;
