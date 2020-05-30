@@ -1,6 +1,8 @@
 mod display;
 pub mod notation;
 
+use packed_simd::u16x8;
+
 use std::hash::{Hash, Hasher};
 use std::vec::Vec;
 
@@ -70,6 +72,8 @@ pub(in crate) const WIN_PATTERNS: [[usize; 3]; 8] = [
 ];
 
 pub(in crate) const WIN_MASKS: &[u32] = &[0x7, 0x38, 0x1c0, 0x49, 0x92, 0x124, 0x111, 0x54];
+pub(in crate) const WIN_MASKS_SIMD: u16x8 =
+    u16x8::new(0x7, 0x38, 0x1c0, 0x49, 0x92, 0x124, 0x111, 0x54);
 const BOARD_MASK: u32 = 0x1ff;
 
 trait HasOwner {
@@ -230,11 +234,13 @@ impl Subboards {
             Player::X => row.x >> shift,
             Player::O => row.o >> shift,
         };
-        for win in WIN_MASKS {
-            if mask & win == *win {
-                return BoardState::Won(player);
-            }
+        if (u16x8::splat(mask as u16) & WIN_MASKS_SIMD)
+            .eq(WIN_MASKS_SIMD)
+            .any()
+        {
+            return BoardState::Won(player);
         }
+
         if ((row.x | row.o) >> shift) & BOARD_MASK == BOARD_MASK {
             BoardState::Drawn
         } else {
@@ -288,10 +294,11 @@ impl GameStates {
 
     fn check_winner(&self, player: Player) -> BoardState {
         let mask = self.playerbits(player);
-        for win in WIN_MASKS {
-            if mask & win == *win {
-                return BoardState::Won(player);
-            }
+        if (u16x8::splat(mask as u16) & WIN_MASKS_SIMD)
+            .eq(WIN_MASKS_SIMD)
+            .any()
+        {
+            return BoardState::Won(player);
         }
         if self.donebits() == BOARD_MASK {
             BoardState::Drawn
