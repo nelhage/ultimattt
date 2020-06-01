@@ -5,6 +5,7 @@ mod worker;
 
 use ansi_term::Style;
 use bytesize::ByteSize;
+use hdrhistogram::{self, Histogram};
 use regex::Regex;
 use serde;
 use serde::{Serialize, Serializer};
@@ -16,6 +17,7 @@ use ultimattt::minimax;
 use ultimattt::minimax::AI;
 use ultimattt::prove;
 
+use std::fmt;
 use std::fs;
 use std::io;
 use std::io::Write;
@@ -374,6 +376,17 @@ fn make_ai(opt: &GlobalOptions) -> minimax::Minimax {
     minimax::Minimax::with_config(&ai_config(opt))
 }
 
+fn format_histogram<T: fmt::Display + hdrhistogram::Counter>(h: &Histogram<T>) -> String {
+    format!(
+        "mean={:.1} p10={} p50={} p90={} p99={}",
+        h.mean(),
+        h.value_at_quantile(0.1),
+        h.value_at_quantile(0.5),
+        h.value_at_quantile(0.9),
+        h.value_at_quantile(0.99),
+    )
+}
+
 fn parse_player<'a>(
     opt: &GlobalOptions,
     player: game::Player,
@@ -596,21 +609,15 @@ fn main() -> Result<(), std::io::Error> {
                             (result.stats.mid.mid as f64) / thread_ms,
                         );
                         println!(
-                            " us/job   mean={:.1} p10={} p50={} p90={} p99={}",
-                            result.stats.worker.us_per_job.mean(),
-                            result.stats.worker.us_per_job.value_at_quantile(0.1),
-                            result.stats.worker.us_per_job.value_at_quantile(0.5),
-                            result.stats.worker.us_per_job.value_at_quantile(0.9),
-                            result.stats.worker.us_per_job.value_at_quantile(0.99),
+                            " us/job   {}",
+                            format_histogram(&result.stats.worker.us_per_job)
                         );
+
                         println!(
-                            " work/job mean={:.1} p10={} p50={} p90={} p99={}",
-                            result.stats.worker.work_per_job.mean(),
-                            result.stats.worker.work_per_job.value_at_quantile(0.1),
-                            result.stats.worker.work_per_job.value_at_quantile(0.5),
-                            result.stats.worker.work_per_job.value_at_quantile(0.9),
-                            result.stats.worker.work_per_job.value_at_quantile(0.99),
+                            " work/job {}",
+                            format_histogram(&result.stats.worker.work_per_job)
                         );
+                        println!(" branch   {}", format_histogram(&result.stats.mid.branch));
                     }
                     if let Some(ref p) = analyze.write_metrics {
                         let metrics = Metrics {

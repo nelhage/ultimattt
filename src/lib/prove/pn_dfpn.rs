@@ -204,12 +204,6 @@ pub struct WorkerStats {
     pub us_per_job: Histogram<u64>,
 }
 
-fn hdrmerge<T: hdrhistogram::Counter>(l: &Histogram<T>, r: &Histogram<T>) -> Histogram<T> {
-    let mut out = l.clone();
-    out.add(r).unwrap();
-    out
-}
-
 impl Default for WorkerStats {
     fn default() -> Self {
         WorkerStats {
@@ -222,8 +216,8 @@ impl Default for WorkerStats {
 impl WorkerStats {
     fn merge(&self, rhs: &Self) -> Self {
         WorkerStats {
-            work_per_job: hdrmerge(&self.work_per_job, &rhs.work_per_job),
-            us_per_job: hdrmerge(&self.us_per_job, &rhs.us_per_job),
+            work_per_job: util::merge_histogram(&self.work_per_job, &rhs.work_per_job),
+            us_per_job: util::merge_histogram(&self.us_per_job, &rhs.us_per_job),
         }
     }
 }

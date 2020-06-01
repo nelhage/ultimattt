@@ -5,7 +5,9 @@ use crate::prove;
 use crate::prove::spdfpn;
 use crate::prove::{Bounds, INFINITY};
 use crate::table;
+use crate::util;
 
+use hdrhistogram::Histogram;
 use serde::Serialize;
 use typenum;
 
@@ -15,7 +17,7 @@ use std::sync::atomic::AtomicU32;
 use std::time::{Duration, Instant};
 use std::{fs, io};
 
-#[derive(Clone, Debug, Default, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub struct Stats {
     pub mid: usize,
     pub terminal: usize,
@@ -24,8 +26,26 @@ pub struct Stats {
     pub minimax: usize,
     pub minimax_solve: usize,
     pub endgame_solve: usize,
+    #[serde(serialize_with = "util::serialize_histogram")]
+    pub branch: Histogram<u64>,
     #[serde(flatten)]
     pub tt: table::Stats,
+}
+
+impl Default for Stats {
+    fn default() -> Self {
+        Stats {
+            mid: 0,
+            terminal: 0,
+            try_calls: 0,
+            jobs: 0,
+            minimax: 0,
+            minimax_solve: 0,
+            endgame_solve: 0,
+            branch: Histogram::new_with_max(81, 3).unwrap(),
+            tt: Default::default(),
+        }
+    }
 }
 
 impl Stats {
@@ -38,6 +58,7 @@ impl Stats {
             minimax: self.minimax + other.minimax,
             minimax_solve: self.minimax_solve + other.minimax_solve,
             endgame_solve: self.endgame_solve + other.endgame_solve,
+            branch: util::merge_histogram(&self.branch, &other.branch),
             tt: self.tt.merge(&other.tt),
         }
     }
@@ -623,6 +644,7 @@ where
                 break;
             }
         }
+        self.stats.branch.record(children.len() as u64).unwrap();
 
         loop {
             data.bounds = compute_bounds(&children);

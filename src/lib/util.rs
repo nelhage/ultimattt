@@ -33,6 +33,15 @@ pub fn serialize_histogram<S: serde::Serializer, T: hdrhistogram::Counter>(
     state.end()
 }
 
+pub fn merge_histogram<T: hdrhistogram::Counter>(
+    l: &Histogram<T>,
+    r: &Histogram<T>,
+) -> Histogram<T> {
+    let mut out = l.clone();
+    out.add(r).unwrap();
+    out
+}
+
 pub fn read_rss() -> ByteSize {
     let path = Path::new("/proc/")
         .join(std::process::id().to_string())
