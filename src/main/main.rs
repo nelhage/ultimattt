@@ -573,7 +573,7 @@ fn main() -> Result<(), std::io::Error> {
                         result.stats.allocated,
                     );
                     println!(
-                        "  mid={} try={} jobs={} tthit={}/{} ({:.1}%) ttstore={} minimax={}/{}",
+                        "  mid={} try={} jobs={} tthit={}/{} ({:.1}%) ttstore={} minimax={}/{} endgame={}",
                         result.stats.mid.mid,
                         result.stats.mid.try_calls,
                         result.stats.mid.jobs,
@@ -585,6 +585,7 @@ fn main() -> Result<(), std::io::Error> {
                         result.stats.mid.tt.stores,
                         result.stats.mid.minimax_solve,
                         result.stats.mid.minimax,
+                        result.stats.mid.endgame_solve,
                     );
                     if cfg.debug > 0 {
                         let thread_ms =

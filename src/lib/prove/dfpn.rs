@@ -1,3 +1,4 @@
+use crate::endgame;
 use crate::game;
 use crate::minimax;
 use crate::prove;
@@ -22,6 +23,7 @@ pub struct Stats {
     pub jobs: usize,
     pub minimax: usize,
     pub minimax_solve: usize,
+    pub endgame_solve: usize,
     #[serde(flatten)]
     pub tt: table::Stats,
 }
@@ -35,6 +37,7 @@ impl Stats {
             try_calls: self.try_calls + other.try_calls,
             minimax: self.minimax + other.minimax,
             minimax_solve: self.minimax_solve + other.minimax_solve,
+            endgame_solve: self.endgame_solve + other.endgame_solve,
             tt: self.tt.merge(&other.tt),
         }
     }
@@ -582,6 +585,9 @@ where
             game::BoardState::InPlay => {
                 if pos.bound_depth() <= self.cfg.minimax_cutoff {
                     self.try_minimax(pos)
+                } else if !endgame::is_winnable(pos, self.player) {
+                    self.stats.endgame_solve += 1;
+                    Some(pos.player() != self.player)
                 } else {
                     None
                 }
