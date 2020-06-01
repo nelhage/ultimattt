@@ -1,13 +1,12 @@
 use crate::game;
 
+use packed_simd::u16x8;
+
 pub fn is_winnable(g: &game::Game, by: game::Player) -> bool {
     let potential = g.game_states.playerbits(by) | !g.game_states.donebits();
-    for &mask in game::WIN_MASKS.iter() {
-        if potential & mask == mask {
-            return true;
-        }
-    }
-    return false;
+    return (u16x8::splat(potential as u16) & game::WIN_MASKS_SIMD)
+        .eq(game::WIN_MASKS_SIMD)
+        .any();
 }
 
 #[cfg(test)]
