@@ -412,6 +412,12 @@ impl Zobrist {
             BoardState::Won(Player::O) => self.boards[board][2],
         }
     }
+    fn for_cell(&self, board: usize, square: usize, cell: CellState) -> u64 {
+        match cell {
+            CellState::Empty => 0,
+            CellState::Played(p) => self.squares[board][square][p.as_bit()],
+        }
+    }
 }
 
 static ZOBRIST_TABLES: Zobrist = Zobrist {
@@ -619,6 +625,15 @@ impl Game {
         for i in 0..9 {
             states.set(i, bits.game_states[i]);
             hash ^= ZOBRIST_TABLES.for_board(i, bits.game_states[i]);
+
+            match bits.game_states[i] {
+                BoardState::InPlay => (),
+                _ => {
+                    for j in 0..9 {
+                        hash ^= ZOBRIST_TABLES.for_cell(i, j, boards.at(i, j));
+                    }
+                }
+            }
         }
         Game {
             next_player: bits.next_player,
@@ -628,6 +643,22 @@ impl Game {
             overall_state: bits.overall_state,
             hash: hash,
         }
+    }
+
+    pub fn unpack(&self) -> Unpacked {
+        let mut out = Unpacked {
+            next_player: self.next_player,
+            next_board: self.next_board,
+            overall_state: self.overall_state,
+            ..Default::default()
+        };
+        for board in 0..9 {
+            for cell in 0..9 {
+                out.boards[board].0[cell] = self.boards.at(board, cell);
+            }
+            out.game_states[board] = self.game_states.at(board);
+        }
+        out
     }
 
     pub fn make_move(&self, m: Move) -> Result<Game, MoveError> {
@@ -659,6 +690,15 @@ impl Game {
         self.hash ^= ZOBRIST_TABLES.squares[m.board()][m.square()][self.next_player.as_bit()];
         let board_state = self.boards.check_winner(m.board(), self.next_player);
         self.game_states.set(m.board(), board_state);
+        match board_state {
+            BoardState::InPlay => (),
+            _ => {
+                for i in 0..9 {
+                    self.hash ^=
+                        ZOBRIST_TABLES.for_cell(m.board(), i, self.boards.at(m.board(), i));
+                }
+            }
+        }
         self.hash ^= ZOBRIST_TABLES.for_board(m.board(), board_state);
         if self.game_states.in_play(m.square()) {
             self.next_board = Some(m.square() as u8);
@@ -725,6 +765,49 @@ impl Game {
             bound += free.count_ones() as usize;
         }
         bound
+    }
+
+    // A position is equivalent to another if they are
+    // indistinguishable from the perspective of gameplay going
+    // forward, even if they may be observationally distinct.
+    pub fn equivalent(&self, rhs: &Self) -> bool {
+        if (
+            self.next_player,
+            self.next_board,
+            self.overall_state,
+            &self.game_states,
+        ) != (
+            rhs.next_player,
+            rhs.next_board,
+            rhs.overall_state,
+            &self.game_states,
+        ) {
+            return false;
+        }
+        if self.boards == rhs.boards {
+            return true;
+        }
+        let mut done = self.game_states.donebits();
+        for (lrow, rrow) in self.boards.rows.iter().zip(rhs.boards.rows.iter()) {
+            let mut mask = (1 << 27) - 1;
+            if done & 1 != 0 {
+                mask &= !BOARD_MASK;
+            }
+            if done & 2 != 0 {
+                mask &= !(BOARD_MASK << 9);
+            }
+            if done & 4 != 0 {
+                mask &= !(BOARD_MASK << 18);
+            }
+            done >>= 3;
+            if (lrow.x & mask) != (rrow.x & mask) {
+                return false;
+            }
+            if (lrow.o & mask) != (rrow.o & mask) {
+                return false;
+            }
+        }
+        return true;
     }
 }
 
@@ -795,6 +878,7 @@ mod tests {
     use std::collections::hash_map::DefaultHasher;
     use std::collections::hash_map::HashMap;
     use std::collections::VecDeque;
+    use std::env;
     use std::hash::{Hash, Hasher};
 
     use super::*;
@@ -1012,7 +1096,7 @@ mod tests {
     }
 
     #[test]
-    fn test_eq() {
+    fn test_hash_eq() {
         let cases = &[
             (Game::new(), 0),
             (Game::new(), 0),
@@ -1021,11 +1105,50 @@ mod tests {
             (board(&[(4, 0), (0, 4), (4, 1), (1, 4), (4, 4)]), 2),
             (board(&[(7, 6), (6, 8), (8, 6), (6, 7)]), 3),
             (board(&[(8, 6), (6, 7), (7, 6), (6, 8)]), 4),
+            (board(&[(7, 6), (6, 8), (8, 6), (6, 7)]), 3),
+            (board(&[(8, 6), (6, 7), (7, 6), (6, 8)]), 4),
+            (
+                board(&[
+                    (0, 0),
+                    (0, 1),
+                    (1, 1),
+                    (1, 0),
+                    (0, 2),
+                    (2, 0),
+                    (0, 4),
+                    (4, 0),
+                    (0, 8),
+                    (8, 0),
+                ]),
+                5,
+            ),
+            (
+                board(&[
+                    (0, 4),
+                    (4, 0),
+                    (0, 8),
+                    (8, 0),
+                    (0, 0),
+                    (2, 0),
+                    (1, 1),
+                    (1, 0),
+                ]),
+                5,
+            ),
         ];
-        for l in cases.iter() {
-            for r in cases.iter() {
-                assert_eq!(l.1 == r.1, l.0 == r.0);
-                assert_eq!(l.1 == r.1, hash_value(&l.0) == hash_value(&r.0));
+        for (li, l) in cases.iter().enumerate() {
+            let repacked = Game::pack(&l.0.unpack());
+            assert_eq!(repacked.zobrist(), l.0.zobrist());
+
+            for (ri, r) in cases.iter().enumerate() {
+                assert_eq!(l.1 == r.1, l.0.equivalent(&r.0), "{} =?= {}", li, ri);
+                assert_eq!(
+                    l.1 == r.1,
+                    l.0.zobrist() == r.0.zobrist(),
+                    "{}.hash =?= {}.hash",
+                    li,
+                    ri
+                );
             }
         }
     }
@@ -1034,6 +1157,14 @@ mod tests {
 
     #[test]
     fn test_hash() {
+        match env::var("ULTIMATTT_TEST_HASH") {
+            Err(_) => return,
+            Ok(val) => {
+                if val.len() == 0 {
+                    return;
+                }
+            }
+        };
         let mut positions = Vec::new();
         let mut queue = VecDeque::new();
         queue.push_back(Game::new());
