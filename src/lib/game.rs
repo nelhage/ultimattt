@@ -3,7 +3,6 @@ pub mod notation;
 
 use packed_simd::u16x8;
 
-use std::hash::{Hash, Hasher};
 use std::vec::Vec;
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
@@ -35,13 +34,13 @@ impl Player {
     }
 }
 
-#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CellState {
     Empty,
     Played(Player),
 }
 
-#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BoardState {
     InPlay,
     Drawn,
@@ -811,15 +810,6 @@ impl Game {
     }
 }
 
-impl Hash for Game {
-    fn hash<H>(&self, h: &mut H)
-    where
-        H: Hasher,
-    {
-        h.write_u64(self.zobrist());
-    }
-}
-
 struct MoveIterator<'a> {
     game: &'a Game,
     board: usize,
@@ -875,11 +865,8 @@ impl<'a> Iterator for MoveIterator<'a> {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::hash_map::DefaultHasher;
-    use std::collections::hash_map::HashMap;
     use std::collections::VecDeque;
     use std::env;
-    use std::hash::{Hash, Hasher};
 
     use super::*;
 
@@ -1086,15 +1073,6 @@ mod tests {
         }
     }
 
-    fn hash_value<H>(v: &H) -> u64
-    where
-        H: Hash,
-    {
-        let mut hasher = DefaultHasher::new();
-        Hash::hash(v, &mut hasher);
-        Hasher::finish(&hasher)
-    }
-
     #[test]
     fn test_hash_eq() {
         let cases = &[
@@ -1191,31 +1169,44 @@ mod tests {
             };
             out
         });
-        let mut i = 0;
-        while i < positions.len() - 1 {
+        for (i, (p, pp)) in positions
+            .iter()
+            .zip({
+                let mut it = positions.iter();
+                it.next();
+                it
+            })
+            .enumerate()
+        {
             assert_eq!(
-                positions[i] == positions[i + 1],
-                hash_value(&positions[i]) == hash_value(&positions[i + 1],),
-                "i={} l={:?} r={:?}",
+                p == pp,
+                p.zobrist() == pp.zobrist(),
+                "i={} l={} r={}",
                 i,
-                &positions[i],
-                &positions[i + 1],
+                p,
+                pp
             );
-            i += 1;
         }
 
-        let mut grp: HashMap<u64, Vec<&Game>> = HashMap::new();
-        for p in positions.iter() {
-            grp.entry(hash_value(p))
-                .or_insert_with(|| Vec::new())
-                .push(&p);
-        }
-        for (_h, its) in grp.iter() {
-            for p1 in its.iter() {
-                for p2 in its.iter() {
-                    assert_eq!(p1, p2, "{:?} != {:?} but they hash equal", &p1, &p2);
-                }
-            }
+        positions.sort_by_key(|p| p.zobrist());
+
+        for (i, (p, pp)) in positions
+            .iter()
+            .zip({
+                let mut it = positions.iter();
+                it.next();
+                it
+            })
+            .enumerate()
+        {
+            assert_eq!(
+                p == pp,
+                p.zobrist() == pp.zobrist(),
+                "i={} l={} r={}",
+                i,
+                p,
+                pp
+            );
         }
     }
 }
