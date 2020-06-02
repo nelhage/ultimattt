@@ -618,6 +618,18 @@ fn main() -> Result<(), std::io::Error> {
                             format_histogram(&result.stats.worker.work_per_job)
                         );
                         println!(" branch   {}", format_histogram(&result.stats.mid.branch));
+                        if cfg.debug > 1 {
+                            println!("  open boards:");
+                            for i in 1..=9 {
+                                println!(
+                                    "   {}: {:10} ({:.2}%)",
+                                    i,
+                                    result.stats.mid.open_boards.count_at(i),
+                                    100.0 * (result.stats.mid.open_boards.count_at(i) as f64)
+                                        / (result.stats.mid.open_boards.len() as f64),
+                                );
+                            }
+                        }
                     }
                     if let Some(ref p) = analyze.write_metrics {
                         let metrics = Metrics {

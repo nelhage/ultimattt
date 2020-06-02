@@ -766,6 +766,10 @@ impl Game {
         bound
     }
 
+    pub fn open_boards(&self) -> u8 {
+        (!self.game_states.donebits() & BOARD_MASK).count_ones() as u8
+    }
+
     // A position is equivalent to another if they are
     // indistinguishable from the perspective of gameplay going
     // forward, even if they may be observationally distinct.

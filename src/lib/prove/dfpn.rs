@@ -28,6 +28,8 @@ pub struct Stats {
     pub endgame_solve: usize,
     #[serde(serialize_with = "util::serialize_histogram")]
     pub branch: Histogram<u64>,
+    #[serde(serialize_with = "util::serialize_histogram")]
+    pub open_boards: Histogram<u64>,
     #[serde(flatten)]
     pub tt: table::Stats,
 }
@@ -43,6 +45,7 @@ impl Default for Stats {
             minimax_solve: 0,
             endgame_solve: 0,
             branch: Histogram::new_with_max(81, 3).unwrap(),
+            open_boards: Histogram::new_with_max(9, 2).unwrap(),
             tt: Default::default(),
         }
     }
@@ -59,6 +62,7 @@ impl Stats {
             minimax_solve: self.minimax_solve + other.minimax_solve,
             endgame_solve: self.endgame_solve + other.endgame_solve,
             branch: util::merge_histogram(&self.branch, &other.branch),
+            open_boards: util::merge_histogram(&self.open_boards, &other.open_boards),
             tt: self.tt.merge(&other.tt),
         }
     }
@@ -601,6 +605,11 @@ where
         if data.bounds.exceeded(bounds) {
             return (data, 0);
         }
+
+        self.stats
+            .open_boards
+            .record(pos.open_boards() as u64)
+            .unwrap();
 
         let terminal = match pos.game_state() {
             game::BoardState::InPlay => {
