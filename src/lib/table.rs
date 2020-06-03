@@ -306,9 +306,10 @@ where
 
     pub fn store(&self, stats: &mut Stats, ent: &E) -> bool {
         debug_assert!(ent.valid());
+        let base = ent.hash() as usize;
+
         let mut worst: Option<(usize, E)> = None;
 
-        let base = ent.hash() as usize;
         for j in 0..N::to_usize() {
             let i = (base + j) % self.entries.len();
             let ei = self.entry(i);
@@ -325,23 +326,15 @@ where
         }
         let (idx, _) = worst.unwrap();
         let lk = self.mutex(idx);
-        let guard = lk.lock();
+        let _guard = lk.lock();
 
-        let dst = unsafe { self.entries[idx].get().as_mut().unwrap() };
-        let did_write = if !dst.valid() || ent.better_than(&dst) {
-            unsafe {
-                E::write(self.entries[idx].get(), ent);
-                ptr::write(self.index[idx].get(), (ent.hash() & 0xff) as u8);
-            }
+        unsafe {
+            E::write(self.entries[idx].get(), ent);
+            ptr::write(self.index[idx].get(), (ent.hash() & 0xff) as u8);
+        }
 
-            stats.stores += 1;
-            true
-        } else {
-            guard.abort();
-            false
-        };
-
-        did_write
+        stats.stores += 1;
+        true
     }
 }
 
