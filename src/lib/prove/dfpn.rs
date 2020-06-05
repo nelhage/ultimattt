@@ -428,7 +428,7 @@ pub(in crate::prove) fn select_child(
     (idx, child_bounds)
 }
 
-fn thresholds(epsilon: f64, bounds: Bounds, nd: Bounds, phi_1: u32, delta_2: u32) -> Bounds {
+pub fn thresholds(epsilon: f64, bounds: Bounds, nd: Bounds, phi_1: u32, delta_2: u32) -> Bounds {
     Bounds {
         phi: bounds.delta + phi_1 - nd.delta,
         delta: min(

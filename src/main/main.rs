@@ -575,21 +575,19 @@ fn main() -> Result<(), std::io::Error> {
                     };
                     let result = prove::pn_dfpn::Prover::prove(&cfg, &game);
                     println!(
-                        "result={:?} time={}.{:03}s pn={} dpn={} jobs={} recv={} searched={}",
+                        "result={:?} time={}.{:03}s pn={} dpn={} nodes={} jobs={} ε-resume={}",
                         result.result,
                         result.duration.as_secs(),
                         result.duration.subsec_millis(),
                         result.proof,
                         result.disproof,
-                        result.stats.jobs,
-                        result.stats.recv,
                         result.stats.allocated,
+                        result.stats.jobs,
+                        result.stats.epsilon_resume,
                     );
                     println!(
-                        "  mid={} try={} jobs={} tthit={}/{} ({:.1}%) ttstore={} minimax={}/{} endgame={}",
+                        "  mid={} tthit={}/{} ({:.1}%) ttstore={} minimax={}/{} endgame={}",
                         result.stats.mid.mid,
-                        result.stats.mid.try_calls,
-                        result.stats.mid.jobs,
                         result.stats.mid.tt.hits,
                         result.stats.mid.tt.lookups,
                         100.0

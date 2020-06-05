@@ -13,7 +13,7 @@ use hdrhistogram::Histogram;
 use probe::probe;
 use serde::Serialize;
 
-use std::cmp::{max, min};
+use std::cmp::min;
 use std::mem;
 use std::mem::MaybeUninit;
 use std::sync::atomic::AtomicU32;
@@ -52,6 +52,7 @@ pub struct Stats {
     pub mid: dfpn::Stats,
     pub allocated: usize,
     pub freed: usize,
+    pub epsilon_resume: usize,
     #[serde(flatten)]
     pub worker: WorkerStats,
 }
@@ -66,6 +67,7 @@ impl Default for Stats {
             recv: 0,
             allocated: 0,
             freed: 0,
+            epsilon_resume: 0,
             mid: Default::default(),
             worker: Default::default(),
         }
@@ -611,8 +613,12 @@ impl Prover {
             let mut child = NodeID::none();
             let (mut delta_1, mut delta_2) = (INFINITY, INFINITY);
             let mut c = node.first_child;
+            let mut pv: Option<NodeID> = None;
             while c.exists() {
                 let ch = self.nodes.get(c);
+                if ch.r#move == node.pv {
+                    pv = Some(c);
+                }
                 if ch.vbounds.delta < delta_1 {
                     delta_2 = delta_1;
                     delta_1 = ch.vbounds.delta;
@@ -623,19 +629,43 @@ impl Prover {
                 c = ch.sibling;
             }
             debug_assert!(child.exists(), "found a child");
+
+            if let Some(pvn) = pv {
+                if pvn != child {
+                    let nd = self.nodes.get(pvn);
+                    let pv_bounds = dfpn::thresholds(
+                        self.cfg.dfpn.epsilon,
+                        root.bounds,
+                        node.vbounds,
+                        nd.vbounds.phi,
+                        delta_1,
+                    );
+                    if nd.vbounds.delta < pv_bounds.delta {
+                        self.stats.epsilon_resume += 1;
+                        root = Cursor {
+                            bounds: pv_bounds,
+                            pos: root.pos.make_move(nd.r#move).unwrap(),
+                            nid: pvn,
+                        };
+                        continue;
+                    }
+                }
+            }
             let cn = self.nodes.get(child);
-            root.bounds = Bounds {
-                phi: root.bounds.delta + cn.vbounds.phi - node.vbounds.delta,
-                delta: min(
-                    root.bounds.phi,
-                    max(
-                        delta_2 + 1,
-                        (delta_2 as f64 * (1.0 + self.cfg.dfpn.epsilon)) as u32,
-                    ),
+            let m = cn.r#move;
+            let nid = root.nid;
+            root = Cursor {
+                bounds: dfpn::thresholds(
+                    self.cfg.dfpn.epsilon,
+                    root.bounds,
+                    node.vbounds,
+                    cn.vbounds.phi,
+                    delta_2,
                 ),
+                pos: root.pos.make_move(cn.r#move).unwrap(),
+                nid: child,
             };
-            root.pos = root.pos.make_move(cn.r#move).unwrap();
-            root.nid = child;
+            self.nodes.get_mut(nid).pv = m;
         }
         Some(root)
     }
