@@ -223,6 +223,8 @@ struct GlobalOptions {
     threads: usize,
     #[structopt(long, default_value = "1")]
     debug: usize,
+    #[structopt(long, help = "Override git sha", default_value = "")]
+    git_sha: String,
 }
 
 #[derive(Debug, StructOpt)]
@@ -449,7 +451,13 @@ struct Metrics<'a, T: Serialize> {
 }
 
 fn main() -> Result<(), std::io::Error> {
-    let opt = Opt::from_args();
+    let opt = {
+        let mut opt = Opt::from_args();
+        if opt.global.git_sha == "" {
+            opt.global.git_sha = env!["VERGEN_SHA"].to_owned();
+        };
+        opt
+    };
     let mut stdout = io::stdout();
     match opt.cmd {
         Command::Play {

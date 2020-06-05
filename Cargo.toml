@@ -3,6 +3,7 @@ name = "ultimattt"
 version = "0.1.0"
 authors = ["Nelson Elhage <nelhage@nelhage.com>"]
 edition = "2018"
+build = "build.rs"
 
 [[bin]]
 name = "ultimattt"
@@ -43,3 +44,6 @@ git = "https://github.com/cuviper/rust-libprobe.git"
 
 [dev-dependencies]
 criterion = "0.3"
+
+[build-dependencies]
+vergen = "3"
