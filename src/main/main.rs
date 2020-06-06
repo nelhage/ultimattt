@@ -620,8 +620,9 @@ fn main() -> Result<(), std::io::Error> {
                         );
 
                         println!(
-                            " work/job {}",
-                            format_histogram(&result.stats.worker.work_per_job)
+                            " work/job {} (1@p{:.0})",
+                            format_histogram(&result.stats.worker.work_per_job),
+                            result.stats.worker.work_per_job.percentile_below(1),
                         );
                         println!(" branch   {}", format_histogram(&result.stats.mid.branch));
                         if cfg.debug > 1 {
