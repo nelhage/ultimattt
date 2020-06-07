@@ -132,7 +132,7 @@ where
                 );
             }
             self.guard.drop_lock();
-            let (result, local_work) =
+            let (result, local_work, _) =
                 self.mid
                     .mid(bounds, self.mid.cfg.max_work_per_job, data, pos);
             self.guard.acquire_lock();

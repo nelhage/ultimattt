@@ -185,6 +185,7 @@ struct JobResult {
     nid: NodeID,
     work: u64,
     bounds: Bounds,
+    children: Vec<dfpn::Child>,
 }
 
 pub struct ProofResult {
@@ -245,7 +246,7 @@ where
         for job in self.jobs.iter() {
             probe!(pndfpn, enter_run_job);
             let start = Instant::now();
-            let (entry, work) = self.mid.mid(
+            let (entry, work, children) = self.mid.mid(
                 job.bounds,
                 self.cfg.split_threshold,
                 dfpn::Entry {
@@ -267,6 +268,7 @@ where
                 nid: job.nid,
                 work: work,
                 bounds: entry.bounds,
+                children: children,
             }) {
                 break;
             }
@@ -525,17 +527,18 @@ impl Prover {
     }
 
     fn select_job<'a>(&'a mut self) -> Option<Job> {
-        let mut mpn = self.select_most_proving(Cursor {
+        let mpn = self.select_most_proving(Cursor {
             nid: self.root,
             pos: self.position.clone(),
             bounds: Bounds::root(),
         })?;
-        let mut did_split = false;
+        /*
         if self.nodes.get(mpn.nid).work >= self.cfg.split_threshold {
             self.expand(&mpn);
             mpn = self.select_most_proving(mpn)?;
             did_split = true;
         }
+        */
 
         let node = self.nodes.get_mut(mpn.nid);
         if node.vbounds.exceeded(mpn.bounds) {
@@ -544,8 +547,8 @@ impl Prover {
 
         if self.cfg.debug > 2 {
             println!(
-                "Select mpn nid={:?} bounds={:?} node={:?} vnode={:?} work={} split={}",
-                mpn.nid, mpn.bounds, node.bounds, node.vbounds, node.work, did_split,
+                "Select mpn nid={:?} bounds={:?} node={:?} vnode={:?} work={}",
+                mpn.nid, mpn.bounds, node.bounds, node.vbounds, node.work,
             )
         }
 
@@ -578,13 +581,18 @@ impl Prover {
             );
         }
         let node = self.nodes.get_mut(res.nid);
-        debug_assert!(!node.flag(FLAG_EXPANDED));
-        node.bounds = res.bounds;
-        node.vbounds = res.bounds;
         node.work += res.work;
-        let parent = node.parent;
-        if parent.exists() {
-            self.update_ancestors(parent);
+        debug_assert!(!node.flag(FLAG_EXPANDED));
+        if res.work >= self.cfg.split_threshold && !res.bounds.solved() {
+            self.expand(res.nid, res.children);
+            self.update_ancestors(res.nid);
+        } else {
+            node.bounds = res.bounds;
+            node.vbounds = res.bounds;
+            let parent = node.parent;
+            if parent.exists() {
+                self.update_ancestors(parent);
+            }
         }
     }
 
@@ -670,11 +678,12 @@ impl Prover {
         Some(root)
     }
 
-    fn expand(&mut self, cursor: &Cursor) {
+    fn expand(&mut self, nid: NodeID, children: Vec<dfpn::Child>) {
         self.stats.expanded += 1;
 
         let mut last_child = NodeID::none();
-        let ref node = self.nodes.get(cursor.nid);
+        let ref node = self.nodes.get(nid);
+        /*
         match cursor.pos.game_state() {
             game::BoardState::InPlay => (),
             _ => debug_assert!(
@@ -682,16 +691,21 @@ impl Prover {
                 format!("expanding a terminal node! {:?}", node.bounds)
             ),
         };
+        */
         debug_assert!(!node.flag(FLAG_EXPANDED));
-        for m in cursor.pos.all_moves() {
+        for ch in children.iter() {
             let mut alloc = self.nodes.alloc();
-            alloc.parent = cursor.nid;
+            alloc.parent = nid;
             if !node.flag(FLAG_AND) {
                 alloc.set_flag(FLAG_AND)
             }
-            let child_pos = cursor.pos.make_move(m).unwrap();
-            alloc.r#move = m;
-            self.evaluate(&mut alloc, &child_pos);
+            alloc.r#move = ch.r#move;
+            alloc.pv = ch.entry.pv;
+            alloc.bounds = ch.entry.bounds;
+            alloc.vbounds = ch.entry.bounds;
+
+            // self.evaluate(&mut alloc, &child_pos);
+
             alloc.sibling = last_child;
             last_child = alloc.id;
             if alloc.bounds.delta == 0 {
@@ -699,7 +713,7 @@ impl Prover {
             }
         }
         {
-            let ref mut node_mut = self.nodes.get_mut(cursor.nid);
+            let ref mut node_mut = self.nodes.get_mut(nid);
             node_mut.set_flag(FLAG_EXPANDED);
             node_mut.first_child = last_child;
         }

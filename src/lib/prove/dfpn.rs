@@ -288,7 +288,7 @@ impl DFPN {
             let mut work = 0;
             let mut dump_tick = self.start + self.cfg.dump_interval;
             while !root.bounds.solved() {
-                let (out, this_work) = worker.mid(
+                let (out, this_work, _) = worker.mid(
                     Bounds {
                         phi: INFINITY / 2,
                         delta: INFINITY / 2,
@@ -582,7 +582,7 @@ where
         max_work: u64,
         mut data: Entry,
         pos: &game::Game,
-    ) -> (Entry, u64) {
+    ) -> (Entry, u64, Vec<Child>) {
         let depth = self.stack.len();
         if self.cfg.debug > 6 {
             eprintln!(
@@ -603,7 +603,7 @@ where
         self.stats.mid += 1;
 
         if data.bounds.exceeded(bounds) {
-            return (data, 0);
+            return (data, 0, Vec::new());
         }
 
         self.stats
@@ -634,7 +634,7 @@ where
             self.stats.terminal += 1;
             data.work = 1;
             self.table.store(&data);
-            return (data, 1);
+            return (data, 1, Vec::new());
         }
 
         let mut local_work = 1;
@@ -666,7 +666,7 @@ where
                 select_child(&children, bounds, &mut data, self.cfg.epsilon);
             let child = &children[best_idx];
             self.stack.push(children[best_idx].r#move);
-            let (child_entry, child_work) = self.mid(
+            let (child_entry, child_work, _) = self.mid(
                 child_bounds,
                 max_work - local_work,
                 children[best_idx].entry.clone(),
@@ -692,7 +692,7 @@ where
                 did_store = did_store,
             );
         }
-        (data, local_work)
+        (data, local_work, children)
     }
 
     pub(in crate::prove) fn ttlookup_or_default(&mut self, g: &game::Game) -> Entry {
