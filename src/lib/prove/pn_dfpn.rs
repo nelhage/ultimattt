@@ -768,6 +768,7 @@ impl Prover {
         }
     }
 
+    #[allow(dead_code)]
     fn free_siblings(&mut self, child: NodeID) {
         let mut todo = vec![child];
         while let Some(it) = todo.pop() {

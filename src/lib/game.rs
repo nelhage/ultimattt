@@ -75,59 +75,6 @@ pub(in crate) const WIN_MASKS_SIMD: u16x8 =
     u16x8::new(0x7, 0x38, 0x1c0, 0x49, 0x92, 0x124, 0x111, 0x54);
 const BOARD_MASK: u32 = 0x1ff;
 
-trait HasOwner {
-    fn player(&self) -> Option<Player>;
-    fn empty(&self) -> bool;
-}
-
-impl HasOwner for CellState {
-    fn player(&self) -> Option<Player> {
-        match self {
-            CellState::Empty => None,
-            CellState::Played(p) => Some(*p),
-        }
-    }
-
-    fn empty(&self) -> bool {
-        match self {
-            CellState::Empty => true,
-            _ => false,
-        }
-    }
-}
-
-impl HasOwner for BoardState {
-    fn player(&self) -> Option<Player> {
-        match self {
-            BoardState::Won(p) => Some(*p),
-            _ => None,
-        }
-    }
-    fn empty(&self) -> bool {
-        match self {
-            BoardState::InPlay => true,
-            _ => false,
-        }
-    }
-}
-
-fn check_winner<T: HasOwner>(board: &[T; 9], who: Player) -> BoardState {
-    if WIN_PATTERNS.iter().any(|&pat| {
-        pat.iter().all(|i| match board[*i].player() {
-            Some(p) => p == who,
-            _ => false,
-        })
-    }) {
-        return BoardState::Won(who);
-    }
-
-    if board.iter().any(|e| e.empty()) {
-        BoardState::InPlay
-    } else {
-        BoardState::Drawn
-    }
-}
-
 #[derive(Clone, Debug)]
 pub struct Subboard([CellState; 9]);
 
@@ -203,12 +150,6 @@ impl Subboards {
                 row.o |= bit;
             }
         }
-    }
-
-    fn full(&self, board: usize) -> bool {
-        let row = &self.rows[board / 3];
-        let mask = BOARD_MASK << 9 * (board % 3);
-        (row.o | row.x) & mask == mask
     }
 
     pub(in crate) fn xbits(&self, board: usize) -> u32 {
