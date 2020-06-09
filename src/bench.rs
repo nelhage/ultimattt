@@ -35,16 +35,6 @@ fn bench_game(c: &mut Criterion) {
             black_box(&gg);
         });
     });
-    c.bench_function("Game::hash", |b| {
-        let g = Game::new();
-        let st = RandomState::new();
-
-        b.iter(|| {
-            let mut hasher = hash::BuildHasher::build_hasher(&st);
-            hash::Hash::hash(&g, &mut hasher);
-            black_box(hash::Hasher::finish(&hasher));
-        });
-    });
 
     c.bench_function("Game::zobrist", |b| {
         let g = Game::new();
