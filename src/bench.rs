@@ -2,8 +2,6 @@ use ultimattt;
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
-use std::collections::hash_map::RandomState;
-use std::hash;
 use std::mem;
 use ultimattt::game::{Game, Move};
 use ultimattt::minimax::Minimax;
