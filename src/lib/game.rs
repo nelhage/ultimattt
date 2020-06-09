@@ -258,28 +258,29 @@ impl Default for Subboards {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(in crate) struct GameStates {
-    // (x: u9, o: u9, drawn: u9), LSB first
-    bits: u32,
+    // LSB first; drawn if both x&y
+    x: u16,
+    o: u16,
 }
 
 impl Default for GameStates {
     fn default() -> Self {
-        GameStates { bits: 0 }
+        GameStates { x: 0, o: 0 }
     }
 }
 
 impl GameStates {
     pub(in crate) fn xbits(&self) -> u32 {
-        self.bits & BOARD_MASK
+        (self.x & !self.o) as u32
     }
     pub(in crate) fn obits(&self) -> u32 {
-        (self.bits >> 9) & BOARD_MASK
+        (self.o & !self.x) as u32
     }
     pub(in crate) fn drawbits(&self) -> u32 {
-        (self.bits >> 18) & BOARD_MASK
+        (self.x & self.o) as u32
     }
     pub(in crate) fn donebits(&self) -> u32 {
-        (self.bits | (self.bits >> 9) | (self.bits >> 18)) & BOARD_MASK
+        (self.x | self.o) as u32
     }
     pub(in crate) fn playerbits(&self, player: Player) -> u32 {
         match player {
@@ -320,20 +321,18 @@ impl GameStates {
     }
 
     fn set(&mut self, board: usize, state: BoardState) {
-        let mut i = board;
+        let bit = 1_u16 << board;
         match state {
             BoardState::Drawn => {
-                i += 18;
+                self.x |= bit;
+                self.o |= bit;
             }
             BoardState::InPlay => {
                 return;
             }
-            BoardState::Won(Player::X) => {}
-            BoardState::Won(Player::O) => {
-                i += 9;
-            }
+            BoardState::Won(Player::X) => self.x |= bit,
+            BoardState::Won(Player::O) => self.o |= bit,
         };
-        self.bits |= 1 << i;
     }
 }
 
@@ -1163,7 +1162,7 @@ mod tests {
 
         positions.sort_by_cached_key(|g: &Game| {
             let mut out = [0 as u64; 5];
-            out[0] = g.game_states.bits as u64;
+            out[0] = (g.game_states.x as u64) << 32 | (g.game_states.o as u64);
             out[1] = (g.boards.rows[0].x as u64) << 32 | (g.boards.rows[0].o as u64);
             out[2] = (g.boards.rows[1].x as u64) << 32 | (g.boards.rows[1].o as u64);
             out[3] = (g.boards.rows[2].x as u64) << 32 | (g.boards.rows[2].o as u64);
