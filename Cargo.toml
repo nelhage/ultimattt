@@ -38,6 +38,7 @@ parking_lot = "0.10.2"
 parking_lot_core = "0.7.2"
 hdrhistogram = "7.1.0"
 packed_simd = "0.3.3"
+rocksdb = "0.14.0"
 
 [dependencies.probe]
 git = "https://github.com/cuviper/rust-libprobe.git"

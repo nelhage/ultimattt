@@ -550,7 +550,7 @@ impl Prover {
         }
     }
 
-    fn select_job<'a>(&'a mut self) -> Option<Job> {
+    fn select_job(&mut self) -> Option<Job> {
         let mpn = self.select_most_proving(Cursor {
             nid: self.root,
             pos: self.position.clone(),

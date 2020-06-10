@@ -197,7 +197,7 @@ impl Default for Subboards {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub(in crate) struct GameStates {
     // LSB first; drawn if both x&y
     x: u16,
@@ -211,29 +211,33 @@ impl Default for GameStates {
 }
 
 impl GameStates {
-    pub(in crate) fn xbits(&self) -> u32 {
+    pub(in crate) fn bits(self) -> u32 {
+        (self.x as u32) << 16 | (self.o as u32)
+    }
+
+    pub(in crate) fn xbits(self) -> u32 {
         (self.x & !self.o) as u32
     }
-    pub(in crate) fn obits(&self) -> u32 {
+    pub(in crate) fn obits(self) -> u32 {
         (self.o & !self.x) as u32
     }
-    pub(in crate) fn drawbits(&self) -> u32 {
+    pub(in crate) fn drawbits(self) -> u32 {
         (self.x & self.o) as u32
     }
-    pub(in crate) fn donebits(&self) -> u32 {
+    pub(in crate) fn donebits(self) -> u32 {
         (self.x | self.o) as u32
     }
-    pub(in crate) fn playerbits(&self, player: Player) -> u32 {
+    pub(in crate) fn playerbits(self, player: Player) -> u32 {
         match player {
             Player::X => self.xbits(),
             Player::O => self.obits(),
         }
     }
-    pub(in crate) fn in_play(&self, board: usize) -> bool {
+    pub(in crate) fn in_play(self, board: usize) -> bool {
         (self.donebits() & 1 << board) == 0
     }
 
-    fn check_winner(&self, player: Player) -> BoardState {
+    fn check_winner(self, player: Player) -> BoardState {
         let mask = self.playerbits(player);
         if (u16x8::splat(mask as u16) & WIN_MASKS_SIMD)
             .eq(WIN_MASKS_SIMD)
@@ -248,7 +252,7 @@ impl GameStates {
         }
     }
 
-    fn at(&self, board: usize) -> BoardState {
+    fn at(self, board: usize) -> BoardState {
         let bit = 1 << board;
         if self.xbits() & bit != 0 {
             BoardState::Won(Player::X)

@@ -15,7 +15,7 @@ use structopt::StructOpt;
 use ultimattt::game;
 use ultimattt::minimax;
 use ultimattt::minimax::AI;
-use ultimattt::prove;
+use ultimattt::{prove, solver_db};
 
 use std::fmt;
 use std::fs;
@@ -23,7 +23,7 @@ use std::io;
 use std::io::Write;
 use std::process::exit;
 use std::str::FromStr;
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 fn cell(g: game::CellState) -> &'static str {
     match g {
@@ -302,6 +302,8 @@ struct AnalyzeParameters {
     split_threshold: Option<u64>,
     #[structopt(long)]
     queue_depth: Option<usize>,
+    #[structopt(long)]
+    solver_db: Option<String>,
     position: String,
 }
 
@@ -368,6 +370,10 @@ fn dfpn_config(
         dump_interval: analyze.dump_interval.clone(),
         probe_log: analyze.probe_log.clone(),
         probe_hash: probe_hash,
+        db: analyze
+            .solver_db
+            .as_ref()
+            .map(|p| Arc::new(solver_db::DB::new(p).unwrap())),
         ..Default::default()
     };
     if let Some(m) = analyze.max_work_per_job {
@@ -538,7 +544,7 @@ fn main() -> Result<(), std::io::Error> {
 
                     let result = prove::dfpn::DFPN::prove(&dfpn_cfg, &game);
                     println!(
-                    "result={:?} time={}.{:03}s pn={} dpn={} mid={} try={} jobs={} tthit={}/{} ({:.1}%) ttstore={} minimax={}/{}",
+                    "result={:?} time={}.{:03}s pn={} dpn={} mid={} try={} jobs={} tthit={}/{} ({:.1}%) ttstore={}",
                     result.value,
                     result.duration.as_secs(),
                     result.duration.subsec_millis(),
@@ -551,9 +557,17 @@ fn main() -> Result<(), std::io::Error> {
                     result.stats.tt.lookups,
                     100.0 * (result.stats.tt.hits as f64 / result.stats.tt.lookups as f64),
                     result.stats.tt.stores,
-                    result.stats.minimax_solve,
-                    result.stats.minimax,
-                );
+                    );
+                    println!(
+                        "  minimax={}/{} endgame={} db_hit={}/{}/{} db_write={}",
+                        result.stats.minimax_solve,
+                        result.stats.minimax,
+                        result.stats.endgame_solve,
+                        result.stats.db_skip,
+                        result.stats.db_hit,
+                        result.stats.db_lookup,
+                        result.stats.db_store,
+                    );
                     println!(
                         "  perf: mid/ms={:.2} job/ms={:.2}",
                         (result.stats.mid as f64) / (result.duration.as_millis() as f64),
@@ -599,7 +613,7 @@ fn main() -> Result<(), std::io::Error> {
                         result.stats.epsilon_resume,
                     );
                     println!(
-                        "  mid={} tthit={}/{} ({:.1}%) ttstore={} minimax={}/{} endgame={}",
+                        "  mid={} tthit={}/{} ({:.1}%) ttstore={} minimax={}/{} endgame={} db={}/{}/{}",
                         result.stats.mid.mid,
                         result.stats.mid.tt.hits,
                         result.stats.mid.tt.lookups,
@@ -610,6 +624,9 @@ fn main() -> Result<(), std::io::Error> {
                         result.stats.mid.minimax_solve,
                         result.stats.mid.minimax,
                         result.stats.mid.endgame_solve,
+                        result.stats.mid.db_skip,
+                        result.stats.mid.db_hit,
+                        result.stats.mid.db_lookup,
                     );
                     if cfg.debug > 0 {
                         let thread_ms =

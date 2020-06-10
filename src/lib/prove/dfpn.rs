@@ -1,11 +1,5 @@
-use crate::endgame;
-use crate::game;
-use crate::minimax;
-use crate::prove;
-use crate::prove::spdfpn;
-use crate::prove::{Bounds, INFINITY};
-use crate::table;
-use crate::util;
+use crate::prove::{spdfpn, Bounds, INFINITY};
+use crate::{endgame, game, minimax, prove, solver_db, table, util};
 
 use hdrhistogram::Histogram;
 use serde::Serialize;
@@ -13,7 +7,7 @@ use typenum;
 
 use std::cmp::{max, min};
 use std::io::Write;
-use std::sync::atomic::AtomicU32;
+use std::sync::{atomic::AtomicU32, Arc};
 use std::time::{Duration, Instant};
 use std::{fs, io};
 
@@ -32,6 +26,10 @@ pub struct Stats {
     pub open_boards: Histogram<u64>,
     #[serde(flatten)]
     pub tt: table::Stats,
+    pub db_lookup: usize,
+    pub db_store: usize,
+    pub db_hit: usize,
+    pub db_skip: usize,
 }
 
 impl Default for Stats {
@@ -47,6 +45,10 @@ impl Default for Stats {
             branch: Histogram::new_with_max(81, 3).unwrap(),
             open_boards: Histogram::new_with_max(9, 2).unwrap(),
             tt: Default::default(),
+            db_lookup: 0,
+            db_hit: 0,
+            db_skip: 0,
+            db_store: 0,
         }
     }
 }
@@ -64,6 +66,10 @@ impl Stats {
             branch: util::merge_histogram(&self.branch, &other.branch),
             open_boards: util::merge_histogram(&self.open_boards, &other.open_boards),
             tt: self.tt.merge(&other.tt),
+            db_lookup: self.db_lookup + other.db_lookup,
+            db_hit: self.db_hit + other.db_hit,
+            db_skip: self.db_skip + other.db_skip,
+            db_store: self.db_store + other.db_store,
         }
     }
 }
@@ -151,6 +157,7 @@ pub struct Config {
     pub minimax_cutoff: usize,
     pub probe_hash: Option<u64>,
     pub probe_log: String,
+    pub db: Option<Arc<solver_db::DB>>,
 }
 
 impl Default for Config {
@@ -168,6 +175,7 @@ impl Default for Config {
             minimax_cutoff: 0,
             probe_hash: None,
             probe_log: "probe.csv".to_owned(),
+            db: None,
         }
     }
 }
@@ -695,6 +703,20 @@ where
 
         populate_pv(&mut data, &children);
         let did_store = self.table.store(&data);
+        if data.bounds.solved() {
+            if let Some(ref db) = self.cfg.db {
+                let is_attacking = self.player == pos.player();
+                let attacker_wins = is_attacking == (data.bounds.phi == 0);
+                let st = match (self.player, attacker_wins) {
+                    (game::Player::X, true) => solver_db::ProofStatus::x(),
+                    (game::Player::X, false) => solver_db::ProofStatus::draw_or_o(),
+                    (game::Player::O, true) => solver_db::ProofStatus::o(),
+                    (game::Player::O, false) => solver_db::ProofStatus::draw_or_x(),
+                };
+                self.stats.db_store += 1;
+                db.write(pos, st);
+            }
+        }
         if self.cfg.debug > 6 {
             eprintln!(
                 "{:depth$}[{id}]exit mid bounds={bounds:?} local_work={local_work} store={did_store}",
@@ -712,7 +734,7 @@ where
     pub(in crate::prove) fn ttlookup_or_default(&mut self, g: &game::Game) -> Entry {
         let te = self.table.lookup(g.zobrist());
         te.unwrap_or_else(|| {
-            let bounds = match g.game_state() {
+            let mut bounds = match g.game_state() {
                 game::BoardState::Won(p) => {
                     if p == g.player() {
                         Bounds::winning()
@@ -729,6 +751,23 @@ where
                 }
                 game::BoardState::InPlay => Bounds::unity(),
             };
+            if !bounds.solved() {
+                if let Some(ref db) = self.cfg.db {
+                    self.stats.db_lookup += 1;
+                    if let Some(st) = db.lookup(g) {
+                        self.stats.db_hit += 1;
+
+                        if !st.can_win(self.player) {
+                            self.stats.db_skip += 1;
+                            bounds = if g.player() == self.player {
+                                Bounds::losing()
+                            } else {
+                                Bounds::winning()
+                            }
+                        }
+                    }
+                }
+            }
             Entry {
                 bounds: bounds,
                 hash: g.zobrist(),
