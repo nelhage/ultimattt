@@ -712,6 +712,7 @@ fn main() -> Result<(), std::io::Error> {
                 }
             };
             println!("{}", &game);
+            println!("zobrist={}", game.zobrist());
         }
     }
     Ok(())
