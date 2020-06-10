@@ -32,6 +32,13 @@ impl Player {
             Player::O => 1,
         }
     }
+
+    pub fn from_bit(bit: bool) -> Self {
+        match bit {
+            false => Player::X,
+            true => Player::O,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -76,7 +83,7 @@ pub(in crate) const WIN_MASKS_SIMD: u16x8 =
 const BOARD_MASK: u32 = 0x1ff;
 
 #[derive(Clone, Debug)]
-pub struct Subboard([CellState; 9]);
+pub struct Subboard(pub [CellState; 9]);
 
 #[derive(Clone, Debug)]
 pub struct Unpacked {

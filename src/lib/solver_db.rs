@@ -3,7 +3,7 @@ use crate::game;
 
 use rocksdb;
 
-use std::path::Path;
+use std::{convert::TryInto, path::Path};
 
 pub struct DB {
     rocks: rocksdb::DB,
@@ -100,17 +100,30 @@ fn merge_proof(_key: &[u8], v: Option<&[u8]>, ops: &mut rocksdb::MergeOperands) 
     out.map(|v| vec![v.as_byte()])
 }
  */
-fn merge_proof(_key: &[u8], v: Option<&[u8]>, ops: &mut rocksdb::MergeOperands) -> Option<Vec<u8>> {
+fn merge_proof(key: &[u8], v: Option<&[u8]>, ops: &mut rocksdb::MergeOperands) -> Option<Vec<u8>> {
     let init = match v {
-        None => ProofStatus::unproven(),
-        Some(bits) => ProofStatus::parse(bits).expect("valid value in DB"),
+        None => Some(ProofStatus::unproven()),
+        Some(bits) => ProofStatus::parse(bits),
     };
     let out = ops.fold(init, |l, r| {
-        let rs = ProofStatus::parse(r).expect("valid value in store");
-        l.merge(rs)
-            .unwrap_or_else(|| panic!("expected compatible values, got: {:?}/{:?}", l, rs))
+        l.and_then(|ls| {
+            let rs = ProofStatus::parse(r)?;
+            ls.merge(rs).or_else(|| {
+                let g = DB::decode(key);
+                panic!(
+                    "merge error: l={:x?} r={:x?} key={:?} g={}",
+                    l,
+                    r,
+                    key,
+                    game::notation::render(&g)
+                )
+            })
+        })
     });
-    Some(vec![out.as_byte()])
+    match out {
+        None => panic!("key={:?} init={:?}", key, init),
+        Some(v) => Some(vec![v.as_byte()]),
+    }
 }
 
 const MAX_KEY_LEN: usize = 4 * 10 + 1;
@@ -150,6 +163,54 @@ impl DB {
             mask >>= 1;
         }
         &buf[0..i]
+    }
+
+    fn decode(buf: &[u8]) -> game::Game {
+        let mut unpacked: game::Unpacked = Default::default();
+        let ometa = u16::from_le_bytes(buf[0..2].try_into().unwrap());
+        let xmeta = u16::from_le_bytes(buf[2..4].try_into().unwrap());
+        for i in 0..9 {
+            let st = match (xmeta & (1 << i) != 0, ometa & (1 << i) != 0) {
+                (false, false) => game::BoardState::InPlay,
+                (true, false) => game::BoardState::Won(game::Player::X),
+                (false, true) => game::BoardState::Won(game::Player::O),
+                (true, true) => game::BoardState::Drawn,
+            };
+            unpacked.game_states[i] = st;
+        }
+        unpacked.next_player = game::Player::from_bit(buf[4] & 1 == 1);
+        unpacked.next_board = match buf[4] >> 4 {
+            0 => None,
+            n => Some(n - 1),
+        };
+        let mut i = 5;
+        for board in 0..9 {
+            if unpacked.game_states[board].terminal() {
+                continue;
+            }
+            let o = u16::from_le_bytes(buf[i..i + 2].try_into().unwrap());
+            let x = u16::from_le_bytes(buf[i + 2..i + 4].try_into().unwrap());
+            i += 4;
+            for cell in 0..9 {
+                let st = match (x & (1 << cell) != 0, o & (1 << cell) != 0) {
+                    (false, false) => game::CellState::Empty,
+                    (true, false) => game::CellState::Played(game::Player::X),
+                    (false, true) => game::CellState::Played(game::Player::O),
+                    (true, true) => panic!("invalid cell: {},{}", board, cell),
+                };
+                unpacked.boards[board].0[cell] = st;
+            }
+        }
+        let g = game::Game::pack(&unpacked);
+        let mut alloc = [0; MAX_KEY_LEN];
+        let reencode = DB::encode(&mut alloc, &g);
+        assert!(
+            reencode == buf,
+            "encode->decode did not round trip got={:?} out={:?}",
+            buf,
+            reencode
+        );
+        g
     }
 
     pub fn lookup(&self, g: &game::Game) -> Option<ProofStatus> {
