@@ -121,6 +121,15 @@ impl DB {
         opts.create_if_missing(true);
         opts.set_compression_type(rocksdb::DBCompressionType::Snappy);
         opts.set_merge_operator("merge_proof", merge_proof, None);
+        opts.set_memtable_prefix_bloom_ratio(0.1);
+        opts.set_prefix_extractor(rocksdb::SliceTransform::create_fixed_prefix(5));
+
+        opts.set_block_based_table_factory(&{
+            let mut block_opts = rocksdb::BlockBasedOptions::default();
+            block_opts.set_bloom_filter(10, false);
+            block_opts.set_index_type(rocksdb::BlockBasedIndexType::HashSearch);
+            block_opts
+        });
 
         rocksdb::DB::open(&opts, path).map(|db| DB { rocks: db })
     }
