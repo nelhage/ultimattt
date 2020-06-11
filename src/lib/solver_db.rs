@@ -126,7 +126,15 @@ fn merge_proof(key: &[u8], v: Option<&[u8]>, ops: &mut rocksdb::MergeOperands) -
     }
 }
 
-const MAX_KEY_LEN: usize = 4 * 10 + 1;
+fn extract_hash<'a>(slice: &'a [u8]) -> &'a [u8] {
+    &slice[slice.len() - 8..slice.len()]
+}
+
+fn extract_hash_in_domain<'a>(_slice: &'a [u8]) -> bool {
+    true
+}
+
+const MAX_KEY_LEN: usize = 8 + 4 * 10 + 1;
 
 impl DB {
     pub fn new<P: AsRef<Path>>(path: P) -> Result<DB, rocksdb::Error> {
@@ -134,8 +142,21 @@ impl DB {
         opts.create_if_missing(true);
         opts.set_compression_type(rocksdb::DBCompressionType::Snappy);
         opts.set_merge_operator("merge_proof", merge_proof, None);
-        opts.set_memtable_prefix_bloom_ratio(0.1);
-        opts.set_prefix_extractor(rocksdb::SliceTransform::create_fixed_prefix(5));
+        // opts.set_memtable_prefix_bloom_ratio(0.1);
+        opts.set_prefix_extractor(rocksdb::SliceTransform::create(
+            "extract hash",
+            extract_hash,
+            Some(extract_hash_in_domain),
+        ));
+
+        let factory = rocksdb::MemtableFactory::HashSkipList {
+            bucket_count: 1_000_000,
+            height: 4,
+            branching_factor: 4,
+        };
+
+        opts.set_allow_concurrent_memtable_write(false);
+        opts.set_memtable_factory(factory);
 
         opts.set_block_based_table_factory(&{
             let mut block_opts = rocksdb::BlockBasedOptions::default();
@@ -162,28 +183,33 @@ impl DB {
             }
             mask >>= 1;
         }
+        buf[i..i + 8].copy_from_slice(&g.zobrist().to_le_bytes());
+        i += 8;
+
         &buf[0..i]
     }
 
     fn decode(buf: &[u8]) -> game::Game {
         let mut unpacked: game::Unpacked = Default::default();
-        let ometa = u16::from_le_bytes(buf[0..2].try_into().unwrap());
-        let xmeta = u16::from_le_bytes(buf[2..4].try_into().unwrap());
-        for i in 0..9 {
-            let st = match (xmeta & (1 << i) != 0, ometa & (1 << i) != 0) {
+        let mut i = 0;
+        let ometa = u16::from_le_bytes(buf[i..i + 2].try_into().unwrap());
+        let xmeta = u16::from_le_bytes(buf[i + 2..i + 4].try_into().unwrap());
+        i += 4;
+        for c in 0..9 {
+            let st = match (xmeta & (1 << c) != 0, ometa & (1 << c) != 0) {
                 (false, false) => game::BoardState::InPlay,
                 (true, false) => game::BoardState::Won(game::Player::X),
                 (false, true) => game::BoardState::Won(game::Player::O),
                 (true, true) => game::BoardState::Drawn,
             };
-            unpacked.game_states[i] = st;
+            unpacked.game_states[c] = st;
         }
-        unpacked.next_player = game::Player::from_bit(buf[4] & 1 == 1);
-        unpacked.next_board = match buf[4] >> 4 {
+        unpacked.next_player = game::Player::from_bit(buf[i] & 1 == 1);
+        unpacked.next_board = match buf[i] >> 4 {
             0 => None,
             n => Some(n - 1),
         };
-        let mut i = 5;
+        i += 1;
         for board in 0..9 {
             if unpacked.game_states[board].terminal() {
                 continue;
@@ -227,5 +253,37 @@ impl DB {
         let key = DB::encode(&mut buf, g);
         let val = [st.as_byte()];
         self.rocks.merge(key, &val).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use std::vec::Vec;
+
+    #[test]
+    fn test_encode_decode() {
+        let positions = &[
+"O;........@;X.O....../........./......X.O/........./O...X..../........./..X...O../........./........X",
+"O;......O@.;X.O.O.X../OX.O...../X.X...XOO/..OX.OX../OX..X..../...O.X.O./..X...OOO/..OX.X.X./.O.....XX",
+"X;XOX.X.OX.;X.OXO.X../OX.O..O../XXX...XOO/..OX.OXO./OX..X.OX./...O.X.O./..X...OOO/O.OXXX.X./.OO....XX",
+"O;XOX.X.OX.;X.OXO.X../OX.O..O../XXX...XOO/..OX.OXO./OX..X.OX./...O.X.O./..X...OOO/O.OXXX.X./XOO....XX",
+"X;.......@.;X.O....../.X.O...../......X.O/...X.OX../O...X..../...O.X.O./..X...OO./.....X.../.O......X",
+"X;......O@.;X.O.O.X../OX.O...../X.X...XOO/..OX.OX../OX..X..../...O.X.O./..X...OOO/..OX.X.../.O.....XX",
+"O;@........;X.O....../.X.O...../X.....X.O/..OX.OX../O...X..../...O.X.O./..X...OO./...X.X.../.O......X",
+"X;.......@.;X.O....../.X.O...../......X.O/...X.OX../O...X..../...O.X.../..X...OO./........./.O......X",
+"X;......@..;X.O....../........./......X../........./O...X..../........./......O../........./.........",
+"X;..@...O..;X.O.O.X../OX.O...../X.....X.O/..OX.OX../OX..X..../...O.X.O./..X...OOO/..OX.X.../.O.....XX",
+        ].iter().map(|s| game::notation::parse(s).unwrap()).collect::<Vec<_>>();
+        for p in positions.iter() {
+            let mut buf = [0; MAX_KEY_LEN];
+            let encoded = DB::encode(&mut buf, p);
+            let decoded = DB::decode(encoded);
+            assert!(decoded.equivalent(p));
+            let pfx = extract_hash(encoded);
+            let hash = u64::from_le_bytes(pfx.try_into().unwrap());
+            assert_eq!(hash, p.zobrist());
+        }
     }
 }
