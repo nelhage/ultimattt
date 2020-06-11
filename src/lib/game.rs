@@ -340,6 +340,7 @@ struct Zobrist {
     // boards[board] = [tie, X, O]
     boards: [[u64; 3]; 9],
     next_board: [u64; 9],
+    players: [u64; 2],
 }
 
 impl Zobrist {
@@ -356,6 +357,9 @@ impl Zobrist {
             CellState::Empty => 0,
             CellState::Played(p) => self.squares[board][square][p.as_bit()],
         }
+    }
+    fn for_player(&self, player: Player) -> u64 {
+        self.players[player.as_bit()]
     }
 }
 
@@ -519,6 +523,7 @@ static ZOBRIST_TABLES: Zobrist = Zobrist {
         5430438456607159556,
         7693123149093558032,
     ],
+    players: [5407203028010692663, 14035603769899813055],
 };
 
 impl Game {
@@ -683,6 +688,7 @@ impl Game {
                 .next_board
                 .map(|b| ZOBRIST_TABLES.next_board[b as usize])
                 .unwrap_or(0)
+            ^ ZOBRIST_TABLES.for_player(self.next_player)
     }
 
     pub fn bound_depth(&self) -> usize {
@@ -1073,6 +1079,26 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn test_hash_player() {
+        let g1 = notation::parse("O;O...OX@XX;XOOOO.O../X..XXO.O./X.X...O.O/.X.OXO.O./O.OXXO..O/XXX....O./X.....X.O/.O.XXX.../.O....XXX").unwrap();
+        let g2 = notation::parse("X;O...OX@XX;XOOOO.O.O/X..XXO.O./X.X...O.O/.X.OXO.O./O.OXXOO.O/XXX....O./X.....X.O/.O.XXX.../XO..X..XX").unwrap();
+        let g3 = {
+            let mut g = g2.clone();
+            g.next_player = g.next_player.other();
+            g
+        };
+        assert!(
+            g1.equivalent(&g3),
+            "set up identical positions except for player"
+        );
+        assert_ne!(
+            g1.zobrist(),
+            g2.zobrist(),
+            "identical positions which differ only in player hash different"
+        );
     }
 
     const TEST_HASH_SAMPLES: usize = 1_000_000;
