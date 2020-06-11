@@ -305,6 +305,13 @@ struct AnalyzeParameters {
     position: String,
 }
 
+#[derive(Debug, StructOpt, Serialize)]
+struct PPParameters {
+    #[structopt(long)]
+    children: bool,
+    position: String,
+}
+
 #[derive(Debug, StructOpt)]
 enum Command {
     Play {
@@ -315,9 +322,7 @@ enum Command {
     },
     Analyze(AnalyzeParameters),
     Selfplay(SelfplayParameters),
-    PP {
-        position: String,
-    },
+    PP(PPParameters),
     Worker {},
 }
 
@@ -703,8 +708,8 @@ fn main() -> Result<(), std::io::Error> {
                 p1_o.2,
             );
         }
-        Command::PP { ref position } => {
-            let game = match game::notation::parse(position) {
+        Command::PP(ref params) => {
+            let game = match game::notation::parse(&params.position) {
                 Ok(g) => g,
                 Err(e) => {
                     println!("Parsing position: {:?}", e);
@@ -713,6 +718,20 @@ fn main() -> Result<(), std::io::Error> {
             };
             println!("{}", &game);
             println!("zobrist={}", game.zobrist());
+            if params.children {
+                println!();
+                println!("# children");
+                for (i, m) in game.all_moves().enumerate() {
+                    let child = game.make_move(m).unwrap();
+                    println!(
+                        "\n----------\nchild={}  zobrist={}\n{}notation={}",
+                        i,
+                        child.zobrist(),
+                        &child,
+                        game::notation::render(&child),
+                    );
+                }
+            }
         }
     }
     Ok(())
