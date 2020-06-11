@@ -10,6 +10,7 @@ use crate::util;
 use crossbeam;
 use crossbeam::channel;
 use hdrhistogram::Histogram;
+use parking_lot::RwLock;
 use probe::probe;
 use serde::Serialize;
 
@@ -311,6 +312,12 @@ impl Prover {
             cfg.dfpn.table_size,
         );
 
+        let mut rwlock: Option<RwLock<dfpn::Probe>> = None;
+        let probe = dfpn::Probe::from_config(&cfg.dfpn).map(|p| {
+            rwlock = Some(RwLock::new(p));
+            rwlock.as_ref().unwrap()
+        });
+
         crossbeam::scope(|s| {
             let (job_send, job_recv) = channel::bounded(prover.queue_depth());
             let (res_send, res_recv) = channel::bounded(prover.queue_depth());
@@ -334,7 +341,23 @@ impl Prover {
                             table: table.handle(),
                             player: pos.player(),
                             stack: Vec::new(),
-                            probe: |_, _, _| {},
+                            probe:
+                                |stats: &dfpn::Stats,
+                                 data: &dfpn::Entry,
+                                 children: &Vec<dfpn::Child>| {
+                                    if let Some(ref p) = probe {
+                                        {
+                                            let r = p.read();
+                                            if data.hash != r.hash {
+                                                return;
+                                            }
+                                        }
+
+                                        let mut w = p.write();
+                                        let tick = w.tick;
+                                        w.do_probe(tick, stats.mid, data, children);
+                                    }
+                                },
                             minimax: minimax::Minimax::with_config(&mmcfg),
                             stats: Default::default(),
                         },

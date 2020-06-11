@@ -451,13 +451,16 @@ pub(in crate::prove) fn run(
                                 stats: Default::default(),
                                 probe: |stats: &Stats, data: &Entry, children: &Vec<Child>| {
                                     if let Some(ref p) = probe {
-                                        let r = p.read();
-                                        if data.hash != r.hash {
-                                            return;
-                                        }
-                                        let now = Instant::now();
-                                        if now < r.tick && !data.bounds.solved() {
-                                            return;
+                                        let now: Instant;
+                                        {
+                                            let r = p.read();
+                                            if data.hash != r.hash {
+                                                return;
+                                            }
+                                            now = Instant::now();
+                                            if now < r.tick && !data.bounds.solved() {
+                                                return;
+                                            }
                                         }
 
                                         let mut w = p.write();

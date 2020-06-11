@@ -225,21 +225,7 @@ impl DFPN {
     }
 
     fn run(&mut self) -> (Entry, Vec<game::Move>, u64) {
-        let mut probe = self.cfg.probe_hash.map(|h| {
-            let probelog = fs::OpenOptions::new()
-                .create(true)
-                .truncate(true)
-                .write(true)
-                .open(&self.cfg.probe_log)
-                .expect("open probe log");
-            let mut probe = Probe {
-                hash: h,
-                tick: self.start,
-                out: probelog,
-            };
-            probe.write_header();
-            probe
-        });
+        let mut probe = Probe::from_config(&self.cfg);
 
         let mmcfg = minimax::Config {
             max_depth: Some(self.cfg.minimax_cutoff as i64 + 1),
@@ -370,6 +356,24 @@ impl Probe {
             )
             .expect("probe line");
         }
+    }
+
+    pub(in crate::prove) fn from_config(cfg: &Config) -> Option<Self> {
+        cfg.probe_hash.map(|h| {
+            let probelog = fs::OpenOptions::new()
+                .create(true)
+                .truncate(true)
+                .write(true)
+                .open(&cfg.probe_log)
+                .expect("open probe log");
+            let mut probe = Probe {
+                hash: h,
+                tick: Instant::now(),
+                out: probelog,
+            };
+            probe.write_header();
+            probe
+        })
     }
 }
 
@@ -675,9 +679,8 @@ where
             children[best_idx].entry = child_entry;
             self.stack.pop();
             local_work += child_work;
+            data.work += child_work;
         }
-
-        data.work += local_work;
 
         populate_pv(&mut data, &children);
         let did_store = self.table.store(&data);
