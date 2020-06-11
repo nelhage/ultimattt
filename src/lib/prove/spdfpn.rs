@@ -63,7 +63,7 @@ impl<'a, T> DerefMut for YieldableGuard<'a, T> {
 
 struct SPDFPNWorker<'a, P>
 where
-    P: FnMut(&Stats, &Entry, &Vec<Child>),
+    P: dfpn::ProbeFn,
 {
     mid: dfpn::MID<'a, table::ConcurrentTranspositionTableHandle<'a, Entry, typenum::U4>, P>,
     guard: YieldableGuard<'a, SharedState>,
@@ -72,7 +72,7 @@ where
 
 impl<Probe> SPDFPNWorker<'_, Probe>
 where
-    Probe: FnMut(&Stats, &Entry, &Vec<Child>),
+    Probe: dfpn::ProbeFn,
 {
     fn try_run_job(
         &mut self,
@@ -187,7 +187,7 @@ where
             vdata.entry.bounds = dfpn::compute_bounds(&vdata.children);
             dfpn::populate_pv(&mut data, &children);
 
-            (self.mid.probe)(&self.mid.stats, &data, &children);
+            (self.mid.probe)(&self.mid.stats, &pos, &data, &children);
 
             if self.mid.cfg.debug > 5 {
                 eprintln!(
@@ -449,29 +449,34 @@ pub(in crate::prove) fn run(
                                 stack: Vec::new(),
                                 minimax: minimax::Minimax::with_config(mcref),
                                 stats: Default::default(),
-                                probe: |stats: &Stats, data: &Entry, children: &Vec<Child>| {
-                                    if let Some(ref p) = probe {
-                                        let now: Instant;
-                                        {
-                                            let r = p.read();
-                                            if data.hash != r.hash {
-                                                return;
+                                probe:
+                                    |stats: &Stats,
+                                     pos: &game::Game,
+                                     data: &Entry,
+                                     children: &Vec<Child>| {
+                                        if let Some(ref p) = probe {
+                                            let now: Instant;
+                                            {
+                                                let r = p.read();
+                                                if data.hash != r.hash {
+                                                    return;
+                                                }
+                                                now = Instant::now();
+                                                if now < r.tick && !data.bounds.solved() {
+                                                    return;
+                                                }
                                             }
-                                            now = Instant::now();
-                                            if now < r.tick && !data.bounds.solved() {
-                                                return;
-                                            }
-                                        }
 
-                                        let mut w = p.write();
-                                        w.do_probe(
-                                            now + Duration::from_millis(10),
-                                            stats.mid,
-                                            data,
-                                            children,
-                                        );
-                                    }
-                                },
+                                            let mut w = p.write();
+                                            w.do_probe(
+                                                now + Duration::from_millis(10),
+                                                stats.mid,
+                                                pos,
+                                                data,
+                                                children,
+                                            );
+                                        }
+                                    },
                             },
                             guard: YieldableGuard::new(sref),
                             wait: cref,

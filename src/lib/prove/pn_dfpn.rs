@@ -229,7 +229,7 @@ impl WorkerStats {
 struct Worker<'a, Table, Probe>
 where
     Table: table::Table<dfpn::Entry>,
-    Probe: FnMut(&dfpn::Stats, &dfpn::Entry, &Vec<dfpn::Child>),
+    Probe: dfpn::ProbeFn,
 {
     cfg: &'a Config,
     jobs: crossbeam::Receiver<Job>,
@@ -241,7 +241,7 @@ where
 impl<'a, Table, Probe> Worker<'a, Table, Probe>
 where
     Table: table::Table<dfpn::Entry>,
-    Probe: FnMut(&dfpn::Stats, &dfpn::Entry, &Vec<dfpn::Child>),
+    Probe: dfpn::ProbeFn,
 {
     fn run(&mut self) {
         for job in self.jobs.iter() {
@@ -343,6 +343,7 @@ impl Prover {
                             stack: Vec::new(),
                             probe:
                                 |stats: &dfpn::Stats,
+                                 pos: &game::Game,
                                  data: &dfpn::Entry,
                                  children: &Vec<dfpn::Child>| {
                                     if let Some(ref p) = probe {
@@ -355,7 +356,7 @@ impl Prover {
 
                                         let mut w = p.write();
                                         let tick = w.tick;
-                                        w.do_probe(tick, stats.mid, data, children);
+                                        w.do_probe(tick, stats.mid, pos, data, children);
                                     }
                                 },
                             minimax: minimax::Minimax::with_config(&mmcfg),

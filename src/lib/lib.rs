@@ -1,5 +1,6 @@
 #![feature(new_uninit)]
 #![feature(asm)]
+#![feature(trait_alias)]
 
 pub mod endgame;
 pub mod game;

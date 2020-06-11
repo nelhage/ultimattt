@@ -250,7 +250,7 @@ impl DFPN {
                 stats: Default::default(),
                 stack: Vec::new(),
                 minimax: minimax::Minimax::with_config(&mmcfg),
-                probe: |stats: &Stats, data: &Entry, children: &Vec<Child>| {
+                probe: |stats: &Stats, pos: &game::Game, data: &Entry, children: &Vec<Child>| {
                     if let Some(ref mut p) = probe {
                         if data.hash != p.hash {
                             return;
@@ -259,7 +259,13 @@ impl DFPN {
                         if now < p.tick && !data.bounds.solved() {
                             return;
                         }
-                        p.do_probe(now + Duration::from_millis(10), stats.mid, data, children);
+                        p.do_probe(
+                            now + Duration::from_millis(10),
+                            stats.mid,
+                            pos,
+                            data,
+                            children,
+                        );
                     }
                 },
             };
@@ -327,7 +333,7 @@ impl Probe {
     fn write_header(&mut self) {
         write!(
             self.out,
-            "mid,node_work,node_phi,node_delta,child,work,phi,delta\n"
+            "mid,notation,node_work,node_phi,node_delta,child,chash,work,phi,delta\n"
         )
         .expect("probe header");
     }
@@ -336,6 +342,7 @@ impl Probe {
         &mut self,
         tick: Instant,
         mid: usize,
+        pos: &game::Game,
         data: &Entry,
         children: &Vec<Child>,
     ) {
@@ -344,12 +351,14 @@ impl Probe {
         for (i, ch) in children.iter().enumerate() {
             write!(
                 self.out,
-                "{},{},{},{},{},{},{},{}\n",
+                "{},{},{},{},{},{},{},{},{},{}\n",
                 mid,
+                game::notation::render(pos),
                 data.work,
                 data.bounds.phi,
                 data.bounds.delta,
                 i,
+                ch.entry.hash,
                 ch.entry.work,
                 ch.entry.bounds.phi,
                 ch.entry.bounds.delta,
@@ -545,10 +554,12 @@ pub(in crate::prove) fn extract_pv<T: table::Table<Entry>>(
     pv
 }
 
+pub(in crate::prove) trait ProbeFn = FnMut(&Stats, &game::Game, &Entry, &Vec<Child>);
+
 pub(in crate::prove) struct MID<'a, Table, Probe>
 where
     Table: table::Table<Entry>,
-    Probe: FnMut(&Stats, &Entry, &Vec<Child>),
+    Probe: ProbeFn,
 {
     pub(in crate::prove) id: usize,
     pub(in crate::prove) cfg: &'a Config,
@@ -563,7 +574,7 @@ where
 impl<'a, Table, Probe> MID<'a, Table, Probe>
 where
     Table: table::Table<Entry>,
-    Probe: FnMut(&Stats, &Entry, &Vec<Child>),
+    Probe: ProbeFn,
 {
     fn try_minimax(&mut self, pos: &game::Game) -> Option<bool> {
         self.stats.minimax += 1;
@@ -661,7 +672,7 @@ where
 
         loop {
             data.bounds = compute_bounds(&children);
-            (self.probe)(&self.stats, &data, &children);
+            (self.probe)(&self.stats, &pos, &data, &children);
 
             if local_work >= max_work || data.bounds.exceeded(bounds) {
                 break;
