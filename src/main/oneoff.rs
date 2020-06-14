@@ -72,10 +72,10 @@ impl Game {
         (self.o | self.x).count_ones() as usize
     }
     fn count_x(self) -> usize {
-        self.x.count_ones() as usize
+        (self.x & !self.o).count_ones() as usize
     }
     fn count_o(self) -> usize {
-        self.o.count_ones() as usize
+        (self.o & !self.x).count_ones() as usize
     }
 
     fn make_move(self, idx: usize, who: u16) -> Game {
