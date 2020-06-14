@@ -78,17 +78,10 @@ impl Game {
         self.o.count_ones() as usize
     }
 
-    fn make_move(self, idx: usize, who: bool) -> Game {
-        if who {
-            Game {
-                x: self.x | (1_u16 << idx),
-                o: self.o,
-            }
-        } else {
-            Game {
-                x: self.x,
-                o: self.o | (1_u16 << idx),
-            }
+    fn make_move(self, idx: usize, who: u16) -> Game {
+        Game {
+            x: self.x | ((who & 1) << idx),
+            o: self.o | (((who & 2) >> 1) << idx),
         }
     }
     fn apply(self, perm: &symmetry::Permutation) -> Game {
@@ -122,6 +115,7 @@ struct Counts {
 }
 
 struct Brute {
+    draws: bool,
     do_symmetry: bool,
     total: usize,
     stats: [[Counts; 8]; 8],
@@ -168,45 +162,59 @@ impl Brute {
 
         for i in 0..9 {
             if g.empty(i) {
-                self.search(g.make_move(i, false));
-                self.search(g.make_move(i, true));
+                self.search(g.make_move(i, 0x1));
+                self.search(g.make_move(i, 0x2));
+                if self.draws {
+                    self.search(g.make_move(i, 0x3));
+                }
             }
         }
     }
 }
 
 fn main() {
-    let mut brute_symm = Brute {
+    let mut brute = Brute {
         do_symmetry: true,
+        draws: true,
         stats: Default::default(),
         seen: BitSet::new(),
         total: 0,
     };
-    brute_symm.search(Game { x: 0, o: 0 });
+    brute.search(Game { x: 0, o: 0 });
 
     println!(
-        "reachable boards(modulo symmetry): {} total={}",
-        brute_symm.total,
-        brute_symm.seen.len()
+        "reachable boards with draws(modulo symmetry): {} total={}",
+        brute.total,
+        brute.seen.len()
     );
 
-    let mut brute_raw = Brute {
-        do_symmetry: false,
-        stats: Default::default(),
-        seen: BitSet::new(),
-        total: 0,
-    };
-    brute_raw.search(Game { x: 0, o: 0 });
-
-    println!(
-        "reachable boards(ignore symmetry): {} total={}",
-        brute_raw.total,
-        brute_raw.seen.len()
-    );
+    for (x, row) in brute.stats.iter().enumerate() {
+        print!("x={}", x);
+        for (_o, e) in row.iter().enumerate() {
+            print!("  {:3}/{:-3}/{:3}|", e.x, e.o, e.visited);
+        }
+        println!();
+    }
 
     println!();
+    println!();
 
-    for (x, row) in brute_symm.stats.iter().enumerate() {
+    let mut brute_inner = Brute {
+        do_symmetry: true,
+        draws: false,
+        stats: Default::default(),
+        seen: BitSet::new(),
+        total: 0,
+    };
+    brute_inner.search(Game { x: 0, o: 0 });
+
+    println!(
+        "reachable boards w/o draws (modulo symmetry): {} total={}",
+        brute_inner.total,
+        brute_inner.seen.len()
+    );
+
+    for (x, row) in brute_inner.stats.iter().enumerate() {
         print!("x={}", x);
         for (_o, e) in row.iter().enumerate() {
             print!("  {:3}/{:-3}/{:3}|", e.x, e.o, e.visited);
