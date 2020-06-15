@@ -76,6 +76,7 @@ pub(in crate::prove) struct Entry {
     pub(in crate::prove) sync: AtomicU32, // 4
     pub(in crate::prove) pv: game::Move,  // 1
     pub(in crate::prove) child: u8,       // 1
+    pub(in crate::prove) depth: u8,       // 1
 }
 
 impl Clone for Entry {
@@ -87,6 +88,7 @@ impl Clone for Entry {
             sync: AtomicU32::new(0),
             pv: self.pv,
             child: self.child,
+            depth: self.depth,
         }
     }
 }
@@ -121,6 +123,7 @@ impl table::AtomicEntry for Entry {
         (*dst).work = v.work;
         (*dst).pv = v.pv;
         (*dst).child = v.child;
+        (*dst).depth = v.depth;
     }
 }
 
@@ -133,6 +136,7 @@ impl Default for Entry {
             pv: game::Move::none(),
             child: std::u8::MAX,
             sync: AtomicU32::new(0),
+            depth: 0,
         }
     }
 }
@@ -276,6 +280,7 @@ impl DFPN {
                 pv: game::Move::none(),
                 work: 0,
                 sync: AtomicU32::new(0),
+                depth: 0,
             };
             let mut work = 0;
             let mut dump_tick = self.start + self.cfg.dump_interval;
@@ -455,20 +460,22 @@ pub(in crate::prove) fn populate_pv(data: &mut Entry, children: &Vec<Child>) {
     // If the position is solved, store the PV. For winning moves,
     // find the shortest path to victory; for losing, the
     // most-delaying
-    if data.bounds.phi == 0 {
-        data.pv = children
+    let ch = if data.bounds.phi == 0 {
+        children
             .iter()
             .filter(|e| e.entry.bounds.delta == 0)
             .min_by_key(|e| e.entry.work)
-            .map(|e| e.r#move)
-            .expect("won node, no winning move");
+            .expect("won node, no winning move")
     } else if data.bounds.delta == 0 {
-        data.pv = children
+        children
             .iter()
             .max_by_key(|e| e.entry.work)
-            .map(|e| e.r#move)
-            .expect("lost node, no move");
-    }
+            .expect("lost node, no move")
+    } else {
+        return;
+    };
+    data.pv = ch.r#move;
+    data.depth = ch.entry.depth + 1;
 }
 
 pub(in crate::prove) fn dump_table<T: table::Table<Entry>>(
@@ -647,6 +654,9 @@ where
                 data.bounds = Bounds::losing();
             }
             data.work = 1;
+            if pos.bound_depth() <= self.cfg.minimax_cutoff {
+                data.depth = self.cfg.minimax_cutoff as u8;
+            }
             self.table.store(&data);
             return (data, 1, Vec::new());
         }
