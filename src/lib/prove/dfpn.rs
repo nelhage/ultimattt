@@ -20,9 +20,9 @@ use std::{fs, io};
 #[derive(Clone, Debug, Serialize)]
 pub struct Stats {
     pub mid: usize,
-    pub terminal: usize,
     pub try_calls: usize,
     pub jobs: usize,
+    pub solved: usize,
     pub minimax: usize,
     pub minimax_solve: usize,
     pub endgame_solve: usize,
@@ -38,9 +38,9 @@ impl Default for Stats {
     fn default() -> Self {
         Stats {
             mid: 0,
-            terminal: 0,
             try_calls: 0,
             jobs: 0,
+            solved: 0,
             minimax: 0,
             minimax_solve: 0,
             endgame_solve: 0,
@@ -55,9 +55,9 @@ impl Stats {
     pub fn merge(&self, other: &Stats) -> Stats {
         Stats {
             mid: self.mid + other.mid,
-            terminal: self.terminal + other.terminal,
             jobs: self.jobs + other.jobs,
             try_calls: self.try_calls + other.try_calls,
+            solved: self.solved + other.solved,
             minimax: self.minimax + other.minimax,
             minimax_solve: self.minimax_solve + other.minimax_solve,
             endgame_solve: self.endgame_solve + other.endgame_solve,
@@ -646,7 +646,6 @@ where
             } else {
                 data.bounds = Bounds::losing();
             }
-            self.stats.terminal += 1;
             data.work = 1;
             self.table.store(&data);
             return (data, 1, Vec::new());
@@ -691,6 +690,10 @@ where
             self.stack.pop();
             local_work += child_work;
             data.work += child_work;
+        }
+
+        if data.bounds.solved() {
+            self.stats.solved += 1;
         }
 
         populate_pv(&mut data, &children);

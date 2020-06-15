@@ -599,7 +599,7 @@ fn main() -> Result<(), std::io::Error> {
                         result.stats.epsilon_resume,
                     );
                     println!(
-                        "  mid={} tthit={}/{} ({:.1}%) ttstore={} minimax={}/{} endgame={}",
+                        "  mid={} tthit={}/{} ({:.1}%) ttstore={} solved={} minimax={}/{} endgame={}",
                         result.stats.mid.mid,
                         result.stats.mid.tt.hits,
                         result.stats.mid.tt.lookups,
@@ -607,6 +607,7 @@ fn main() -> Result<(), std::io::Error> {
                             * (result.stats.mid.tt.hits as f64
                                 / result.stats.mid.tt.lookups as f64),
                         result.stats.mid.tt.stores,
+                        result.stats.mid.solved,
                         result.stats.mid.minimax_solve,
                         result.stats.mid.minimax,
                         result.stats.mid.endgame_solve,
