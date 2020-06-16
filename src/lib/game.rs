@@ -162,7 +162,14 @@ impl Subboards {
         (row.o >> (9 * (board % 3))) & BOARD_MASK
     }
 
-    fn mask(&self, board: usize) -> u32 {
+    pub(in crate) fn playerbits(&self, player: Player, board: usize) -> u32 {
+        match player {
+            Player::X => self.xbits(board),
+            Player::O => self.obits(board),
+        }
+    }
+
+    pub(in crate) fn mask(&self, board: usize) -> u32 {
         let row = &self.rows[board / 3];
         (row.o | row.x) >> (9 * (board % 3)) & BOARD_MASK
     }
