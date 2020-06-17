@@ -734,39 +734,41 @@ where
         g: &game::Game,
         eval: prove::Status,
     ) -> Entry {
-        let te = self.table.lookup(g.zobrist());
-        te.unwrap_or_else(|| {
-            let bounds = match g.game_state() {
-                game::BoardState::Won(p) => {
-                    if p == g.player() {
-                        Bounds::winning()
-                    } else {
-                        Bounds::losing()
-                    }
+        let bounds = match g.game_state() {
+            game::BoardState::Won(p) => {
+                if p == g.player() {
+                    Bounds::winning()
+                } else {
+                    Bounds::losing()
                 }
-                game::BoardState::Drawn => {
-                    if g.player() == self.player {
-                        Bounds::losing()
-                    } else {
-                        Bounds::winning()
-                    }
-                }
-                game::BoardState::InPlay => {
-                    if eval.is_won(g.player()) {
-                        Bounds::winning()
-                    } else if eval.is_won(g.player().other()) {
-                        Bounds::losing()
-                    } else {
-                        Bounds::unity()
-                    }
-                }
-            };
-            Entry {
-                bounds: bounds,
-                hash: g.zobrist(),
-                work: 0,
-                ..Default::default()
             }
-        })
+            game::BoardState::Drawn => {
+                if g.player() == self.player {
+                    Bounds::losing()
+                } else {
+                    Bounds::winning()
+                }
+            }
+            game::BoardState::InPlay => {
+                if eval.is_won(g.player()) {
+                    Bounds::winning()
+                } else if eval.is_won(g.player().other()) {
+                    Bounds::losing()
+                } else {
+                    Bounds::unity()
+                }
+            }
+        };
+        let default = Entry {
+            bounds: bounds,
+            hash: g.zobrist(),
+            work: 0,
+            ..Default::default()
+        };
+        if default.bounds.solved() {
+            default
+        } else {
+            self.table.lookup(g.zobrist()).unwrap_or(default)
+        }
     }
 }
