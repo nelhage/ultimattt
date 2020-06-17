@@ -633,13 +633,19 @@ where
             .record(pos.open_boards() as u64)
             .unwrap();
 
+        let analysis = endgame::Analysis::new(pos);
+
         let terminal = match pos.game_state() {
             game::BoardState::InPlay => {
-                if pos.bound_depth() <= self.cfg.minimax_cutoff {
-                    self.try_minimax(pos)
-                } else if !endgame::is_winnable(pos, self.player) {
+                let proof = analysis.status();
+                if !proof.is_winnable(self.player) {
                     self.stats.endgame_solve += 1;
                     Some(pos.player() != self.player)
+                } else if proof.is_won(self.player) {
+                    self.stats.endgame_solve += 1;
+                    Some(pos.player() == self.player)
+                } else if pos.bound_depth() <= self.cfg.minimax_cutoff {
+                    self.try_minimax(pos)
                 } else {
                     None
                 }
@@ -666,7 +672,8 @@ where
         let mut children = Vec::new();
         for m in pos.all_moves() {
             let g = pos.make_move(m).expect("all_moves returned illegal move");
-            let data = self.ttlookup_or_default(&g);
+            let eval = analysis.evaluate_move(m);
+            let data = self.ttlookup_or_default(&g, eval);
             let bounds = data.bounds;
             children.push(Child {
                 position: g,
@@ -722,7 +729,11 @@ where
         (data, local_work, children)
     }
 
-    pub(in crate::prove) fn ttlookup_or_default(&mut self, g: &game::Game) -> Entry {
+    pub(in crate::prove) fn ttlookup_or_default(
+        &mut self,
+        g: &game::Game,
+        eval: prove::Status,
+    ) -> Entry {
         let te = self.table.lookup(g.zobrist());
         te.unwrap_or_else(|| {
             let bounds = match g.game_state() {
@@ -740,7 +751,15 @@ where
                         Bounds::winning()
                     }
                 }
-                game::BoardState::InPlay => Bounds::unity(),
+                game::BoardState::InPlay => {
+                    if eval.is_won(g.player()) {
+                        Bounds::winning()
+                    } else if eval.is_won(g.player().other()) {
+                        Bounds::losing()
+                    } else {
+                        Bounds::unity()
+                    }
+                }
             };
             Entry {
                 bounds: bounds,

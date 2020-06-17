@@ -1,5 +1,6 @@
 use crate::game;
 use crate::minimax;
+use crate::prove;
 use crate::prove::dfpn;
 use crate::prove::dfpn::{Child, Config, Entry, Probe, Stats};
 use crate::prove::{Bounds, INFINITY};
@@ -147,7 +148,7 @@ where
         vdata.children.clear();
         for m in pos.all_moves() {
             let g = pos.make_move(m).expect("all_moves returned illegal move");
-            let entry = self.mid.ttlookup_or_default(&g);
+            let entry = self.mid.ttlookup_or_default(&g, prove::Status::unproven());
             let child = Child {
                 position: g,
                 r#move: m,

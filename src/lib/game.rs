@@ -174,6 +174,11 @@ impl Subboards {
         (row.o | row.x) >> (9 * (board % 3)) & BOARD_MASK
     }
 
+    pub(in crate) fn free_squares(&self, board: usize) -> u32 {
+        let row = &self.rows[board / 3];
+        !((row.o | row.x) >> (9 * (board % 3))) & BOARD_MASK
+    }
+
     fn check_winner(&self, board: usize, player: Player) -> BoardState {
         let row = &self.rows[board / 3];
         let shift = 9 * (board % 3);
@@ -671,6 +676,13 @@ impl Game {
 
     pub fn game_state(&self) -> BoardState {
         self.overall_state
+    }
+
+    pub fn game_over(&self) -> bool {
+        match self.overall_state {
+            BoardState::InPlay => false,
+            _ => true,
+        }
     }
 
     pub fn player(&self) -> Player {

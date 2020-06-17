@@ -1,30 +1,136 @@
+#![allow(dead_code)]
+
 use crate::game;
+use crate::prove;
 
 use packed_simd::u16x8;
 
-pub fn is_winnable(g: &game::Game, by: game::Player) -> bool {
-    let potential = g.game_states.playerbits(by) | !g.game_states.donebits();
+pub struct Analysis<'a> {
+    pos: &'a game::Game,
+    proven: prove::Status,
+    attacker_critical: u16,
+    defender_critical: u16,
+}
+
+impl<'a> Analysis<'a> {
+    pub fn new(pos: &'a game::Game) -> Self {
+        Self::analyze(pos)
+    }
+
+    fn analyze(pos: &'a game::Game) -> Self {
+        if pos.game_over() {
+            return Analysis {
+                pos,
+                attacker_critical: 0,
+                defender_critical: 0,
+                proven: prove::Status::unproven(),
+            };
+        }
+
+        let attacker_critical = critical_boards(pos, pos.player());
+        let defender_critical = critical_boards(pos, pos.player().other());
+        let mut proven = prove::Status::unproven();
+
+        if attacker_critical != 0 {
+            // If the attacker has a critial square, and is permitted
+            // to play there, she wins.
+            match pos.board_to_play() {
+                Some(b) if attacker_critical & (1 << b) == 0 => (),
+                _ => {
+                    proven = prove::Status::for_player(pos.player());
+                }
+            }
+        }
+
+        if defender_critical != 0
+            && proven.is_winnable(pos.player().other())
+            && forced_loss(pos, defender_critical)
+        {
+            proven = prove::Status::for_player(pos.player().other());
+        }
+
+        if !is_winnable(pos, game::Player::X) {
+            proven = proven.merge(prove::Status::draw_or_o()).unwrap_or_else(|| {
+                panic!(
+                    "endgame merge({}): proven={:x?} but X can't win",
+                    game::notation::render(pos),
+                    proven
+                );
+            });
+        }
+        if !is_winnable(pos, game::Player::O) {
+            proven = proven.merge(prove::Status::draw_or_x()).unwrap_or_else(|| {
+                panic!(
+                    "endgame merge({}): proven={:x?} but O can't win",
+                    game::notation::render(pos),
+                    proven
+                );
+            });
+        }
+
+        Analysis {
+            pos,
+            attacker_critical,
+            defender_critical,
+            proven,
+        }
+    }
+
+    pub fn status(&self) -> prove::Status {
+        return self.proven;
+    }
+
+    pub fn evaluate_move(&self, m: game::Move) -> prove::Status {
+        if self.defender_critical == 0 {
+            return prove::Status::unproven();
+        }
+        let bad = self.pos.game_states.donebits() | (self.defender_critical as u32);
+        if bad & (1 << m.board()) != 0 {
+            return prove::Status::for_player(self.pos.player().other());
+        }
+        return prove::Status::unproven();
+    }
+}
+
+fn is_winnable(pos: &game::Game, by: game::Player) -> bool {
+    let potential = pos.game_states.playerbits(by) | !pos.game_states.donebits();
     return (u16x8::splat(potential as u16) & game::WIN_MASKS_SIMD)
         .eq(game::WIN_MASKS_SIMD)
         .any();
 }
 
+fn forced_loss(pos: &game::Game, defender_critical: u16) -> bool {
+    // If the defender has a critial cell, and we have to send
+    // them there, and we cannot block them, they win
+    let board = match pos.board_to_play() {
+        // If we can play on any board, assume we aren't forced
+        None => return false,
+        // If we can play in a critical board, assume we might be able
+        // to block them
+        Some(b) if defender_critical & (1 << b) != 0 => return false,
+        Some(b) => b,
+    };
+
+    // We are forced to play in a specific board, and it
+    // is not one of the opponent's critical boards. Let's
+    // look at where we can send them
+    let dests = pos.boards.free_squares(board);
+    let bad = pos.game_states.donebits() | (defender_critical as u32);
+    if dests & !bad == 0 {
+        return true;
+    }
+    return false;
+}
+
+#[inline]
 fn is_single_bit(v: u32) -> bool {
     debug_assert!(v != 0);
     v & (v - 1) == 0
 }
 
+#[inline]
 fn critical_indices(player: u32, empty: u32) -> impl Iterator<Item = usize> {
     game::WIN_MASKS.iter().filter_map(move |mask| {
-        /*
-        eprintln!(
-            "mask={:x} player={:x} empty={:x} maybe={}",
-            mask,
-            player,
-            empty,
-            (player | empty) & mask != mask,
-        );
-        */
         if (player | empty) & mask != *mask {
             return None;
         }
@@ -114,6 +220,37 @@ mod tests {
             let got_o = critical_boards(&pos, game::Player::O);
             assert_eq!(want_x, got_x, "critical_cell({}, X)", board);
             assert_eq!(want_o, got_o, "critical_cell({}, O)", board);
+        }
+    }
+
+    #[test]
+    fn test_endgame() {
+        let tests = &[
+            ("X;OX@.O.O.X;XOOOOXXOO/XO.X.OXO./X.X.X.O.O/XX.OXOX../OXOOX.O../OXX...OO./OOOOXXX.O/XOOX.X.X./XO....XXX",
+             prove::Status::unproven(),
+            ),
+            ("O;OX..@XXX.;X.OOO.OO./XO.X.OXO./X.XXX.O.O/XXOOXOO../OXOOXO.O./XXX....O./X.OX..X.O/XO.XXX.../.O.....XX",
+             prove::Status::x(),
+            ),
+            ("X;OXO..X@XX;XOOOOO.O./XXXXOO.OO/X.X...OOO/XX.OXO.../OXOOX..O./XXX....O./.O..X.X.O/XO.XXX.../.O....XXX",
+             prove::Status::x(),
+            ),
+            ("O;OXO.@X.XX;XOOOOO.O./XXXXOO.OO/X.X...OOO/XX.OXO.../OXOOX..O./XXX....O./.O..X.X.O/XO.XXX.../.O....XXX",
+             prove::Status::x(),
+            ),
+            ("O;OX@XOOOX.;XOOOOXXO./XO.X.OXO./X.X.X.OXO/XXXOXO.../OXOOXOXOO/OXXOOXOO./OOO.XXX.O/XO.XXXO../.O..XX.XX",
+             prove::Status::draw_or_o(),
+            )
+        ];
+        for &(board, expect) in tests {
+            let pos = game::notation::parse(board).unwrap();
+            let an = Analysis::new(&pos);
+            let got = an.status();
+            assert_eq!(
+                expect, got,
+                "prove(\"{}\")={:?} want {:?}",
+                board, got, expect,
+            );
         }
     }
 }
