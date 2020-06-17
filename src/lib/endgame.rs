@@ -14,9 +14,8 @@ fn is_single_bit(v: u32) -> bool {
     v & (v - 1) == 0
 }
 
-fn critical_index(player: u32, empty: u32) -> Option<usize> {
-    // let mut board: Option<usize> = None;
-    for &mask in game::WIN_MASKS.iter() {
+fn critical_indices(player: u32, empty: u32) -> impl Iterator<Item = usize> {
+    game::WIN_MASKS.iter().filter_map(move |mask| {
         /*
         eprintln!(
             "mask={:x} player={:x} empty={:x} maybe={}",
@@ -26,22 +25,28 @@ fn critical_index(player: u32, empty: u32) -> Option<usize> {
             (player | empty) & mask != mask,
         );
         */
-        if (player | empty) & mask != mask {
-            continue;
+        if (player | empty) & mask != *mask {
+            return None;
         }
         if !is_single_bit(empty & mask) {
-            continue;
+            return None;
         }
 
         return Some((mask & empty).trailing_zeros() as usize);
-    }
-    None
+    })
 }
 
-pub fn critical_cell(g: &game::Game, who: game::Player) -> Option<(usize, usize)> {
-    let board = critical_index(g.game_states.playerbits(who), !g.game_states.donebits())?;
-    let cell = critical_index(g.boards.playerbits(who, board), !g.boards.mask(board))?;
-    Some((board, cell))
+pub fn critical_boards(g: &game::Game, who: game::Player) -> u16 {
+    let mut out = 0_u16;
+    for board in critical_indices(g.game_states.playerbits(who), !g.game_states.donebits()) {
+        if critical_indices(g.boards.playerbits(who, board), !g.boards.mask(board))
+            .next()
+            .is_some()
+        {
+            out |= 1_u16 << board;
+        }
+    }
+    out
 }
 
 #[cfg(test)]
@@ -98,15 +103,15 @@ mod tests {
     #[test]
     fn test_critical_cell() {
         let tests = &[
-            ("X;OXO.O.@..;X.OOOO.O./XO.X.OXO./X.X.X.OOO/.XXOXO.OX/OXOOX.O../.XXXX..O./X.O...X.O/XO.X.XOXX/.O.O.O.XX", None, Some((8, 4))),
-            ("X;OXO.O.@..;X.OOOO.O./XO.X.OXO./X.X.X.OOO/.XXOXO.OX/OXOOX.O../.XXXX..O./X.O.X.X.O/XO.X.XOXX/.O.OXO.XX", None, None),
-            ("X;OX..O@X..;X.OOOOXO./XO.X.OXO./X.XXXOOXO/XXOOXO.O./OXOOX.O../.XX...OOX/O.OXXXX.O/XOXX.XO../.OO....XX", None, Some((8, 0))),
-            ("X;OX.@OX..X;XOOOX.OOO/XXXX.O.OO/X.XO..O.O/XX.OXO.../OOOOX..../XXX....O./O...X.X.O/XO.X.X.../.O....XXX", Some((2, 1)), None),
+            ("X;OXO.O.@..;X.OOOO.O./XO.X.OXO./X.X.X.OOO/.XXOXO.OX/OXOOX.O../.XXXX..O./X.O...X.O/XO.X.XOXX/.O.O.O.XX", 0, 0x140),
+            ("X;OXO.O.@..;X.OOOO.O./XO.X.OXO./X.X.X.OOO/.XXOXO.OX/OXOOX.O../.XXXX..O./X.O.X.X.O/XO.X.XOXX/.O.OXO.XX", 0, 0x40),
+            ("X;OX..O@X..;X.OOOOXO./XO.X.OXO./X.XXXOOXO/XXOOXO.O./OXOOX.O../.XX...OOX/O.OXXXX.O/XOXX.XO../.OO....XX", 0, 0x100),
+            ("X;OX.@OX..X;XOOOX.OOO/XXXX.O.OO/X.XO..O.O/XX.OXO.../OOOOX..../XXX....O./O...X.X.O/XO.X.X.../.O....XXX", 0x4, 0),
         ];
         for &(board, want_x, want_o) in tests {
             let pos = game::notation::parse(board).unwrap();
-            let got_x = critical_cell(&pos, game::Player::X);
-            let got_o = critical_cell(&pos, game::Player::O);
+            let got_x = critical_boards(&pos, game::Player::X);
+            let got_o = critical_boards(&pos, game::Player::O);
             assert_eq!(want_x, got_x, "critical_cell({}, X)", board);
             assert_eq!(want_o, got_o, "critical_cell({}, O)", board);
         }
