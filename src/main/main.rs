@@ -455,6 +455,21 @@ struct Metrics<'a, T: Serialize> {
     analyze: &'a AnalyzeParameters,
 }
 
+fn print_mid_common(mid: &prove::dfpn::Stats) {
+    println!(
+        "  mid={} tthit={}/{} ({:.1}%) ttstore={} solved={} minimax={}/{} endgame={}",
+        mid.mid,
+        mid.tt.hits,
+        mid.tt.lookups,
+        100.0 * (mid.tt.hits as f64 / mid.tt.lookups as f64),
+        mid.tt.stores,
+        mid.solved,
+        mid.minimax_solve,
+        mid.minimax,
+        mid.endgame_solve,
+    );
+}
+
 fn main() -> Result<(), std::io::Error> {
     let opt = {
         let mut opt = Opt::from_args();
@@ -538,22 +553,16 @@ fn main() -> Result<(), std::io::Error> {
 
                     let result = prove::dfpn::DFPN::prove(&dfpn_cfg, &game);
                     println!(
-                    "result={:?} time={}.{:03}s pn={} dpn={} mid={} try={} jobs={} tthit={}/{} ({:.1}%) ttstore={} minimax={}/{}",
-                    result.value,
-                    result.duration.as_secs(),
-                    result.duration.subsec_millis(),
-                    result.bounds.phi,
-                    result.bounds.delta,
-                    result.stats.mid,
-                    result.stats.try_calls,
-                    result.stats.jobs,
-                    result.stats.tt.hits,
-                    result.stats.tt.lookups,
-                    100.0 * (result.stats.tt.hits as f64 / result.stats.tt.lookups as f64),
-                    result.stats.tt.stores,
-                    result.stats.minimax_solve,
-                    result.stats.minimax,
-                );
+                        "result={:?} time={}.{:03}s pn={} dpn={} try={} jobs={}",
+                        result.value,
+                        result.duration.as_secs(),
+                        result.duration.subsec_millis(),
+                        result.bounds.phi,
+                        result.bounds.delta,
+                        result.stats.try_calls,
+                        result.stats.jobs,
+                    );
+                    print_mid_common(&result.stats);
                     println!(
                         "  perf: mid/ms={:.2} job/ms={:.2}",
                         (result.stats.mid as f64) / (result.duration.as_millis() as f64),
@@ -598,20 +607,7 @@ fn main() -> Result<(), std::io::Error> {
                         result.stats.jobs,
                         result.stats.epsilon_resume,
                     );
-                    println!(
-                        "  mid={} tthit={}/{} ({:.1}%) ttstore={} solved={} minimax={}/{} endgame={}",
-                        result.stats.mid.mid,
-                        result.stats.mid.tt.hits,
-                        result.stats.mid.tt.lookups,
-                        100.0
-                            * (result.stats.mid.tt.hits as f64
-                                / result.stats.mid.tt.lookups as f64),
-                        result.stats.mid.tt.stores,
-                        result.stats.mid.solved,
-                        result.stats.mid.minimax_solve,
-                        result.stats.mid.minimax,
-                        result.stats.mid.endgame_solve,
-                    );
+                    print_mid_common(&result.stats.mid);
                     if cfg.debug > 0 {
                         let thread_ms =
                             result.duration.as_millis() as f64 * opt.global.threads as f64;
