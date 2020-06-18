@@ -31,21 +31,9 @@ impl<'a> Analysis<'a> {
         let defender_critical = critical_boards(pos, pos.player().other());
         let mut proven = prove::Status::unproven();
 
-        if attacker_critical != 0 {
-            // If the attacker has a critial square, and is permitted
-            // to play there, she wins.
-            match pos.board_to_play() {
-                Some(b) if attacker_critical & (1 << b) == 0 => (),
-                _ => {
-                    proven = prove::Status::for_player(pos.player());
-                }
-            }
-        }
-
-        if defender_critical != 0
-            && proven.is_winnable(pos.player().other())
-            && forced_loss(pos, defender_critical)
-        {
+        if prove_attacker(pos, attacker_critical, defender_critical) {
+            proven = prove::Status::for_player(pos.player())
+        } else if forced_loss(pos, defender_critical) {
             proven = prove::Status::for_player(pos.player().other());
         }
 
@@ -99,7 +87,43 @@ fn is_winnable(pos: &game::Game, by: game::Player) -> bool {
         .any();
 }
 
+fn prove_attacker(pos: &game::Game, attacker_critical: u16, defender_critical: u16) -> bool {
+    if attacker_critical == 0 {
+        return false;
+    }
+
+    // If the attacker has a critial square, and is permitted
+    // to play there, she wins.
+    let board = match pos.board_to_play() {
+        None => return true,
+        Some(b) if attacker_critical & (1 << b) != 0 => return true,
+        Some(b) => b,
+    };
+
+    // Can we force the defender into letting us play in a critical
+    // cell? We can send them anywhere our move lets us, but ignore
+    // cells that are closed, or where the defender would win.
+    let dests =
+        pos.boards.free_squares(board) & !pos.game_states.donebits() & !(defender_critical as u32);
+    // We want them to send us to one of these
+    let want = pos.game_states.donebits() | (attacker_critical as u32);
+    for i in 0..9 {
+        if dests & (1 << i) == 0 {
+            continue;
+        }
+        let send = pos.boards.free_squares(i);
+        if send & !want == 0 {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 fn forced_loss(pos: &game::Game, defender_critical: u16) -> bool {
+    if defender_critical == 0 {
+        return false;
+    }
     // If the defender has a critial cell, and we have to send
     // them there, and we cannot block them, they win
     let board = match pos.board_to_play() {
@@ -241,7 +265,10 @@ mod tests {
             ),
             ("O;OX@XOOOX.;XOOOOXXO./XO.X.OXO./X.X.X.OXO/XXXOXO.../OXOOXOXOO/OXXOOXOO./OOO.XXX.O/XO.XXXO../.O..XX.XX",
              prove::Status::draw_or_o(),
-            )
+            ),
+            ("X;O..XOX@X.;X.OOO.OO./XO.XXOOO./X.X..OO.O/.X.OXO.X./OXOOX.O../XXX....O./.XX...XX./XO.XXXOO./OO.....XX",
+             prove::Status::o(),
+            ),
         ];
         let mut mm = minimax::Minimax::with_config(&minimax::Config {
             max_depth: Some(10),
