@@ -160,6 +160,7 @@ mod tests {
     use super::*;
     use crate::game;
     use crate::game::notation::parse;
+    use crate::minimax;
 
     #[test]
     fn test_is_winnable() {
@@ -242,6 +243,13 @@ mod tests {
              prove::Status::draw_or_o(),
             )
         ];
+        let mut mm = minimax::Minimax::with_config(&minimax::Config {
+            max_depth: Some(10),
+            timeout: None,
+            debug: 0,
+            table_bytes: None,
+            draw_winner: None,
+        });
         for &(board, expect) in tests {
             let pos = game::notation::parse(board).unwrap();
             let an = Analysis::new(&pos);
@@ -250,6 +258,21 @@ mod tests {
                 expect, got,
                 "prove(\"{}\")={:?} want {:?}",
                 board, got, expect,
+            );
+            let (_, vstats) = mm.analyze(&pos);
+            let score = vstats.last().unwrap().score;
+            let mmeval = if score >= minimax::EVAL_WON {
+                prove::Status::for_player(pos.player())
+            } else if score <= minimax::EVAL_LOST {
+                prove::Status::for_player(pos.player().other())
+            } else {
+                prove::Status::unproven()
+            };
+            assert!(
+                expect.merge(mmeval).is_some(),
+                "Result {:?} is incompatible with minimax result {:?}",
+                got,
+                mmeval,
             );
         }
     }
