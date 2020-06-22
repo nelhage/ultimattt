@@ -4,6 +4,30 @@ use crate::game;
 use crate::prove;
 
 use packed_simd::u16x8;
+use serde::Serialize;
+
+#[derive(Default, Serialize, Debug, Clone)]
+pub struct Stats {
+    pub attacker_critical: usize,
+    pub defender_critical: usize,
+    pub both_critical: usize,
+    pub unwinnable: usize,
+    pub prove_attacker: usize,
+    pub prove_defender: usize,
+}
+
+impl Stats {
+    pub fn merge(&self, other: &Stats) -> Stats {
+        Stats {
+            attacker_critical: self.attacker_critical + other.attacker_critical,
+            defender_critical: self.defender_critical + other.defender_critical,
+            both_critical: self.both_critical + other.both_critical,
+            unwinnable: self.unwinnable + other.unwinnable,
+            prove_attacker: self.prove_attacker + other.prove_attacker,
+            prove_defender: self.prove_defender + other.prove_defender,
+        }
+    }
+}
 
 pub struct Analysis<'a> {
     pos: &'a game::Game,
@@ -13,11 +37,7 @@ pub struct Analysis<'a> {
 }
 
 impl<'a> Analysis<'a> {
-    pub fn new(pos: &'a game::Game) -> Self {
-        Self::analyze(pos)
-    }
-
-    fn analyze(pos: &'a game::Game) -> Self {
+    pub fn new<'b>(pos: &'a game::Game, stats: &'b mut Stats) -> Self {
         if pos.game_over() {
             return Analysis {
                 pos,
@@ -28,16 +48,28 @@ impl<'a> Analysis<'a> {
         }
 
         let attacker_critical = critical_boards(pos, pos.player());
+        if attacker_critical != 0 {
+            stats.attacker_critical += 1;
+        }
         let defender_critical = critical_boards(pos, pos.player().other());
+        if defender_critical != 0 {
+            stats.defender_critical += 1;
+        }
+        if defender_critical != 0 && attacker_critical != 0 {
+            stats.both_critical += 1;
+        }
         let mut proven = prove::Status::unproven();
 
         if prove_attacker(pos, attacker_critical, defender_critical) {
+            stats.prove_attacker += 1;
             proven = prove::Status::for_player(pos.player())
         } else if forced_loss(pos, defender_critical) {
+            stats.prove_defender += 1;
             proven = prove::Status::for_player(pos.player().other());
         }
 
         if !is_winnable(pos, game::Player::X) {
+            stats.unwinnable += 1;
             proven = proven.merge(prove::Status::draw_or_o()).unwrap_or_else(|| {
                 panic!(
                     "endgame merge({}): proven={:x?} but X can't win",
@@ -47,6 +79,7 @@ impl<'a> Analysis<'a> {
             });
         }
         if !is_winnable(pos, game::Player::O) {
+            stats.unwinnable += 1;
             proven = proven.merge(prove::Status::draw_or_x()).unwrap_or_else(|| {
                 panic!(
                     "endgame merge({}): proven={:x?} but O can't win",

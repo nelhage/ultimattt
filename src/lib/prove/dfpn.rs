@@ -26,12 +26,14 @@ pub struct Stats {
     pub minimax: usize,
     pub minimax_solve: usize,
     pub endgame_solve: usize,
+    pub endgame_move: usize,
     #[serde(serialize_with = "util::serialize_histogram")]
     pub branch: Histogram<u64>,
     #[serde(serialize_with = "util::serialize_histogram")]
     pub open_boards: Histogram<u64>,
     #[serde(flatten)]
     pub tt: table::Stats,
+    pub endgame: endgame::Stats,
 }
 
 impl Default for Stats {
@@ -44,9 +46,11 @@ impl Default for Stats {
             minimax: 0,
             minimax_solve: 0,
             endgame_solve: 0,
+            endgame_move: 0,
             branch: Histogram::new_with_max(81, 3).unwrap(),
             open_boards: Histogram::new_with_max(9, 2).unwrap(),
             tt: Default::default(),
+            endgame: Default::default(),
         }
     }
 }
@@ -61,9 +65,11 @@ impl Stats {
             minimax: self.minimax + other.minimax,
             minimax_solve: self.minimax_solve + other.minimax_solve,
             endgame_solve: self.endgame_solve + other.endgame_solve,
+            endgame_move: self.endgame_move + other.endgame_move,
             branch: util::merge_histogram(&self.branch, &other.branch),
             open_boards: util::merge_histogram(&self.open_boards, &other.open_boards),
             tt: self.tt.merge(&other.tt),
+            endgame: self.endgame.merge(&other.endgame),
         }
     }
 }
@@ -633,7 +639,7 @@ where
             .record(pos.open_boards() as u64)
             .unwrap();
 
-        let analysis = endgame::Analysis::new(pos);
+        let analysis = endgame::Analysis::new(pos, &mut self.stats.endgame);
 
         let terminal = match pos.game_state() {
             game::BoardState::InPlay => {
@@ -751,8 +757,10 @@ where
             }
             game::BoardState::InPlay => {
                 if eval.is_won(g.player()) {
+                    self.stats.endgame_move += 1;
                     Bounds::winning()
                 } else if eval.is_won(g.player().other()) {
+                    self.stats.endgame_move += 1;
                     Bounds::losing()
                 } else {
                     Bounds::unity()

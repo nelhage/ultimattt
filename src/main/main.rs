@@ -468,6 +468,15 @@ fn print_mid_common(mid: &prove::dfpn::Stats) {
         mid.minimax,
         mid.endgame_solve,
     );
+    println!("  endgame att_crit={} def_crit={} both_crit={} attacker={} defender={} unwinnable={} skip_moves={}",
+             mid.endgame.attacker_critical,
+             mid.endgame.defender_critical,
+             mid.endgame.both_critical,
+             mid.endgame.prove_attacker,
+             mid.endgame.prove_defender,
+             mid.endgame.unwinnable,
+             mid.endgame_move,
+    );
 }
 
 fn main() -> Result<(), std::io::Error> {
