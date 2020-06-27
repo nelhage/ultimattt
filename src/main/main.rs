@@ -227,6 +227,16 @@ struct GlobalOptions {
     git_sha: String,
 }
 
+impl GlobalOptions {
+    fn optional_timeout(&self) -> Option<Duration> {
+        if self.timeout == Duration::from_secs(0) {
+            None
+        } else {
+            Some(self.timeout)
+        }
+    }
+}
+
 #[derive(Debug, StructOpt)]
 #[structopt(name = "ultimatett", about = "Ultimate Tic Tac Toe")]
 pub struct Opt {
@@ -328,7 +338,7 @@ enum Command {
 
 fn ai_config(opt: &GlobalOptions) -> minimax::Config {
     minimax::Config {
-        timeout: Some(opt.timeout),
+        timeout: opt.optional_timeout(),
         max_depth: opt.depth,
         debug: opt.debug,
         table_bytes: Some(opt.table_mem.as_u64() as usize),
@@ -360,7 +370,7 @@ fn dfpn_config(
     let mut cfg = prove::dfpn::Config {
         threads: opt.threads,
         table_size: opt.table_mem.as_u64() as usize,
-        timeout: Some(opt.timeout),
+        timeout: opt.optional_timeout(),
         debug: opt.debug,
         epsilon: analyze.epsilon,
         dump_table: analyze.dump_table.clone(),
@@ -538,7 +548,7 @@ fn main() -> Result<(), std::io::Error> {
                     let result = prove::pn::Prover::prove(
                         &prove::pn::Config {
                             debug: opt.global.debug,
-                            timeout: Some(opt.global.timeout),
+                            timeout: opt.global.optional_timeout(),
                             max_nodes: analyze.max_nodes,
                             ..Default::default()
                         },
@@ -591,7 +601,7 @@ fn main() -> Result<(), std::io::Error> {
                         };
                         let mut cfg = prove::pn_dfpn::Config {
                             debug: opt.global.debug,
-                            timeout: Some(opt.global.timeout),
+                            timeout: opt.global.optional_timeout(),
                             max_nodes: analyze.max_nodes,
                             dfpn: dfpn_cfg,
                             ..Default::default()
