@@ -312,7 +312,8 @@ mod tests {
         });
         for &(board, expect) in tests {
             let pos = game::notation::parse(board).unwrap();
-            let an = Analysis::new(&pos);
+            let mut stats = Default::default();
+            let an = Analysis::new(&pos, &mut stats);
             let got = an.status();
             assert_eq!(
                 expect, got,
