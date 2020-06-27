@@ -1,5 +1,6 @@
 use crate::game;
 use crate::minimax;
+use crate::progress::Ticker;
 use crate::prove;
 use crate::prove::dfpn;
 use crate::prove::dfpn::{Child, Config, Entry, Probe, Stats};
@@ -15,8 +16,8 @@ struct SharedState {
     vtable: HashMap<u64, VEntry>,
     shutdown: bool,
     start: Instant,
-    tick: Instant,
-    dump_tick: Instant,
+    tick: Ticker,
+    dump_tick: Ticker,
 }
 
 struct YieldableGuard<'a, T> {
@@ -305,7 +306,7 @@ where
             }
 
             let now = Instant::now();
-            if self.mid.cfg.debug > 0 && now > self.guard.tick {
+            if self.mid.cfg.debug > 0 && self.guard.tick.tick() {
                 let elapsed = now.duration_since(self.guard.start);
                 eprintln!(
                     "[{}]t={}.{:03}s root=({},{}) jobs={} work={}",
@@ -317,13 +318,11 @@ where
                     self.mid.stats.jobs,
                     work,
                 );
-                self.guard.tick = now + dfpn::TICK_TIME;
             }
 
             if let Some(_) = self.mid.cfg.dump_table {
-                if now > self.guard.dump_tick {
+                if self.guard.dump_tick.tick() {
                     dfpn::dump_table(&self.mid.cfg, &self.mid.table).expect("dump_table failed");
-                    self.guard.dump_tick = now + self.mid.cfg.dump_interval;
                 }
             }
 
@@ -416,8 +415,8 @@ pub(in crate::prove) fn run(
         vtable: HashMap::new(),
         shutdown: false,
         start: start,
-        tick: start,
-        dump_tick: start + cfg.dump_interval,
+        tick: Ticker::new(dfpn::TICK_TIME),
+        dump_tick: Ticker::new(cfg.dump_interval),
     });
     let cv = Condvar::new();
 

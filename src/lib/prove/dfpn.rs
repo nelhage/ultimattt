@@ -1,6 +1,7 @@
 use crate::endgame;
 use crate::game;
 use crate::minimax;
+use crate::progress::Ticker;
 use crate::prove;
 use crate::prove::spdfpn;
 use crate::prove::{Bounds, INFINITY};
@@ -287,7 +288,7 @@ impl DFPN {
                 depth: 0,
             };
             let mut work = 0;
-            let mut dump_tick = self.start + self.cfg.dump_interval;
+            let mut dump_tick = Ticker::new(self.cfg.dump_interval);
             while !root.bounds.solved() {
                 let (out, this_work, _) = worker.mid(
                     Bounds {
@@ -313,9 +314,8 @@ impl DFPN {
                 }
 
                 if let Some(_) = self.cfg.dump_table {
-                    if now > dump_tick {
+                    if dump_tick.tick() {
                         dump_table(&self.cfg, &worker.table).expect("dump_table failed");
-                        dump_tick = now + self.cfg.dump_interval;
                     }
                 }
             }

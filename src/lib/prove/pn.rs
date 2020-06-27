@@ -1,4 +1,5 @@
 use crate::game;
+use crate::progress::{Counter, Ticker};
 use crate::prove::node_pool;
 use crate::prove::node_pool::{NodeID, Pool};
 use crate::prove::{Bounds, Evaluation};
@@ -123,7 +124,8 @@ pub struct Prover {
     nodes: Pool<Node>,
 
     start: Instant,
-    tick: Instant,
+    tick: Ticker,
+    progress: Counter<PROGRESS_INTERVAL>,
     limit: Option<Instant>,
 
     cursor: Cursor,
@@ -168,7 +170,7 @@ impl Cursor {
     }
 }
 
-const PROGRESS_INTERVAL: isize = 10000;
+const PROGRESS_INTERVAL: usize = 10000;
 static TICK_INTERVAL: Duration = Duration::from_millis(100);
 
 impl Prover {
@@ -182,7 +184,8 @@ impl Prover {
             stats: Default::default(),
             nodes: Pool::new(),
             start: start,
-            tick: start,
+            tick: Ticker::new(TICK_INTERVAL),
+            progress: Counter::new(),
             limit: cfg.timeout.map(|t| Instant::now() + t),
             position: pos.clone(),
             root: NodeID::none(),
@@ -281,7 +284,6 @@ impl Prover {
 
     fn search(&mut self, root: NodeID, limit: Option<usize>) {
         let mut current = root;
-        let mut i = 0;
         while {
             let ref nd = self.nodes.get(root);
             !nd.bounds.solved()
@@ -289,11 +291,9 @@ impl Prover {
             let next = self.select_most_proving(current);
             self.expand(next);
             current = self.update_ancestors(next);
-            i += 1;
-            if i % PROGRESS_INTERVAL == 0 {
-                let now = Instant::now();
-                if now > self.tick && self.config.debug > 0 {
-                    let elapsed = now.duration_since(self.start);
+            if self.progress.tick() {
+                if self.tick.tick() && self.config.debug > 0 {
+                    let elapsed = Instant::now().duration_since(self.start);
                     eprintln!(
                         "t={}.{:03}s nodes={}/{} proved={} disproved={} root=({}, {}) n/ms={:.0} rss={}",
                         elapsed.as_secs(),
@@ -307,10 +307,9 @@ impl Prover {
                         (self.nodes.stats.allocated.get() as f64) / (elapsed.as_millis() as f64),
                         util::read_rss(),
                     );
-                    self.tick = now + TICK_INTERVAL;
                 }
                 if let Some(limit) = self.limit {
-                    if now > limit {
+                    if Instant::now() > limit {
                         break;
                     }
                 }

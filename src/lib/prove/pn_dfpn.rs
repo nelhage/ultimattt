@@ -1,5 +1,6 @@
 use crate::game;
 use crate::minimax;
+use crate::progress::Ticker;
 use crate::prove::dfpn;
 use crate::prove::node_pool;
 use crate::prove::node_pool::{NodeID, Pool};
@@ -168,7 +169,7 @@ pub struct Prover {
     nodes: Pool<Node>,
 
     start: Instant,
-    tick: Instant,
+    tick: Ticker,
     limit: Option<Instant>,
 
     position: game::Game,
@@ -295,7 +296,7 @@ impl Prover {
             stats: Default::default(),
             nodes: Pool::new(),
             start: start,
-            tick: start,
+            tick: Ticker::new(TICK_INTERVAL),
             limit: cfg.timeout.map(|t| Instant::now() + t),
             position: pos.clone(),
             root: NodeID::none(),
@@ -497,7 +498,7 @@ impl Prover {
             !nd.bounds.solved()
         } {
             let now = Instant::now();
-            if now > self.tick && self.cfg.debug > 0 {
+            if self.tick.tick() && self.cfg.debug > 0 {
                 let elapsed = now.duration_since(self.start);
                 eprintln!(
                     "t={}.{:03}s nodes={}/{} proved={} disproved={} root=({}, {}) n/s={:.0} rss={}",
@@ -512,7 +513,6 @@ impl Prover {
                     (self.nodes.stats.allocated.get() as f64) / (elapsed.as_secs() as f64),
                     util::read_rss(),
                 );
-                self.tick = now + TICK_INTERVAL;
             }
             if let Some(limit) = self.limit {
                 if now > limit {
