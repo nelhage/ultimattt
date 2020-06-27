@@ -1,6 +1,8 @@
 #![feature(new_uninit)]
 #![feature(asm)]
 #![feature(trait_alias)]
+#![allow(incomplete_features)]
+#![feature(const_generics)]
 
 pub mod endgame;
 pub mod game;

@@ -2,7 +2,6 @@ use crate::game;
 use crate::table;
 
 use smallvec::SmallVec;
-use typenum;
 
 use std::cmp::max;
 use std::mem::MaybeUninit;
@@ -179,7 +178,7 @@ pub struct Minimax {
     config: Config,
     stats: Stats,
     response: [ResponseTable; 2],
-    table: Option<table::TranspositionTable<Entry, typenum::U1>>,
+    table: Option<table::TranspositionTable<Entry, 1>>,
 }
 
 pub const EVAL_WON: i64 = 1 << 60;

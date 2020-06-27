@@ -309,9 +309,8 @@ impl Prover {
             prover.evaluate(&mut root, pos);
         }
 
-        let table = table::ConcurrentTranspositionTable::<dfpn::Entry, typenum::U4>::with_memory(
-            cfg.dfpn.table_size,
-        );
+        let table =
+            table::ConcurrentTranspositionTable::<dfpn::Entry, 4>::with_memory(cfg.dfpn.table_size);
 
         let mut rwlock: Option<RwLock<dfpn::Probe>> = None;
         let probe = dfpn::Probe::from_config(&cfg.dfpn).map(|p| {

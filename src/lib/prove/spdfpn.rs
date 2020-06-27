@@ -66,7 +66,7 @@ struct SPDFPNWorker<'a, P>
 where
     P: dfpn::ProbeFn,
 {
-    mid: dfpn::MID<'a, table::ConcurrentTranspositionTableHandle<'a, Entry, typenum::U4>, P>,
+    mid: dfpn::MID<'a, table::ConcurrentTranspositionTableHandle<'a, Entry, 4>, P>,
     guard: YieldableGuard<'a, SharedState>,
     wait: &'a Condvar,
 }

@@ -9,7 +9,6 @@ use crate::util;
 
 use hdrhistogram::Histogram;
 use serde::Serialize;
-use typenum;
 
 use std::cmp::{max, min};
 use std::io::Write;
@@ -247,10 +246,9 @@ impl DFPN {
 
         if self.cfg.threads == 0 {
             let table = if let Some(ref path) = self.cfg.load_table {
-                table::TranspositionTable::<_, typenum::U4>::from_file(path)
-                    .expect("invalid table file")
+                table::TranspositionTable::<_, 4>::from_file(path).expect("invalid table file")
             } else {
-                table::TranspositionTable::<_, typenum::U4>::with_memory(self.cfg.table_size)
+                table::TranspositionTable::<_, 4>::with_memory(self.cfg.table_size)
             };
             let mut worker = MID {
                 id: 0,
