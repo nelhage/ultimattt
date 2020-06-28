@@ -151,9 +151,9 @@ where
             version: DUMPFILE_VERSION,
             entries: self.entries.len() as u64,
         };
-        w.write(unsafe { as_bytes(&header) })?;
-        w.write(unsafe { slice_as_bytes(&*self.index) })?;
-        w.write(unsafe { slice_as_bytes(&*self.entries) })?;
+        w.write_all(unsafe { as_bytes(&header) })?;
+        w.write_all(unsafe { slice_as_bytes(&*self.index) })?;
+        w.write_all(unsafe { slice_as_bytes(&*self.entries) })?;
         Ok(())
     }
 
@@ -330,9 +330,9 @@ where
             version: DUMPFILE_VERSION,
             entries: self.entries.len() as u64,
         };
-        w.write(unsafe { as_bytes(&header) })?;
-        w.write(unsafe { slice_as_bytes(&*self.index) })?;
-        w.write(unsafe { slice_as_bytes(&*self.entries) })?;
+        w.write_all(unsafe { as_bytes(&header) })?;
+        w.write_all(unsafe { slice_as_bytes(&*self.index) })?;
+        w.write_all(unsafe { slice_as_bytes(&*self.entries) })?;
         Ok(())
     }
 
