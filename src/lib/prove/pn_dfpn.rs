@@ -258,7 +258,6 @@ where
                     pv: game::Move::none(),
                     work: 0,
                     sync: AtomicU32::new(0),
-                    depth: 0,
                 },
                 &job.pos,
             );

@@ -82,7 +82,6 @@ pub(in crate::prove) struct Entry {
     pub(in crate::prove) sync: AtomicU32, // 4
     pub(in crate::prove) pv: game::Move,  // 1
     pub(in crate::prove) child: u8,       // 1
-    pub(in crate::prove) depth: u8,       // 1
 }
 
 impl Clone for Entry {
@@ -94,7 +93,6 @@ impl Clone for Entry {
             sync: AtomicU32::new(0),
             pv: self.pv,
             child: self.child,
-            depth: self.depth,
         }
     }
 }
@@ -129,7 +127,6 @@ impl table::AtomicEntry for Entry {
         (*dst).work = v.work;
         (*dst).pv = v.pv;
         (*dst).child = v.child;
-        (*dst).depth = v.depth;
     }
 }
 
@@ -142,7 +139,6 @@ impl Default for Entry {
             pv: game::Move::none(),
             child: std::u8::MAX,
             sync: AtomicU32::new(0),
-            depth: 0,
         }
     }
 }
@@ -285,7 +281,6 @@ impl DFPN {
                 pv: game::Move::none(),
                 work: 0,
                 sync: AtomicU32::new(0),
-                depth: 0,
             };
             let mut work = 0;
             let mut dump_tick = Ticker::new(self.cfg.dump_interval);
@@ -479,7 +474,6 @@ pub(in crate::prove) fn populate_pv(data: &mut Entry, children: &Vec<Child>) {
         return;
     };
     data.pv = ch.r#move;
-    data.depth = ch.entry.depth + 1;
 }
 
 pub(in crate::prove) fn dump_table<T: table::Table<Entry>>(
@@ -669,9 +663,6 @@ where
                 data.bounds = Bounds::losing();
             }
             data.work = 1;
-            if pos.bound_depth() <= self.cfg.minimax_cutoff {
-                data.depth = self.cfg.minimax_cutoff as u8;
-            }
             self.table.store(&data);
             return (data, 1, Vec::new());
         }
