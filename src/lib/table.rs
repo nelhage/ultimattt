@@ -68,6 +68,15 @@ unsafe fn slice_as_bytes<'a, T>(slice: &'a [T]) -> &'a [u8] {
     )
 }
 
+fn set_file_vectored(w: &mut fs::File, slices: &[&[u8]]) -> io::Result<()> {
+    let bytes = slices.iter().fold(0, |len, slice| len + slice.len());
+    w.set_len(bytes as u64)?;
+    for &slice in slices {
+        io::Write::write_all(w, slice)?;
+    }
+    Ok(())
+}
+
 #[repr(C)]
 #[derive(Clone, Copy)]
 struct Header {
@@ -146,15 +155,19 @@ where
         self.stats.clone()
     }
 
-    pub fn dump(&self, w: &mut dyn io::Write) -> io::Result<()> {
+    pub fn dump(&self, w: &mut fs::File) -> io::Result<()> {
         let header = Header {
             version: DUMPFILE_VERSION,
             entries: self.entries.len() as u64,
         };
-        w.write_all(unsafe { as_bytes(&header) })?;
-        w.write_all(unsafe { slice_as_bytes(&*self.index) })?;
-        w.write_all(unsafe { slice_as_bytes(&*self.entries) })?;
-        Ok(())
+        let slices = unsafe {
+            &[
+                as_bytes(&header),
+                slice_as_bytes(&*self.index),
+                slice_as_bytes(&*self.entries),
+            ]
+        };
+        set_file_vectored(w, slices)
     }
 
     pub fn from_reader(r: &mut dyn io::Read) -> io::Result<Self> {
@@ -325,15 +338,19 @@ impl<E, const N: usize> ConcurrentTranspositionTable<E, N>
 where
     E: AtomicEntry + Default,
 {
-    pub fn dump(&self, w: &mut dyn io::Write) -> io::Result<()> {
+    pub fn dump(&self, w: &mut fs::File) -> io::Result<()> {
         let header = Header {
             version: DUMPFILE_VERSION,
             entries: self.entries.len() as u64,
         };
-        w.write_all(unsafe { as_bytes(&header) })?;
-        w.write_all(unsafe { slice_as_bytes(&*self.index) })?;
-        w.write_all(unsafe { slice_as_bytes(&*self.entries) })?;
-        Ok(())
+        let slices = unsafe {
+            &[
+                as_bytes(&header),
+                slice_as_bytes(&*self.index),
+                slice_as_bytes(&*self.entries),
+            ]
+        };
+        set_file_vectored(w, slices)
     }
 
     pub fn stats(&self) -> Stats {
@@ -369,7 +386,7 @@ where
         self.table.store(&mut self.stats, e)
     }
 
-    pub fn dump(&self, w: &mut dyn io::Write) -> io::Result<()> {
+    pub fn dump(&self, w: &mut fs::File) -> io::Result<()> {
         self.table.dump(w)
     }
 }
@@ -400,7 +417,7 @@ where
 {
     fn lookup(&mut self, h: u64) -> Option<E>;
     fn store(&mut self, e: &E) -> bool;
-    fn dump(&self, w: &mut dyn io::Write) -> io::Result<()>;
+    fn dump(&self, w: &mut fs::File) -> io::Result<()>;
 }
 
 impl<E, const N: usize> Table<E> for TranspositionTable<E, N>
@@ -415,7 +432,7 @@ where
         self.store(e)
     }
 
-    fn dump(&self, w: &mut dyn io::Write) -> io::Result<()> {
+    fn dump(&self, w: &mut fs::File) -> io::Result<()> {
         self.dump(w)
     }
 }
@@ -432,7 +449,7 @@ where
         self.store(e)
     }
 
-    fn dump(&self, w: &mut dyn io::Write) -> io::Result<()> {
+    fn dump(&self, w: &mut fs::File) -> io::Result<()> {
         self.dump(w)
     }
 }

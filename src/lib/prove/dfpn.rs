@@ -482,13 +482,14 @@ pub(in crate::prove) fn dump_table<T: table::Table<Entry>>(
 ) -> io::Result<()> {
     if let Some(ref path) = cfg.dump_table {
         let before = Instant::now();
-        let tmppath = path.to_owned() + ".tmp";
-        {
-            let mut f = fs::File::create(&tmppath)?;
-            table.dump(&mut f)?;
-            f.sync_data()?;
-        }
-        fs::rename(&tmppath, path)?;
+        let mut f = fs::OpenOptions::new()
+            .create(true)
+            .append(false)
+            .truncate(false)
+            .write(true)
+            .open(path)?;
+        table.dump(&mut f)?;
+
         let elapsed = Instant::now().duration_since(before);
         if cfg.debug > 0 {
             eprintln!(
