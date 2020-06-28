@@ -87,10 +87,10 @@ struct Node {
     parent: NodeID,      // 4
     first_child: NodeID, // 4
     sibling: NodeID,     // 4
-    value: Evaluation,   // 1
     r#move: game::Move,  // 1
     pv: game::Move,      // 1
     flags: u8,           // 1
+    vcount: u8,          // 1
 }
 
 impl Node {
@@ -127,26 +127,27 @@ impl node_pool::Node for Node {
             pv: game::Move::none(),
             bounds: Bounds::unity(),
             vbounds: Bounds::unity(),
-            value: Evaluation::Unknown,
             flags: FLAG_FREE,
             first_child: NodeID::none(),
             sibling: NodeID::none(),
             work: 0,
+            vcount: 0,
         }));
     }
 
     fn alloc(&mut self) {
         debug_assert!(self.flag(FLAG_FREE));
         debug_assert!(!self.first_child.exists());
+        debug_assert!(self.vcount == 0);
         self.parent = NodeID::none();
         self.bounds = Bounds { phi: 0, delta: 0 };
         self.vbounds = Bounds { phi: 0, delta: 0 };
-        self.value = Evaluation::Unknown;
         self.flags = 0;
     }
 
     fn free(&mut self) {
         debug_assert!(!self.flag(FLAG_FREE));
+        debug_assert!(self.vcount == 0);
         self.flags = FLAG_FREE;
         self.first_child = NodeID::none();
         self.sibling = NodeID::none();
@@ -405,7 +406,7 @@ impl Prover {
             result: match (root.proof(), root.disproof()) {
                 (0, _) => Evaluation::True,
                 (_, 0) => Evaluation::False,
-                _ => root.value,
+                _ => Evaluation::Unknown,
             },
             duration: Instant::now() - prover.start,
             proof: root.proof(),
@@ -424,7 +425,7 @@ impl Prover {
     fn evaluate(&self, node: &mut node_pool::AllocedNode<Node>, pos: &game::Game) {
         let player = self.player();
         let res = pos.game_state();
-        node.value = match res {
+        let value = match res {
             game::BoardState::InPlay => Evaluation::Unknown,
             game::BoardState::Drawn => {
                 if pos.player() == player {
@@ -441,9 +442,9 @@ impl Prover {
                 }
             }
         };
-        let bounds = match node.value {
+        let bounds = match value {
             Evaluation::True | Evaluation::False => {
-                if node.flag(FLAG_AND) == (node.value == Evaluation::True) {
+                if node.flag(FLAG_AND) == (value == Evaluation::True) {
                     Bounds::losing()
                 } else {
                     Bounds::winning()
@@ -468,9 +469,11 @@ impl Prover {
     }
     */
 
-    fn calc_proof_numbers(&self, _nid: NodeID, node: &Node) -> (Bounds, Bounds, u64) {
+    fn set_proof_numbers<'a>(&'a mut self, nid: NodeID) -> &'a mut Node {
+        let node = self.nodes.get(nid);
         debug_assert!(node.flag(FLAG_EXPANDED));
         let mut work = 0;
+        let mut vcount = 0;
         let mut bounds = Bounds {
             delta: 0,
             phi: std::u32::MAX,
@@ -488,10 +491,18 @@ impl Prover {
             bounds.phi = min(bounds.phi, node.bounds.delta);
             vbounds.delta = vbounds.delta.saturating_add(node.vbounds.phi);
             vbounds.phi = min(vbounds.phi, node.vbounds.delta);
+            if node.vcount > 0 {
+                vcount += 1;
+            }
             c = node.sibling;
             work += node.work;
         }
-        (bounds, vbounds, work)
+        let node_mut = self.nodes.get_mut(nid);
+        node_mut.bounds = bounds;
+        node_mut.vbounds = vbounds;
+        node_mut.work = work;
+        node_mut.vcount = vcount;
+        node_mut
     }
 
     fn search<T: table::Table<dfpn::Entry>>(
@@ -610,6 +621,7 @@ impl Prover {
         } else {
             Bounds::losing()
         };
+        node.vcount = 1;
         let parent = node.parent;
         if parent.exists() {
             self.update_ancestors(parent);
@@ -634,6 +646,7 @@ impl Prover {
             self.expand(res.nid, res.children);
             self.update_ancestors(res.nid);
         } else {
+            node.vcount = 0;
             node.bounds = res.bounds;
             node.vbounds = res.bounds;
             let parent = node.parent;
@@ -775,30 +788,19 @@ impl Prover {
                 "expected expanded node: {:?}",
                 nid
             );
-            let (bounds, vbounds, work) = self.calc_proof_numbers(nid, node);
-            if bounds == node.bounds && vbounds == node.vbounds {
+            let old = (node.bounds, node.vbounds);
+            let node_mut = self.set_proof_numbers(nid);
+            if old == (node_mut.bounds, node_mut.vbounds) {
                 return nid;
             }
-            /*
             let mut free_child = NodeID::none();
-            */
-            {
-                let ref mut node_mut = self.nodes.get_mut(nid);
-                node_mut.bounds = bounds;
-                node_mut.vbounds = vbounds;
-                node_mut.work = work;
-                /*
-                if bounds.solved() {
-                    free_child = node_mut.first_child;
-                    node_mut.first_child = NodeID::none();
-                }
-                */
+            if node_mut.bounds.solved() && node_mut.vcount == 0 {
+                free_child = node_mut.first_child;
+                node_mut.first_child = NodeID::none();
             }
-            /*
             if free_child.exists() {
                 self.free_siblings(free_child);
             }
-            */
             {
                 let ref node = self.nodes.get(nid);
                 if node.proof() == 0 {
@@ -815,7 +817,6 @@ impl Prover {
         }
     }
 
-    #[allow(dead_code)]
     fn free_siblings(&mut self, child: NodeID) {
         let mut todo = vec![child];
         while let Some(it) = todo.pop() {
