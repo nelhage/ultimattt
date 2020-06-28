@@ -310,8 +310,12 @@ impl Prover {
             prover.evaluate(&mut root, pos);
         }
 
-        let table =
-            table::ConcurrentTranspositionTable::<dfpn::Entry, 4>::with_memory(cfg.dfpn.table_size);
+        let table = if let Some(ref path) = cfg.dfpn.load_table {
+            table::ConcurrentTranspositionTable::<dfpn::Entry, 4>::from_file(path)
+                .expect("unable to load table from file")
+        } else {
+            table::ConcurrentTranspositionTable::<dfpn::Entry, 4>::with_memory(cfg.dfpn.table_size)
+        };
 
         let mut rwlock: Option<RwLock<dfpn::Probe>> = None;
         let probe = dfpn::Probe::from_config(&cfg.dfpn).map(|p| {
@@ -374,7 +378,13 @@ impl Prover {
 
             mem::drop(job_recv);
 
-            prover.search(job_send, res_recv, prover.root, prover.cfg.max_nodes);
+            prover.search(
+                job_send,
+                res_recv,
+                &table.handle(),
+                prover.root,
+                prover.cfg.max_nodes,
+            );
 
             let (mid_stats, worker_stats) = handles.into_iter().map(|h| h.join().unwrap()).fold(
                 Default::default(),
@@ -485,14 +495,16 @@ impl Prover {
         (bounds, vbounds, work)
     }
 
-    fn search(
+    fn search<T: table::Table<dfpn::Entry>>(
         &mut self,
         jobs: channel::Sender<Job>,
         results: channel::Receiver<JobResult>,
+        table: &T,
         root: NodeID,
         limit: Option<usize>,
     ) {
         let mut inflight = 0;
+        let mut dump_tick = Ticker::new(self.cfg.dfpn.dump_interval);
         while {
             let ref nd = self.nodes.get(root);
             !nd.bounds.solved()
@@ -513,6 +525,18 @@ impl Prover {
                     (self.nodes.stats.allocated.get() as f64) / (elapsed.as_secs() as f64),
                     util::read_rss(),
                 );
+            }
+            if let Some(_) = self.cfg.dfpn.dump_table {
+                if dump_tick.tick() {
+                    let start = Instant::now();
+                    dfpn::dump_table(&self.cfg.dfpn, table).unwrap();
+                    let elapsed = Instant::now().duration_since(start);
+                    eprintln!(
+                        "Dumped table in {}.{:03}s",
+                        elapsed.as_secs(),
+                        elapsed.subsec_millis()
+                    );
+                }
             }
             if let Some(limit) = self.limit {
                 if now > limit {
