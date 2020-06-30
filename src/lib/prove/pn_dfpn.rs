@@ -93,6 +93,10 @@ struct Node {
     vcount: u8,          // 1
 }
 
+pub fn sizeof_node() -> usize {
+    mem::size_of::<Node>()
+}
+
 impl Node {
     fn flag(&self, flag: u8) -> bool {
         (self.flags & flag) != 0

@@ -52,6 +52,10 @@ struct Node {
     sibling: NodeID,
 }
 
+pub fn sizeof_node() -> usize {
+    mem::size_of::<Node>()
+}
+
 impl Node {
     fn flag(&self, flag: u16) -> bool {
         (self.flags & flag) != 0

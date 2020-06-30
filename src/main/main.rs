@@ -17,13 +17,11 @@ use ultimattt::minimax;
 use ultimattt::minimax::AI;
 use ultimattt::prove;
 
-use std::fmt;
-use std::fs;
-use std::io;
 use std::io::Write;
 use std::process::exit;
 use std::str::FromStr;
 use std::time::Duration;
+use std::{fmt, fs, io, mem};
 
 fn cell(g: game::CellState) -> &'static str {
     match g {
@@ -333,6 +331,7 @@ enum Command {
     Analyze(AnalyzeParameters),
     Selfplay(SelfplayParameters),
     PP(PPParameters),
+    Sizes {},
     Worker {},
 }
 
@@ -748,6 +747,13 @@ fn main() -> Result<(), std::io::Error> {
                     );
                 }
             }
+        }
+        Command::Sizes {} => {
+            println!("sizeof(Game)          = {}", mem::size_of::<game::Game>());
+            println!("sizeof(Move)          = {}", mem::size_of::<game::Move>());
+            println!("sizeof(pn::Node)      = {}", prove::pn::sizeof_node());
+            println!("sizeof(dfpn::Entry)   = {}", prove::dfpn::sizeof_entry());
+            println!("sizeof(pn_dfpn::Node) = {}", prove::pn_dfpn::sizeof_node());
         }
     }
     Ok(())

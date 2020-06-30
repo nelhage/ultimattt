@@ -15,7 +15,7 @@ use std::cmp::{max, min};
 use std::io::Write;
 use std::sync::atomic::AtomicU32;
 use std::time::{Duration, Instant};
-use std::{fs, io};
+use std::{fs, io, mem};
 
 #[derive(Clone, Debug, Serialize)]
 pub struct Stats {
@@ -82,6 +82,10 @@ pub(in crate::prove) struct Entry {
     pub(in crate::prove) sync: AtomicU32, // 4
     pub(in crate::prove) pv: game::Move,  // 1
     pub(in crate::prove) child: u8,       // 1
+}
+
+pub fn sizeof_entry() -> usize {
+    mem::size_of::<Entry>()
 }
 
 impl Clone for Entry {
