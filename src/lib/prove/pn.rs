@@ -41,8 +41,6 @@ const FLAG_AND: u16 = 1 << 1;
 const FLAG_FREE: u16 = 1 << 2;
 
 struct Node {
-    parent: NodeID,
-
     bounds: Bounds,
 
     value: Evaluation,
@@ -85,20 +83,18 @@ impl Node {
 impl node_pool::Node for Node {
     unsafe fn init(ptr: *mut MaybeUninit<Node>, free: NodeID) {
         ptr.write(MaybeUninit::new(Node {
-            parent: free,
             r#move: game::Move::none(),
             bounds: Bounds::unity(),
             value: Evaluation::Unknown,
             flags: FLAG_FREE,
-            first_child: NodeID::none(),
+            first_child: free,
             sibling: NodeID::none(),
         }));
     }
 
     fn alloc(&mut self) {
         debug_assert!(self.flag(FLAG_FREE));
-        debug_assert!(!self.first_child.exists());
-        self.parent = NodeID::none();
+        self.first_child = NodeID::none();
         self.bounds = Bounds { phi: 0, delta: 0 };
         self.value = Evaluation::Unknown;
         self.flags = 0;
@@ -113,12 +109,12 @@ impl node_pool::Node for Node {
 
     fn set_free_ptr(&mut self, free: NodeID) {
         debug_assert!(self.flag(FLAG_FREE));
-        self.parent = free;
+        self.first_child = free;
     }
 
     fn get_free_ptr(&self) -> NodeID {
         debug_assert!(self.flag(FLAG_FREE));
-        self.parent
+        self.first_child
     }
 }
 
@@ -161,16 +157,21 @@ impl Cursor {
         self.stack.last().unwrap().0
     }
 
-    fn descend(&mut self, nid: NodeID, node: &Node) {
-        let pos = match self.position(node.parent).make_move(node.r#move) {
+    fn descend(&mut self, parent: NodeID, nid: NodeID, node: &Node) {
+        let pos = match self.position(parent).make_move(node.r#move) {
             Ok(pos) => pos,
             Err(_) => panic!("illegal tree"),
         };
         self.stack.push((nid, pos));
     }
 
-    fn ascend(&mut self) {
+    fn at_root(&self) -> bool {
+        self.stack.len() == 1
+    }
+
+    fn ascend(&mut self) -> NodeID {
         self.stack.pop();
+        self.current()
     }
 }
 
@@ -203,7 +204,6 @@ impl Prover {
             let mut root = prover.nodes.alloc();
             prover.cursor.stack.push((root.id, pos.clone()));
 
-            root.parent = NodeID::none();
             prover.root = root.id;
             prover.evaluate(&mut root);
             prover.set_proof_numbers(root.id, &mut *root);
@@ -330,10 +330,9 @@ impl Prover {
             debug_assert!(
                 node.bounds.phi != 0,
                 format!(
-                    "expand phi=0, root=({}, {}), depth={}",
+                    "expand phi=0, root=({}, {})",
                     self.nodes.get(self.root).proof(),
                     self.nodes.get(self.root).disproof(),
-                    self.depth(self.root),
                 )
             );
             let mut child = NodeID::none();
@@ -347,7 +346,7 @@ impl Prover {
                 c = ch.sibling;
             }
             debug_assert!(child.exists(), "found a child");
-            self.cursor.descend(child, &self.nodes.get(child));
+            self.cursor.descend(nid, child, &self.nodes.get(child));
             nid = child;
         }
         nid
@@ -374,12 +373,11 @@ impl Prover {
         let pos = self.cursor.position(nid).clone();
         for m in pos.all_moves() {
             let mut alloc = self.nodes.alloc();
-            alloc.parent = nid;
             if !node.flag(FLAG_AND) {
                 alloc.set_flag(FLAG_AND)
             }
             alloc.r#move = m;
-            self.cursor.descend(alloc.id, &*alloc);
+            self.cursor.descend(nid, alloc.id, &*alloc);
             self.evaluate(&mut alloc);
             self.set_proof_numbers(alloc.id, &mut *alloc);
             self.cursor.ascend();
@@ -457,9 +455,8 @@ impl Prover {
                 } else if node.disproof() == 0 {
                     self.stats.disproved += 1;
                 }
-                if node.parent.exists() {
-                    nid = node.parent;
-                    self.cursor.ascend();
+                if !self.cursor.at_root() {
+                    nid = self.cursor.ascend();
                 } else {
                     return nid;
                 }
@@ -483,14 +480,5 @@ impl Prover {
 
     fn player(&self) -> game::Player {
         self.position.player()
-    }
-
-    fn depth(&self, mut nid: NodeID) -> usize {
-        let mut depth = 0;
-        while nid.exists() {
-            depth += 1;
-            nid = self.nodes.get(nid).parent;
-        }
-        depth
     }
 }
