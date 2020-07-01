@@ -459,7 +459,7 @@ fn build_selfplay_player<'a>(
 struct Metrics<'a, T: Serialize> {
     duration_ms: u128,
     #[serde(flatten)]
-    stats: T,
+    stats: &'a T,
     config: &'a GlobalOptions,
     analyze: &'a AnalyzeParameters,
 }
@@ -486,6 +486,33 @@ fn print_mid_common(mid: &prove::dfpn::Stats) {
              mid.endgame.unwinnable,
              mid.endgame_move,
     );
+}
+
+fn write_metrics<Stats: Serialize>(opt: &Opt, duration: Duration, stats: &Stats) -> io::Result<()> {
+    match opt.cmd {
+        Command::Analyze(ref analyze) => {
+            if let Some(ref p) = analyze.write_metrics {
+                let metrics = Metrics {
+                    duration_ms: duration.as_millis(),
+                    stats: stats,
+                    config: &opt.global,
+                    analyze: analyze,
+                };
+                let mut f = fs::OpenOptions::new()
+                    .read(false)
+                    .append(true)
+                    .write(true)
+                    .truncate(false)
+                    .create(true)
+                    .open(p)
+                    .expect("write_metrics");
+                serde_json::to_writer(&mut f, &metrics)?;
+                f.write_all(b"\n")?;
+            }
+        }
+        _ => (),
+    }
+    Ok(())
 }
 
 fn main() -> Result<(), std::io::Error> {
@@ -562,6 +589,7 @@ fn main() -> Result<(), std::io::Error> {
                         result.disproof,
                         result.allocated,
                     );
+                    write_metrics(&opt, result.duration, &result.stats)?;
                 }
                 Engine::DFPN | Engine::SPDFPN => {
                     let mut dfpn_cfg = dfpn_config(&opt.global, &analyze, &game);
@@ -591,6 +619,7 @@ fn main() -> Result<(), std::io::Error> {
                         write!(&mut pv as &mut dyn std::fmt::Write, "{} ", m).unwrap();
                     }
                     println!(" pv={}", pv.trim_end());
+                    write_metrics(&opt, result.duration, &result.stats)?;
                 }
                 Engine::PN_DFPN => {
                     let cfg = {
@@ -658,24 +687,7 @@ fn main() -> Result<(), std::io::Error> {
                             }
                         }
                     }
-                    if let Some(ref p) = analyze.write_metrics {
-                        let metrics = Metrics {
-                            duration_ms: result.duration.as_millis(),
-                            stats: result.stats.clone(),
-                            config: &opt.global,
-                            analyze: analyze,
-                        };
-                        let mut f = fs::OpenOptions::new()
-                            .read(false)
-                            .append(true)
-                            .write(true)
-                            .truncate(false)
-                            .create(true)
-                            .open(p)
-                            .expect("write_metrics");
-                        serde_json::to_writer(&mut f, &metrics)?;
-                        f.write_all(b"\n")?;
-                    }
+                    write_metrics(&opt, result.duration, &result.stats)?;
                 }
                 Engine::Minimax => {
                     let mut ai = make_ai(&opt.global);

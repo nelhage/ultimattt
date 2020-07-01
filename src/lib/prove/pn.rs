@@ -10,6 +10,8 @@ use std::mem;
 use std::mem::MaybeUninit;
 use std::time::{Duration, Instant};
 
+use serde::Serialize;
+
 #[derive(Clone, Debug)]
 pub struct Config {
     pub debug: usize,
@@ -29,7 +31,7 @@ impl Default for Config {
     }
 }
 
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Default, Debug, Serialize)]
 pub struct Stats {
     pub proved: usize,
     pub disproved: usize,
