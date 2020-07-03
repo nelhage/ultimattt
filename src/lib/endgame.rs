@@ -106,13 +106,13 @@ impl<'a> Analysis<'a> {
             return prove::Status::unproven();
         }
         let bad = self.pos.game_states.donebits() | (self.defender_critical as u32);
-        if bad & (1 << m.board()) != 0 {
+        if bad & (1 << m.square()) != 0 {
             return prove::Status::for_player(self.pos.player().other());
         }
         return prove::Status::unproven();
     }
 
-    fn dump_crit(crit: u16) -> String {
+    fn pp_boardset(crit: u16) -> String {
         if crit == 0 {
             "<none>".to_owned()
         } else {
@@ -131,13 +131,17 @@ impl<'a> Analysis<'a> {
         writeln!(
             out,
             "Attacker crit: {}",
-            Self::dump_crit(self.attacker_critical)
+            Self::pp_boardset(self.attacker_critical)
         )?;
         writeln!(
             out,
             "Defender crit: {}",
-            Self::dump_crit(self.defender_critical)
+            Self::pp_boardset(self.defender_critical)
         )?;
+        if self.defender_critical != 0 {
+            let bad = self.pos.game_states.donebits() | (self.defender_critical as u32);
+            writeln!(out, "  bad squares: {}", Self::pp_boardset(bad as u16))?;
+        }
         writeln!(out, "Moves:")?;
         for m in self.pos.all_moves() {
             let eval = self.evaluate_move(m);
@@ -369,6 +373,44 @@ mod tests {
                 got,
                 mmeval,
             );
+        }
+    }
+
+    #[test]
+    fn test_evaluate_move() {
+        struct Case<'a> {
+            board: &'static str,
+            moves: &'a [(&'static str, prove::Status)],
+        }
+        let tests: &[Case] = &[
+            Case{
+                board: "O;X..X..@..;X...O.XXX/...O....X/O...XOXX./..X..XO.X/O....X.O./.OOXX.XX./OXXO.OX../O.O..OOX./..O..OO..",
+                moves:
+                &[("ge", prove::Status::unproven()),
+                  ("gh", prove::Status::unproven()),
+                  ("gi", prove::Status::unproven())
+                ]}
+            ,
+            Case{
+                board:
+                "O;X@.X.....;X...O.XXX/...O....X/O...XOXX./..X..XO.X/O....X.O./.OOXX.XX./OXXO.OXO./OXO..OOX./..O..OO..",
+                moves: &[
+                    ("ba", prove::Status::x()),
+                    ("bb", prove::Status::unproven()),
+                    ("bc", prove::Status::unproven()),
+                    ("bg", prove::Status::x()),
+                ],
+            }
+        ];
+        for tc in tests {
+            let pos = game::notation::parse(tc.board).unwrap();
+            let mut stats = Default::default();
+            let an = Analysis::new(&pos, &mut stats);
+            for (s, want) in tc.moves.iter() {
+                let m = game::notation::parse_move(s).unwrap();
+                let got = an.evaluate_move(m);
+                assert_eq!(got, *want, "eval_move('{}', '{}')", tc.board, s);
+            }
         }
     }
 }
