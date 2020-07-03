@@ -11,13 +11,11 @@ use crate::util;
 use crossbeam;
 use crossbeam::channel;
 use hdrhistogram::Histogram;
-use parking_lot::{Mutex, RwLock};
+use parking_lot::RwLock;
 use probe::probe;
 use serde::Serialize;
 
 use std::cmp::min;
-use std::fs;
-use std::io::Write;
 use std::mem;
 use std::mem::MaybeUninit;
 use std::sync::atomic::AtomicU32;
@@ -329,8 +327,6 @@ impl Prover {
             rwlock.as_ref().unwrap()
         });
 
-        let poslog = Mutex::new(fs::File::create("endgame.log").expect("log file"));
-
         crossbeam::scope(|s| {
             let (job_send, job_recv) = channel::bounded(prover.queue_depth());
             let (res_send, res_recv) = channel::bounded(prover.queue_depth());
@@ -342,10 +338,9 @@ impl Prover {
                 draw_winner: Some(pos.player().other()),
             };
 
-            let handles =
-                (0..cfg.dfpn.threads)
-                    .map(|i| {
-                        let mut worker = Worker {
+            let handles = (0..cfg.dfpn.threads)
+                .map(|i| {
+                    let mut worker = Worker {
                         cfg: cfg,
                         jobs: job_recv.clone(),
                         results: res_send.clone(),
@@ -359,13 +354,8 @@ impl Prover {
                                 |stats: &dfpn::Stats,
                                  pos: &game::Game,
                                  data: &dfpn::Entry,
-                            children: &Vec<dfpn::Child>| {
-                                if data.bounds.solved() && data.work > 1 && data.work < 20 {
-                                    write!(poslog.lock(), "{},{}\n",
-                                           game::notation::render(pos),
-                                           data.work).expect("write");
-                                }
-                                if let Some(ref p) = probe {
+                                 children: &Vec<dfpn::Child>| {
+                                    if let Some(ref p) = probe {
                                         {
                                             let r = p.read();
                                             if data.hash != r.hash {
@@ -383,12 +373,12 @@ impl Prover {
                         },
                         stats: Default::default(),
                     };
-                        s.spawn(move |_| {
-                            worker.run();
-                            (worker.mid.stats, worker.stats)
-                        })
+                    s.spawn(move |_| {
+                        worker.run();
+                        (worker.mid.stats, worker.stats)
                     })
-                    .collect::<Vec<_>>();
+                })
+                .collect::<Vec<_>>();
 
             mem::drop(job_recv);
 
