@@ -358,22 +358,26 @@ mod tests {
                 "prove(\"{}\")={:?} want {:?}",
                 board, got, expect,
             );
-            let (_, vstats) = mm.analyze(&pos);
-            let score = vstats.last().unwrap().score;
-            let mmeval = if score >= minimax::EVAL_WON {
-                prove::Status::for_player(pos.player())
-            } else if score <= minimax::EVAL_LOST {
-                prove::Status::for_player(pos.player().other())
-            } else {
-                prove::Status::unproven()
-            };
-            assert!(
-                expect.merge(mmeval).is_some(),
-                "Result {:?} is incompatible with minimax result {:?}",
-                got,
-                mmeval,
-            );
+            assert_compatible(&mut mm, &pos, got);
         }
+    }
+
+    fn assert_compatible(mm: &mut minimax::Minimax, pos: &game::Game, status: prove::Status) {
+        let (_, vstats) = mm.analyze(&pos);
+        let score = vstats.last().unwrap().score;
+        let mmeval = if score >= minimax::EVAL_WON {
+            prove::Status::for_player(pos.player())
+        } else if score <= minimax::EVAL_LOST {
+            prove::Status::for_player(pos.player().other())
+        } else {
+            prove::Status::unproven()
+        };
+        assert!(
+            status.merge(mmeval).is_some(),
+            "Result {:?} is incompatible with minimax result {:?}",
+            status,
+            mmeval,
+        );
     }
 
     #[test]
@@ -402,6 +406,14 @@ mod tests {
                 ],
             }
         ];
+        let mut mm = minimax::Minimax::with_config(&minimax::Config {
+            max_depth: Some(10),
+            timeout: None,
+            debug: 0,
+            table_bytes: None,
+            draw_winner: None,
+        });
+
         for tc in tests {
             let pos = game::notation::parse(tc.board).unwrap();
             let mut stats = Default::default();
@@ -410,6 +422,7 @@ mod tests {
                 let m = game::notation::parse_move(s).unwrap();
                 let got = an.evaluate_move(m);
                 assert_eq!(got, *want, "eval_move('{}', '{}')", tc.board, s);
+                assert_compatible(&mut mm, &pos, got);
             }
         }
     }
