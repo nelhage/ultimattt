@@ -1,10 +1,10 @@
-#![allow(dead_code)]
-
 use crate::game;
 use crate::prove;
 
 use packed_simd::u16x8;
 use serde::Serialize;
+
+use std::io;
 
 #[derive(Default, Serialize, Debug, Clone)]
 pub struct Stats {
@@ -110,6 +110,40 @@ impl<'a> Analysis<'a> {
             return prove::Status::for_player(self.pos.player().other());
         }
         return prove::Status::unproven();
+    }
+
+    fn dump_crit(crit: u16) -> String {
+        if crit == 0 {
+            "<none>".to_owned()
+        } else {
+            let mut v = Vec::new();
+            for bit in 0..9 {
+                if crit & (1 << bit) != 0 {
+                    v.push(((('a' as u8) + bit) as char).to_string());
+                }
+            }
+            v.join(" ")
+        }
+    }
+
+    pub fn dump(&self, out: &mut dyn io::Write) -> io::Result<()> {
+        writeln!(out, "Result: {:?}", self.proven)?;
+        writeln!(
+            out,
+            "Attacker crit: {}",
+            Self::dump_crit(self.attacker_critical)
+        )?;
+        writeln!(
+            out,
+            "Defender crit: {}",
+            Self::dump_crit(self.defender_critical)
+        )?;
+        writeln!(out, "Moves:")?;
+        for m in self.pos.all_moves() {
+            let eval = self.evaluate_move(m);
+            writeln!(out, " {}: {:?}", m, eval)?;
+        }
+        Ok(())
     }
 }
 

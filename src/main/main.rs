@@ -12,6 +12,7 @@ use serde::{Serialize, Serializer};
 use serde_json;
 use structopt::StructOpt;
 
+use ultimattt::endgame;
 use ultimattt::game;
 use ultimattt::minimax;
 use ultimattt::minimax::AI;
@@ -264,6 +265,7 @@ enum Engine {
     SPDFPN,
     #[allow(non_camel_case_types)]
     PN_DFPN,
+    Endgame,
 }
 
 impl FromStr for Engine {
@@ -275,6 +277,7 @@ impl FromStr for Engine {
             "dfpn" => Ok(Engine::DFPN),
             "spdfpn" => Ok(Engine::SPDFPN),
             "pn-dfpn" => Ok(Engine::PN_DFPN),
+            "endgame" => Ok(Engine::Endgame),
             _ => Err(format!("Unknown engine: `{}`", s)),
         }
     }
@@ -320,14 +323,20 @@ struct PPParameters {
     position: String,
 }
 
+#[derive(Debug, StructOpt, Serialize)]
+struct PlayParameters {
+    #[structopt(short = "x", long, default_value = "human")]
+    playerx: String,
+    #[structopt(short = "o", long, default_value = "minimax")]
+    playero: String,
+
+    #[structopt(long)]
+    position: Option<String>,
+}
+
 #[derive(Debug, StructOpt)]
 enum Command {
-    Play {
-        #[structopt(short = "x", long, default_value = "human")]
-        playerx: String,
-        #[structopt(short = "o", long, default_value = "minimax")]
-        playero: String,
-    },
+    Play(PlayParameters),
     Analyze(AnalyzeParameters),
     Selfplay(SelfplayParameters),
     PP(PPParameters),
@@ -527,14 +536,14 @@ fn main() -> Result<(), std::io::Error> {
     };
     let mut stdout = io::stdout();
     match opt.cmd {
-        Command::Play {
-            ref playerx,
-            ref playero,
-            ..
-        } => {
-            let mut g = game::Game::new();
-            let mut player_x = parse_player(&opt.global, game::Player::X, playerx)?;
-            let mut player_o = parse_player(&opt.global, game::Player::O, playero)?;
+        Command::Play(ref play) => {
+            let mut g = play
+                .position
+                .as_ref()
+                .map(|b| game::notation::parse(b).expect("Illegal position"))
+                .unwrap_or_else(|| game::Game::new());
+            let mut player_x = parse_player(&opt.global, game::Player::X, &play.playerx)?;
+            let mut player_o = parse_player(&opt.global, game::Player::O, &play.playero)?;
             loop {
                 render(&mut stdout, &g)?;
                 let m = match g.player() {
@@ -690,6 +699,13 @@ fn main() -> Result<(), std::io::Error> {
                         }
                     }
                     write_metrics(&opt, result.duration, &result.stats)?;
+                }
+                Engine::Endgame => {
+                    render(&mut io::stdout(), &game)?;
+                    let mut stats = Default::default();
+                    let endgame = endgame::Analysis::new(&game, &mut stats);
+                    println!("\nEndgame analysis:");
+                    endgame.dump(&mut io::stdout())?;
                 }
                 Engine::Minimax => {
                     let mut ai = make_ai(&opt.global);

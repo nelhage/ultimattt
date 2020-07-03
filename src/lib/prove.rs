@@ -78,7 +78,7 @@ const MAYBE_O: u8 = 0b0010;
 const MAYBE_DRAW: u8 = 0b0100;
 const VALID_BITS: u8 = 0b0111;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Status(u8);
 
 impl Default for Status {
@@ -149,5 +149,21 @@ impl Status {
             game::Player::X => self.0 == MAYBE_X,
             game::Player::O => self.0 == MAYBE_O,
         }
+    }
+}
+
+impl fmt::Debug for Status {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut opts = Vec::new();
+        if self.0 & MAYBE_X != 0 {
+            opts.push("X");
+        }
+        if self.0 & MAYBE_O != 0 {
+            opts.push("O");
+        }
+        if self.0 & MAYBE_DRAW != 0 {
+            opts.push("Draw");
+        }
+        write!(f, "{}", opts.join("|"))
     }
 }
