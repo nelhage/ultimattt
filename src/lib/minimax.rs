@@ -1,6 +1,8 @@
 use crate::game;
 use crate::table;
 
+use rand;
+use rand::seq::IteratorRandom;
 use smallvec::SmallVec;
 
 use std::cmp::max;
@@ -500,6 +502,23 @@ impl AI for Minimax {
     fn select_move(&mut self, g: &game::Game) -> Result<game::Move, Error> {
         let (pv, _) = self.analyze(g);
         Ok(pv[0])
+    }
+}
+
+pub struct Random {}
+impl Random {
+    pub fn new() -> Self {
+        Random {}
+    }
+}
+
+impl AI for Random {
+    fn select_move(&mut self, g: &game::Game) -> Result<game::Move, Error> {
+        let mut rng = rand::thread_rng();
+        match g.all_moves().choose(&mut rng) {
+            Some(m) => Ok(m),
+            None => Err(Error::Other("no moves".to_owned())),
+        }
     }
 }
 

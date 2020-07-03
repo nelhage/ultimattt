@@ -426,6 +426,8 @@ fn parse_player<'a>(
             player,
             &ai_config(opt),
         )?))
+    } else if spec == "random" {
+        Ok(Box::new(minimax::Random::new()))
     } else {
         Err(io::Error::new(
             io::ErrorKind::Other,
