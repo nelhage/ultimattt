@@ -313,6 +313,9 @@ struct AnalyzeParameters {
     split_threshold: Option<u64>,
     #[structopt(long)]
     queue_depth: Option<usize>,
+
+    #[structopt(long)]
+    variation: Option<String>,
     position: String,
 }
 
@@ -354,6 +357,13 @@ fn ai_config(opt: &GlobalOptions) -> minimax::Config {
     }
 }
 
+fn apply_variation(pos: &game::Game, line: &str) -> game::Game {
+    line.split(" ").fold(pos.clone(), |pos, mv| {
+        pos.make_move(game::notation::parse_move(mv).expect("parse_move"))
+            .expect("make_move")
+    })
+}
+
 fn dfpn_config(
     opt: &GlobalOptions,
     analyze: &AnalyzeParameters,
@@ -365,13 +375,7 @@ fn dfpn_config(
         (None, Some(moves)) => Some(if moves.len() == 0 {
             pos.zobrist()
         } else {
-            moves
-                .split(" ")
-                .fold(pos.clone(), |pos, mv| {
-                    pos.make_move(game::notation::parse_move(mv).expect("parse_move"))
-                        .expect("make_move")
-                })
-                .zobrist()
+            apply_variation(&pos, moves).zobrist()
         }),
         (Some(_), Some(_)) => panic!("--probe-hash and --probe are incompatible"),
     };
@@ -574,7 +578,11 @@ fn main() -> Result<(), std::io::Error> {
         }
         Command::Analyze(ref analyze) => {
             let game = match game::notation::parse(&analyze.position) {
-                Ok(g) => g,
+                Ok(g) => analyze
+                    .variation
+                    .as_ref()
+                    .map(|line| apply_variation(&g, line))
+                    .unwrap_or(g),
                 Err(e) => {
                     println!("Parsing position: {:?}", e);
                     exit(1)
