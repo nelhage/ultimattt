@@ -1,9 +1,9 @@
 use std::fmt;
 
-use super::{BoardState, CellState, Game, Player};
+use super::{CellState, Game, GameState, Player};
 
 mod pr {
-    use super::{BoardState, CellState, Game, Player};
+    use super::{CellState, Game, GameState, Player};
     use std::fmt;
 
     pub fn player(p: Player) -> &'static str {
@@ -21,9 +21,9 @@ mod pr {
         }
         let p = g.board_state(b);
         match p {
-            BoardState::InPlay => " ",
-            BoardState::Drawn => "#",
-            BoardState::Won(p) => player(p),
+            GameState::InPlay => " ",
+            GameState::Drawn => "#",
+            GameState::Won(p) => player(p),
         }
     }
 
@@ -100,7 +100,7 @@ impl fmt::Display for super::Move {
         if self.is_none() {
             write!(f, "<none>")
         } else {
-            write!(f, "{}{}", CHARS[self.board()], CHARS[self.square()])
+            write!(f, "{}{}", CHARS[self.global()], CHARS[self.local()])
         }
     }
 }

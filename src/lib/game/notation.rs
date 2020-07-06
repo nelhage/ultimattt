@@ -7,9 +7,9 @@ pub fn render(g: &Game) -> String {
     for board in 0..9 {
         let st = g.board_state(board as usize);
         let ch = match st {
-            BoardState::InPlay => ".",
-            BoardState::Drawn => "#",
-            BoardState::Won(p) => p.as_str(),
+            GameState::InPlay => ".",
+            GameState::Drawn => "#",
+            GameState::Won(p) => p.as_str(),
         };
         if g.board_to_play().map(|b| b == board).unwrap_or(false) {
             out.push_str("@");
@@ -35,8 +35,8 @@ pub fn render(g: &Game) -> String {
 }
 
 pub fn render_move(m: Move) -> String {
-    let board = 'a' as u8 + m.board() as u8;
-    let cell = 'a' as u8 + m.square() as u8;
+    let board = 'a' as u8 + m.global() as u8;
+    let cell = 'a' as u8 + m.local() as u8;
     return format!("{}{}", board as char, cell as char);
 }
 
@@ -87,14 +87,14 @@ pub fn parse(text: &str) -> Result<Game, ParseError> {
     }
     for board in 0..9 {
         let state = match overall.chars().nth(board).unwrap() {
-            'X' => BoardState::Won(Player::X),
-            'O' => BoardState::Won(Player::O),
-            '#' => BoardState::Drawn,
+            'X' => GameState::Won(Player::X),
+            'O' => GameState::Won(Player::O),
+            '#' => GameState::Drawn,
             '@' => {
                 game.next_board = Some(board as u8);
-                BoardState::InPlay
+                GameState::InPlay
             }
-            '.' => BoardState::InPlay,
+            '.' => GameState::InPlay,
             _ => {
                 return Err(ParseError {
                     loc: &overall[board..board + 1],
@@ -102,7 +102,7 @@ pub fn parse(text: &str) -> Result<Game, ParseError> {
                 });
             }
         };
-        game.game_states[board] = state;
+        game.global_states[board] = state;
     }
     let mut chars = bits[2].chars();
     for board in 0..9 {
@@ -119,7 +119,7 @@ pub fn parse(text: &str) -> Result<Game, ParseError> {
                         });
                     }
                 };
-                game.boards[board].0[sq] = state;
+                game.local_boards[board].0[sq] = state;
             } else {
                 return Err(ParseError {
                     loc: &bits[2],

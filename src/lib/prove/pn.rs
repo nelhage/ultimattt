@@ -232,15 +232,15 @@ impl Prover {
         let pos = self.cursor.position(node.id);
         let res = pos.game_state();
         node.value = match res {
-            game::BoardState::InPlay => Evaluation::Unknown,
-            game::BoardState::Drawn => {
+            game::GameState::InPlay => Evaluation::Unknown,
+            game::GameState::Drawn => {
                 if pos.player() == player {
                     Evaluation::False
                 } else {
                     Evaluation::True
                 }
             }
-            game::BoardState::Won(p) => {
+            game::GameState::Won(p) => {
                 if p == player {
                     Evaluation::True
                 } else {
@@ -365,7 +365,7 @@ impl Prover {
         let mut last_child = NodeID::none();
         let ref node = self.nodes.get(nid);
         match self.cursor.position(nid).game_state() {
-            game::BoardState::InPlay => (),
+            game::GameState::InPlay => (),
             _ => debug_assert!(
                 false,
                 format!("expanding a terminal node! {:?}", node.bounds)

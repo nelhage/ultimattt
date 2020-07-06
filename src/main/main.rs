@@ -54,10 +54,10 @@ fn render(out: &mut dyn io::Write, g: &game::Game) -> Result<(), io::Error> {
                 write!(out, " |")?;
             }
             let ch = match g.board_state(3 * brow + bcol as usize) {
-                game::BoardState::InPlay => " ",
-                game::BoardState::Drawn => "#",
-                game::BoardState::Won(game::Player::X) => "X",
-                game::BoardState::Won(game::Player::O) => "O",
+                game::GameState::InPlay => " ",
+                game::GameState::Drawn => "#",
+                game::GameState::Won(game::Player::X) => "X",
+                game::GameState::Won(game::Player::O) => "O",
             };
             write!(out, " {}", ch)?;
         }
@@ -572,7 +572,7 @@ fn main() -> Result<(), std::io::Error> {
                     }
                 };
                 match g.game_state() {
-                    game::BoardState::InPlay => (),
+                    game::GameState::InPlay => (),
                     _ => break,
                 }
             }

@@ -77,9 +77,9 @@ where
             };
             let result = self.simulate(&mut *p1, &mut *p2)?;
             match result {
-                game::BoardState::Drawn => dst.2 += 1,
-                game::BoardState::InPlay => panic!("impossible"),
-                game::BoardState::Won(p) => {
+                game::GameState::Drawn => dst.2 += 1,
+                game::GameState::InPlay => panic!("impossible"),
+                game::GameState::Won(p) => {
                     if p == game::Player::X {
                         dst.0 += 1;
                     } else {
@@ -96,9 +96,9 @@ where
         &self,
         player_x: &mut (dyn minimax::AI + 'a),
         player_o: &mut (dyn minimax::AI + 'a),
-    ) -> Result<game::BoardState, io::Error> {
+    ) -> Result<game::GameState, io::Error> {
         let mut board = game::Game::new();
-        while let game::BoardState::InPlay = board.game_state() {
+        while let game::GameState::InPlay = board.game_state() {
             let m = match board.player() {
                 game::Player::X => player_x.select_move(&board),
                 game::Player::O => player_o.select_move(&board),

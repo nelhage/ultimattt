@@ -105,8 +105,8 @@ impl<'a> Analysis<'a> {
         if self.defender_critical == 0 {
             return prove::Status::unproven();
         }
-        let bad = self.pos.game_states.donebits() | (self.defender_critical as u32);
-        if bad & (1 << m.square()) != 0 {
+        let bad = self.pos.global_states.donebits() | (self.defender_critical as u32);
+        if bad & (1 << m.local()) != 0 {
             return prove::Status::for_player(self.pos.player().other());
         }
         return prove::Status::unproven();
@@ -139,7 +139,7 @@ impl<'a> Analysis<'a> {
             Self::pp_boardset(self.defender_critical)
         )?;
         if self.defender_critical != 0 {
-            let bad = self.pos.game_states.donebits() | (self.defender_critical as u32);
+            let bad = self.pos.global_states.donebits() | (self.defender_critical as u32);
             writeln!(
                 out,
                 "  winning boards[defender]: {}",
@@ -147,7 +147,7 @@ impl<'a> Analysis<'a> {
             )?;
         }
         if self.attacker_critical != 0 {
-            let bad = self.pos.game_states.donebits() | (self.attacker_critical as u32);
+            let bad = self.pos.global_states.donebits() | (self.attacker_critical as u32);
             writeln!(
                 out,
                 "  winning boards[attacker]: {}",
@@ -164,7 +164,7 @@ impl<'a> Analysis<'a> {
 }
 
 fn is_winnable(pos: &game::Game, by: game::Player) -> bool {
-    let potential = pos.game_states.playerbits(by) | !pos.game_states.donebits();
+    let potential = pos.global_states.playerbits(by) | !pos.global_states.donebits();
     return (u16x8::splat(potential as u16) & game::WIN_MASKS_SIMD)
         .eq(game::WIN_MASKS_SIMD)
         .any();
@@ -186,15 +186,16 @@ fn prove_attacker(pos: &game::Game, attacker_critical: u16, defender_critical: u
     // Can we force the defender into letting us play in a critical
     // cell? We can send them anywhere our move lets us, but ignore
     // cells that are closed, or where the defender would win.
-    let dests =
-        pos.boards.free_squares(board) & !pos.game_states.donebits() & !(defender_critical as u32);
+    let dests = pos.local_boards.free_squares(board)
+        & !pos.global_states.donebits()
+        & !(defender_critical as u32);
     // We want them to send us to one of these
-    let want = pos.game_states.donebits() | (attacker_critical as u32);
+    let want = pos.global_states.donebits() | (attacker_critical as u32);
     for i in 0..9 {
         if dests & (1 << i) == 0 {
             continue;
         }
-        let mut send = pos.boards.free_squares(i);
+        let mut send = pos.local_boards.free_squares(i);
         if i == board {
             // If we send them to the curren local board, remove that
             // square from the analysis
@@ -226,8 +227,8 @@ fn forced_loss(pos: &game::Game, defender_critical: u16) -> bool {
     // We are forced to play in a specific board, and it
     // is not one of the opponent's critical boards. Let's
     // look at where we can send them
-    let dests = pos.boards.free_squares(board);
-    let bad = pos.game_states.donebits() | (defender_critical as u32);
+    let dests = pos.local_boards.free_squares(board);
+    let bad = pos.global_states.donebits() | (defender_critical as u32);
     if dests & !bad == 0 {
         return true;
     }
@@ -256,10 +257,13 @@ fn critical_indices(player: u32, empty: u32) -> impl Iterator<Item = usize> {
 
 pub fn critical_boards(g: &game::Game, who: game::Player) -> u16 {
     let mut out = 0_u16;
-    for board in critical_indices(g.game_states.playerbits(who), !g.game_states.donebits()) {
-        if critical_indices(g.boards.playerbits(who, board), !g.boards.mask(board))
-            .next()
-            .is_some()
+    for board in critical_indices(g.global_states.playerbits(who), !g.global_states.donebits()) {
+        if critical_indices(
+            g.local_boards.playerbits(who, board),
+            !g.local_boards.mask(board),
+        )
+        .next()
+        .is_some()
         {
             out |= 1_u16 << board;
         }

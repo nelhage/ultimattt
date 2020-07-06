@@ -430,15 +430,15 @@ impl Prover {
         let player = self.player();
         let res = pos.game_state();
         let value = match res {
-            game::BoardState::InPlay => Evaluation::Unknown,
-            game::BoardState::Drawn => {
+            game::GameState::InPlay => Evaluation::Unknown,
+            game::GameState::Drawn => {
                 if pos.player() == player {
                     Evaluation::False
                 } else {
                     Evaluation::True
                 }
             }
-            game::BoardState::Won(p) => {
+            game::GameState::Won(p) => {
                 if p == player {
                     Evaluation::True
                 } else {

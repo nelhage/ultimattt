@@ -222,7 +222,7 @@ impl Minimax {
     }
 
     fn score_board(&self, g: &game::Game, board: usize) -> i64 {
-        if !g.game_states.in_play(board) {
+        if !g.global_states.in_play(board) {
             return 0;
         }
         struct WinPotentials {
@@ -230,8 +230,8 @@ impl Minimax {
             n1: (i64, i64),
             n2: (i64, i64),
         };
-        let xbits = g.boards.xbits(board);
-        let obits = g.boards.obits(board);
+        let xbits = g.local_boards.xbits(board);
+        let obits = g.local_boards.obits(board);
         let mut potentials = WinPotentials {
             n1: (0, 0),
             n2: (0, 0),
@@ -267,15 +267,15 @@ impl Minimax {
 
     pub fn evaluate(&self, g: &game::Game) -> i64 {
         let winner = match g.game_state() {
-            game::BoardState::Drawn => {
+            game::GameState::Drawn => {
                 if let Some(w) = self.config.draw_winner {
                     Some(w)
                 } else {
                     return 0;
                 }
             }
-            game::BoardState::InPlay => None,
-            game::BoardState::Won(p) => Some(p),
+            game::GameState::InPlay => None,
+            game::GameState::Won(p) => Some(p),
         };
         if let Some(p) = winner {
             return if p == g.player() { EVAL_WON } else { EVAL_LOST };
@@ -287,8 +287,8 @@ impl Minimax {
         }
         let mut score: i64 = 0;
         for (i, mask) in game::WIN_MASKS.iter().enumerate() {
-            let xbits = g.game_states.xbits() & mask;
-            let obits = g.game_states.obits() & mask;
+            let xbits = g.global_states.xbits() & mask;
+            let obits = g.global_states.obits() & mask;
 
             // If both players have a play, this is a dead line. Award
             // no points.

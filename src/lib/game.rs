@@ -41,16 +41,16 @@ pub enum CellState {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum BoardState {
+pub enum GameState {
     InPlay,
     Drawn,
     Won(Player),
 }
 
-impl BoardState {
+impl GameState {
     pub fn terminal(&self) -> bool {
         match self {
-            BoardState::Drawn | BoardState::Won(_) => true,
+            GameState::Drawn | GameState::Won(_) => true,
             _ => false,
         }
     }
@@ -76,24 +76,24 @@ pub(in crate) const WIN_MASKS_SIMD: u16x8 =
 const BOARD_MASK: u32 = 0x1ff;
 
 #[derive(Clone, Debug)]
-pub struct Subboard([CellState; 9]);
+pub struct LocalBoard([CellState; 9]);
 
 #[derive(Clone, Debug)]
 pub struct Unpacked {
     pub next_player: Player,
     pub next_board: Option<u8>,
-    pub boards: [Subboard; 9],
-    pub game_states: [BoardState; 9],
-    pub overall_state: BoardState,
+    pub local_boards: [LocalBoard; 9],
+    pub global_states: [GameState; 9],
+    pub game_state: GameState,
 }
 
 impl Default for Unpacked {
     fn default() -> Self {
-        let board = Subboard([CellState::Empty; 9]);
+        let board = LocalBoard([CellState::Empty; 9]);
         Self {
             next_player: Player::X,
             next_board: None,
-            boards: [
+            local_boards: [
                 board.clone(),
                 board.clone(),
                 board.clone(),
@@ -104,8 +104,8 @@ impl Default for Unpacked {
                 board.clone(),
                 board.clone(),
             ],
-            game_states: [BoardState::InPlay; 9],
-            overall_state: BoardState::InPlay,
+            global_states: [GameState::InPlay; 9],
+            game_state: GameState::InPlay,
         }
     }
 }
@@ -119,14 +119,14 @@ struct Row {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(in crate) struct Subboards {
+pub(in crate) struct LocalBoards {
     rows: [Row; 3],
 }
 
-impl Subboards {
-    fn at(&self, board: usize, cell: usize) -> CellState {
-        let row = &self.rows[board / 3];
-        let idx = (board % 3) * 9 + cell;
+impl LocalBoards {
+    fn at(&self, global: usize, local: usize) -> CellState {
+        let row = &self.rows[global / 3];
+        let idx = (global % 3) * 9 + local;
         let xbit = (row.x >> idx) & 1 == 1;
         let obit = (row.o >> idx) & 1 == 1;
         if xbit {
@@ -138,9 +138,9 @@ impl Subboards {
         return CellState::Empty;
     }
 
-    fn set(&mut self, board: usize, cell: usize, who: Player) {
-        let mut row = &mut self.rows[board / 3];
-        let idx = (board % 3) * 9 + cell;
+    fn set(&mut self, global: usize, local: usize, who: Player) {
+        let mut row = &mut self.rows[global / 3];
+        let idx = (global % 3) * 9 + local;
         let bit = 1 << idx;
         match who {
             Player::X => {
@@ -152,36 +152,36 @@ impl Subboards {
         }
     }
 
-    pub(in crate) fn xbits(&self, board: usize) -> u32 {
-        let row = &self.rows[board / 3];
-        (row.x >> (9 * (board % 3))) & BOARD_MASK
+    pub(in crate) fn xbits(&self, global: usize) -> u32 {
+        let row = &self.rows[global / 3];
+        (row.x >> (9 * (global % 3))) & BOARD_MASK
     }
 
-    pub(in crate) fn obits(&self, board: usize) -> u32 {
-        let row = &self.rows[board / 3];
-        (row.o >> (9 * (board % 3))) & BOARD_MASK
+    pub(in crate) fn obits(&self, global: usize) -> u32 {
+        let row = &self.rows[global / 3];
+        (row.o >> (9 * (global % 3))) & BOARD_MASK
     }
 
-    pub(in crate) fn playerbits(&self, player: Player, board: usize) -> u32 {
+    pub(in crate) fn playerbits(&self, player: Player, global: usize) -> u32 {
         match player {
-            Player::X => self.xbits(board),
-            Player::O => self.obits(board),
+            Player::X => self.xbits(global),
+            Player::O => self.obits(global),
         }
     }
 
-    pub(in crate) fn mask(&self, board: usize) -> u32 {
-        let row = &self.rows[board / 3];
-        (row.o | row.x) >> (9 * (board % 3)) & BOARD_MASK
+    pub(in crate) fn mask(&self, global: usize) -> u32 {
+        let row = &self.rows[global / 3];
+        (row.o | row.x) >> (9 * (global % 3)) & BOARD_MASK
     }
 
-    pub(in crate) fn free_squares(&self, board: usize) -> u32 {
-        let row = &self.rows[board / 3];
-        !((row.o | row.x) >> (9 * (board % 3))) & BOARD_MASK
+    pub(in crate) fn free_squares(&self, global: usize) -> u32 {
+        let row = &self.rows[global / 3];
+        !((row.o | row.x) >> (9 * (global % 3))) & BOARD_MASK
     }
 
-    fn check_winner(&self, board: usize, player: Player) -> BoardState {
-        let row = &self.rows[board / 3];
-        let shift = 9 * (board % 3);
+    fn check_winner(&self, global: usize, player: Player) -> GameState {
+        let row = &self.rows[global / 3];
+        let shift = 9 * (global % 3);
         let mask = match player {
             Player::X => row.x >> shift,
             Player::O => row.o >> shift,
@@ -190,39 +190,39 @@ impl Subboards {
             .eq(WIN_MASKS_SIMD)
             .any()
         {
-            return BoardState::Won(player);
+            return GameState::Won(player);
         }
 
         if ((row.x | row.o) >> shift) & BOARD_MASK == BOARD_MASK {
-            BoardState::Drawn
+            GameState::Drawn
         } else {
-            BoardState::InPlay
+            GameState::InPlay
         }
     }
 }
 
-impl Default for Subboards {
+impl Default for LocalBoards {
     fn default() -> Self {
-        Subboards {
+        LocalBoards {
             rows: [Row { x: 0, o: 0 }, Row { x: 0, o: 0 }, Row { x: 0, o: 0 }],
         }
     }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(in crate) struct GameStates {
+pub(in crate) struct GlobalStates {
     // LSB first; drawn if both x&y
     x: u16,
     o: u16,
 }
 
-impl Default for GameStates {
+impl Default for GlobalStates {
     fn default() -> Self {
-        GameStates { x: 0, o: 0 }
+        GlobalStates { x: 0, o: 0 }
     }
 }
 
-impl GameStates {
+impl GlobalStates {
     pub(in crate) fn xbits(&self) -> u32 {
         (self.x & !self.o) as u32
     }
@@ -245,46 +245,46 @@ impl GameStates {
         (self.donebits() & 1 << board) == 0
     }
 
-    fn check_winner(&self, player: Player) -> BoardState {
+    fn check_winner(&self, player: Player) -> GameState {
         let mask = self.playerbits(player);
         if (u16x8::splat(mask as u16) & WIN_MASKS_SIMD)
             .eq(WIN_MASKS_SIMD)
             .any()
         {
-            return BoardState::Won(player);
+            return GameState::Won(player);
         }
         if self.donebits() == BOARD_MASK {
-            BoardState::Drawn
+            GameState::Drawn
         } else {
-            BoardState::InPlay
+            GameState::InPlay
         }
     }
 
-    fn at(&self, board: usize) -> BoardState {
+    fn at(&self, board: usize) -> GameState {
         let bit = 1 << board;
         if self.xbits() & bit != 0 {
-            BoardState::Won(Player::X)
+            GameState::Won(Player::X)
         } else if self.obits() & bit != 0 {
-            BoardState::Won(Player::O)
+            GameState::Won(Player::O)
         } else if self.drawbits() & bit != 0 {
-            BoardState::Drawn
+            GameState::Drawn
         } else {
-            BoardState::InPlay
+            GameState::InPlay
         }
     }
 
-    fn set(&mut self, board: usize, state: BoardState) {
+    fn set(&mut self, board: usize, state: GameState) {
         let bit = 1_u16 << board;
         match state {
-            BoardState::Drawn => {
+            GameState::Drawn => {
                 self.x |= bit;
                 self.o |= bit;
             }
-            BoardState::InPlay => {
+            GameState::InPlay => {
                 return;
             }
-            BoardState::Won(Player::X) => self.x |= bit,
-            BoardState::Won(Player::O) => self.o |= bit,
+            GameState::Won(Player::X) => self.x |= bit,
+            GameState::Won(Player::O) => self.o |= bit,
         };
     }
 }
@@ -293,9 +293,9 @@ impl GameStates {
 pub struct Game {
     pub(in crate) next_player: Player,
     pub(in crate) next_board: Option<u8>,
-    pub(in crate) boards: Subboards,
-    pub(in crate) game_states: GameStates,
-    pub(in crate) overall_state: BoardState,
+    pub(in crate) local_boards: LocalBoards,
+    pub(in crate) global_states: GlobalStates,
+    pub(in crate) game_state: GameState,
     hash: u64,
 }
 
@@ -306,17 +306,17 @@ pub struct Move {
 }
 
 impl Move {
-    pub fn from_coords(board: usize, square: usize) -> Self {
+    pub fn from_coords(global: usize, local: usize) -> Self {
         return Self {
-            bits: (board << 4 | square) as u8,
+            bits: (global << 4 | local) as u8,
         };
     }
 
-    pub fn board(self) -> usize {
+    pub fn global(self) -> usize {
         (self.bits >> 4) as usize
     }
 
-    pub fn square(self) -> usize {
+    pub fn local(self) -> usize {
         (self.bits & 0xf) as usize
     }
 
@@ -356,12 +356,12 @@ struct Zobrist {
 }
 
 impl Zobrist {
-    fn for_board(&self, board: usize, state: BoardState) -> u64 {
+    fn for_board(&self, board: usize, state: GameState) -> u64 {
         match state {
-            BoardState::InPlay => 0,
-            BoardState::Drawn => self.boards[board][0],
-            BoardState::Won(Player::X) => self.boards[board][1],
-            BoardState::Won(Player::O) => self.boards[board][2],
+            GameState::InPlay => 0,
+            GameState::Drawn => self.boards[board][0],
+            GameState::Won(Player::X) => self.boards[board][1],
+            GameState::Won(Player::O) => self.boards[board][2],
         }
     }
     fn for_cell(&self, board: usize, square: usize, cell: CellState) -> u64 {
@@ -543,22 +543,22 @@ impl Game {
         Game {
             next_player: Player::X,
             next_board: None,
-            boards: Default::default(),
-            game_states: Default::default(),
-            overall_state: BoardState::InPlay,
+            local_boards: Default::default(),
+            global_states: Default::default(),
+            game_state: GameState::InPlay,
             hash: 0,
         }
     }
 
     pub fn pack(bits: &Unpacked) -> Game {
-        let mut boards: Subboards = Default::default();
+        let mut boards: LocalBoards = Default::default();
         let mut hash: u64 = 0;
         for row in 0..3 {
             let mut x: u32 = 0;
             let mut o: u32 = 0;
             for col in 0..3 {
                 let bnum = 3 * row + col;
-                let board = &bits.boards[bnum];
+                let board = &bits.local_boards[bnum];
                 for (i, cell) in board.0.iter().enumerate() {
                     let idx: u32 = 1 << (9 * col + i);
                     match cell {
@@ -577,13 +577,13 @@ impl Game {
             boards.rows[row].x = x;
             boards.rows[row].o = o;
         }
-        let mut states: GameStates = Default::default();
+        let mut states: GlobalStates = Default::default();
         for i in 0..9 {
-            states.set(i, bits.game_states[i]);
-            hash ^= ZOBRIST_TABLES.for_board(i, bits.game_states[i]);
+            states.set(i, bits.global_states[i]);
+            hash ^= ZOBRIST_TABLES.for_board(i, bits.global_states[i]);
 
-            match bits.game_states[i] {
-                BoardState::InPlay => (),
+            match bits.global_states[i] {
+                GameState::InPlay => (),
                 _ => {
                     for j in 0..9 {
                         hash ^= ZOBRIST_TABLES.for_cell(i, j, boards.at(i, j));
@@ -594,9 +594,9 @@ impl Game {
         Game {
             next_player: bits.next_player,
             next_board: bits.next_board,
-            boards: boards,
-            game_states: states,
-            overall_state: bits.overall_state,
+            local_boards: boards,
+            global_states: states,
+            game_state: bits.game_state,
             hash: hash,
         }
     }
@@ -605,14 +605,14 @@ impl Game {
         let mut out = Unpacked {
             next_player: self.next_player,
             next_board: self.next_board,
-            overall_state: self.overall_state,
+            game_state: self.game_state,
             ..Default::default()
         };
         for board in 0..9 {
             for cell in 0..9 {
-                out.boards[board].0[cell] = self.boards.at(board, cell);
+                out.local_boards[board].0[cell] = self.local_boards.at(board, cell);
             }
-            out.game_states[board] = self.game_states.at(board);
+            out.global_states[board] = self.global_states.at(board);
         }
         out
     }
@@ -623,64 +623,65 @@ impl Game {
     }
 
     pub fn inplace_move(&mut self, m: Move) -> Result<(), MoveError> {
-        if m.board() >= 9 || m.square() >= 9 {
+        if m.global() >= 9 || m.local() >= 9 {
             return Err(MoveError::OutOfBounds);
         }
-        match self.overall_state {
-            BoardState::InPlay => (),
+        match self.game_state {
+            GameState::InPlay => (),
             _ => return Err(MoveError::GameOver),
         }
-        if !self.game_states.in_play(m.board()) {
+        if !self.global_states.in_play(m.global()) {
             return Err(MoveError::WonBoard);
         }
         if let Some(b) = self.next_board {
-            if b != m.board() as u8 {
+            if b != m.global() as u8 {
                 return Err(MoveError::WrongBoard);
             }
         }
-        if self.boards.at(m.board(), m.square()) != CellState::Empty {
+        if self.local_boards.at(m.global(), m.local()) != CellState::Empty {
             return Err(MoveError::NotEmpty);
         }
 
-        self.boards.set(m.board(), m.square(), self.next_player);
-        self.hash ^= ZOBRIST_TABLES.squares[m.board()][m.square()][self.next_player.as_bit()];
-        let board_state = self.boards.check_winner(m.board(), self.next_player);
-        self.game_states.set(m.board(), board_state);
+        self.local_boards
+            .set(m.global(), m.local(), self.next_player);
+        self.hash ^= ZOBRIST_TABLES.squares[m.global()][m.local()][self.next_player.as_bit()];
+        let board_state = self.local_boards.check_winner(m.global(), self.next_player);
+        self.global_states.set(m.global(), board_state);
         match board_state {
-            BoardState::InPlay => (),
+            GameState::InPlay => (),
             _ => {
                 for i in 0..9 {
                     self.hash ^=
-                        ZOBRIST_TABLES.for_cell(m.board(), i, self.boards.at(m.board(), i));
+                        ZOBRIST_TABLES.for_cell(m.global(), i, self.local_boards.at(m.global(), i));
                 }
             }
         }
-        self.hash ^= ZOBRIST_TABLES.for_board(m.board(), board_state);
-        if self.game_states.in_play(m.square()) {
-            self.next_board = Some(m.square() as u8);
+        self.hash ^= ZOBRIST_TABLES.for_board(m.global(), board_state);
+        if self.global_states.in_play(m.local()) {
+            self.next_board = Some(m.local() as u8);
         } else {
             self.next_board = None;
         }
-        self.overall_state = self.game_states.check_winner(self.next_player);
+        self.game_state = self.global_states.check_winner(self.next_player);
         self.next_player = self.next_player.other();
         return Ok(());
     }
 
     pub fn recalc_winner(&mut self) {
-        self.overall_state = self.game_states.check_winner(self.next_player.other());
+        self.game_state = self.global_states.check_winner(self.next_player.other());
     }
 
     pub fn all_moves<'a>(&'a self) -> impl Iterator<Item = Move> + 'a {
         MoveIterator::from_game(&self)
     }
 
-    pub fn game_state(&self) -> BoardState {
-        self.overall_state
+    pub fn game_state(&self) -> GameState {
+        self.game_state
     }
 
     pub fn game_over(&self) -> bool {
-        match self.overall_state {
-            BoardState::InPlay => false,
+        match self.game_state {
+            GameState::InPlay => false,
             _ => true,
         }
     }
@@ -694,11 +695,11 @@ impl Game {
     }
 
     pub fn at(&self, board: usize, cell: usize) -> CellState {
-        self.boards.at(board, cell)
+        self.local_boards.at(board, cell)
     }
 
-    pub fn board_state(&self, board: usize) -> BoardState {
-        self.game_states.at(board)
+    pub fn board_state(&self, board: usize) -> GameState {
+        self.global_states.at(board)
     }
 
     pub fn zobrist(&self) -> u64 {
@@ -711,10 +712,10 @@ impl Game {
     }
 
     pub fn bound_depth(&self) -> usize {
-        let mut done = self.game_states.donebits();
+        let mut done = self.global_states.donebits();
         let mut bound: usize = 0;
         // done: u9
-        for row in self.boards.rows.iter() {
+        for row in self.local_boards.rows.iter() {
             let mut free = !(row.x | row.o) & ((1 << 27) - 1);
             if done & 1 != 0 {
                 free &= !BOARD_MASK;
@@ -732,7 +733,7 @@ impl Game {
     }
 
     pub fn open_boards(&self) -> u8 {
-        (!self.game_states.donebits() & BOARD_MASK).count_ones() as u8
+        (!self.global_states.donebits() & BOARD_MASK).count_ones() as u8
     }
 
     // A position is equivalent to another if they are
@@ -742,21 +743,26 @@ impl Game {
         if (
             self.next_player,
             self.next_board,
-            self.overall_state,
-            &self.game_states,
+            self.game_state,
+            &self.global_states,
         ) != (
             rhs.next_player,
             rhs.next_board,
-            rhs.overall_state,
-            &self.game_states,
+            rhs.game_state,
+            &self.global_states,
         ) {
             return false;
         }
-        if self.boards == rhs.boards {
+        if self.local_boards == rhs.local_boards {
             return true;
         }
-        let mut done = self.game_states.donebits();
-        for (lrow, rrow) in self.boards.rows.iter().zip(rhs.boards.rows.iter()) {
+        let mut done = self.global_states.donebits();
+        for (lrow, rrow) in self
+            .local_boards
+            .rows
+            .iter()
+            .zip(rhs.local_boards.rows.iter())
+        {
             let mut mask = (1 << 27) - 1;
             if done & 1 != 0 {
                 mask &= !BOARD_MASK;
@@ -790,12 +796,12 @@ impl<'a> MoveIterator<'a> {
     fn from_game(game: &'a Game) -> Self {
         let board = match game.board_to_play() {
             Some(b) => b,
-            None => (0..9).find(|b| game.game_states.in_play(*b)).unwrap_or(9),
+            None => (0..9).find(|b| game.global_states.in_play(*b)).unwrap_or(9),
         };
         MoveIterator {
             game: game,
             cell: 0,
-            mask: game.boards.mask(board),
+            mask: game.local_boards.mask(board),
             board: board,
         }
     }
@@ -811,14 +817,14 @@ impl<'a> Iterator for MoveIterator<'a> {
                     return None;
                 }
                 self.board += 1;
-                if !self.game.game_states.in_play(self.board) {
+                if !self.game.global_states.in_play(self.board) {
                     continue;
                 }
                 if self.board >= 9 {
                     return None;
                 }
                 self.cell = 0;
-                self.mask = self.game.boards.mask(self.board);
+                self.mask = self.game.local_boards.mask(self.board);
             }
 
             let bit = self.mask & 1 == 0;
@@ -850,7 +856,7 @@ mod tests {
             if at != CellState::Played(g.player().other()) {
                 panic!(
                     "board(): consistency failure i={} m={:?} bits={:?} at={:?}",
-                    i, m, g.boards, at
+                    i, m, g.local_boards, at
                 );
             }
         }
@@ -865,7 +871,7 @@ mod tests {
                 assert_eq!(gg.at(1, 6), CellState::Played(Player::X));
                 assert_eq!(gg.at(0, 0), CellState::Empty);
                 for i in 0..9 {
-                    assert_eq!(gg.board_state(i), BoardState::InPlay);
+                    assert_eq!(gg.board_state(i), GameState::InPlay);
                 }
             }
             Err(e) => {
@@ -877,10 +883,10 @@ mod tests {
     #[test]
     fn test_sub_win() {
         let g = board(&[(0, 4), (4, 0), (0, 2), (2, 0), (0, 6)]);
-        assert_eq!(g.board_state(0), BoardState::Won(Player::X));
+        assert_eq!(g.board_state(0), GameState::Won(Player::X));
 
         let g = board(&[(0, 4), (4, 6), (6, 4), (4, 7), (7, 4), (4, 8)]);
-        assert_eq!(g.board_state(4), BoardState::Won(Player::O));
+        assert_eq!(g.board_state(4), GameState::Won(Player::O));
     }
 
     #[test]
@@ -903,7 +909,7 @@ mod tests {
             (6, 0),
             (0, 8),
         ]);
-        assert_eq!(g.board_state(0), BoardState::Drawn);
+        assert_eq!(g.board_state(0), GameState::Drawn);
     }
 
     #[test]
@@ -933,7 +939,7 @@ mod tests {
                 panic!("Disallowed move: ({}, {}): {:?}", b, b, e);
             }
         }
-        assert_eq!(g.board_state(0), BoardState::Drawn);
+        assert_eq!(g.board_state(0), GameState::Drawn);
     }
 
     #[test]
@@ -977,7 +983,7 @@ mod tests {
             (4, 2),
             (2, 5),
         ]);
-        assert_eq!(g.game_state(), BoardState::Won(Player::X));
+        assert_eq!(g.game_state(), GameState::Won(Player::X));
         let r = g.make_move(Move::from_coords(5, 1));
         match r {
             Ok(_) => panic!("allowed move on won board"),
@@ -1138,7 +1144,7 @@ mod tests {
         while positions.len() < TEST_HASH_SAMPLES {
             let g = queue.pop_front().unwrap();
             positions.push(g.clone());
-            if let BoardState::InPlay = g.game_state() {
+            if let GameState::InPlay = g.game_state() {
                 for m in g.all_moves() {
                     let gg = g.make_move(m).expect("all_moves returned illegal move");
                     queue.push_back(gg);
@@ -1148,10 +1154,10 @@ mod tests {
 
         positions.sort_by_cached_key(|g: &Game| {
             let mut out = [0 as u64; 5];
-            out[0] = (g.game_states.x as u64) << 32 | (g.game_states.o as u64);
-            out[1] = (g.boards.rows[0].x as u64) << 32 | (g.boards.rows[0].o as u64);
-            out[2] = (g.boards.rows[1].x as u64) << 32 | (g.boards.rows[1].o as u64);
-            out[3] = (g.boards.rows[2].x as u64) << 32 | (g.boards.rows[2].o as u64);
+            out[0] = (g.global_states.x as u64) << 32 | (g.global_states.o as u64);
+            out[1] = (g.local_boards.rows[0].x as u64) << 32 | (g.local_boards.rows[0].o as u64);
+            out[2] = (g.local_boards.rows[1].x as u64) << 32 | (g.local_boards.rows[1].o as u64);
+            out[3] = (g.local_boards.rows[2].x as u64) << 32 | (g.local_boards.rows[2].o as u64);
             out[4] = match g.next_board {
                 Some(i) => i as u64,
                 None => 0xff,

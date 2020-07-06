@@ -520,7 +520,7 @@ pub(in crate::prove) fn extract_pv<T: table::Table<Entry>>(
     let mut prev = false;
     loop {
         match g.game_state() {
-            game::BoardState::InPlay => (),
+            game::GameState::InPlay => (),
             _ => {
                 if cfg.debug > 0 {
                     eprintln!("PV terminated depth={} game={:?}", pv.len(), g.game_state());
@@ -647,7 +647,7 @@ where
         let analysis = endgame::Analysis::new(pos, &mut self.stats.endgame);
 
         let terminal = match pos.game_state() {
-            game::BoardState::InPlay => {
+            game::GameState::InPlay => {
                 let proof = analysis.status();
                 if !proof.is_winnable(self.player) {
                     self.stats.endgame_solve += 1;
@@ -661,8 +661,8 @@ where
                     None
                 }
             }
-            game::BoardState::Drawn => Some(pos.player() != self.player),
-            game::BoardState::Won(p) => Some(p == pos.player()),
+            game::GameState::Drawn => Some(pos.player() != self.player),
+            game::GameState::Won(p) => Some(p == pos.player()),
         };
         if let Some(v) = terminal {
             if v {
@@ -748,21 +748,21 @@ where
         eval: prove::Status,
     ) -> Entry {
         let bounds = match g.game_state() {
-            game::BoardState::Won(p) => {
+            game::GameState::Won(p) => {
                 if p == g.player() {
                     Bounds::winning()
                 } else {
                     Bounds::losing()
                 }
             }
-            game::BoardState::Drawn => {
+            game::GameState::Drawn => {
                 if g.player() == self.player {
                     Bounds::losing()
                 } else {
                     Bounds::winning()
                 }
             }
-            game::BoardState::InPlay => {
+            game::GameState::InPlay => {
                 if eval.is_won(g.player()) {
                     self.stats.endgame_move += 1;
                     Bounds::winning()
