@@ -194,7 +194,12 @@ fn prove_attacker(pos: &game::Game, attacker_critical: u16, defender_critical: u
         if dests & (1 << i) == 0 {
             continue;
         }
-        let send = pos.boards.free_squares(i);
+        let mut send = pos.boards.free_squares(i);
+        if i == board {
+            // If we send them to the curren local board, remove that
+            // square from the analysis
+            send &= !(1 << i);
+        }
         if send & !want == 0 {
             return true;
         }
@@ -352,6 +357,9 @@ mod tests {
             ("X;O..XOX@X.;X.OOO.OO./XO.XXOOO./X.X..OO.O/.X.OXO.X./OXOOX.O../XXX....O./.XX...XX./XO.XXXOO./OO.....XX",
              prove::Status::o(),
             ),
+            ("O;X....@OO.;X...O.XXX/......X.X/O...XXXX./.....XO../O.O.XX.O./.OOXX..X./O.X.OO..O/OOO..O.X./..O..OX..",
+             prove::Status::o(),
+             )
         ];
         let mut mm = minimax::Minimax::with_config(&minimax::Config {
             max_depth: Some(10),
