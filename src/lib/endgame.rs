@@ -140,7 +140,19 @@ impl<'a> Analysis<'a> {
         )?;
         if self.defender_critical != 0 {
             let bad = self.pos.game_states.donebits() | (self.defender_critical as u32);
-            writeln!(out, "  bad squares: {}", Self::pp_boardset(bad as u16))?;
+            writeln!(
+                out,
+                "  winning boards[defender]: {}",
+                Self::pp_boardset(bad as u16)
+            )?;
+        }
+        if self.attacker_critical != 0 {
+            let bad = self.pos.game_states.donebits() | (self.attacker_critical as u32);
+            writeln!(
+                out,
+                "  winning boards[attacker]: {}",
+                Self::pp_boardset(bad as u16)
+            )?;
         }
         writeln!(out, "Moves:")?;
         for m in self.pos.all_moves() {
