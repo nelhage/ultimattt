@@ -481,8 +481,9 @@ struct Metrics<'a, T: Serialize> {
 
 fn print_mid_common(mid: &prove::dfpn::Stats) {
     println!(
-        "  mid={} tthit={}/{} ({:.1}%) ttstore={} solved={} minimax={}/{} endgame={}",
+        "  mid={} children={} tthit={}/{} ({:.1}%) ttstore={} solved={} minimax={}/{} endgame={}",
         mid.mid,
+        mid.generated_children,
         mid.tt.hits,
         mid.tt.lookups,
         100.0 * (mid.tt.hits as f64 / mid.tt.lookups as f64),

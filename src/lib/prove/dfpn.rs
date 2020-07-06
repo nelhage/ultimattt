@@ -20,6 +20,7 @@ use std::{fs, io, mem};
 #[derive(Clone, Debug, Serialize)]
 pub struct Stats {
     pub mid: usize,
+    pub generated_children: usize,
     pub try_calls: usize,
     pub jobs: usize,
     pub solved: usize,
@@ -40,6 +41,7 @@ impl Default for Stats {
     fn default() -> Self {
         Stats {
             mid: 0,
+            generated_children: 0,
             try_calls: 0,
             jobs: 0,
             solved: 0,
@@ -59,6 +61,7 @@ impl Stats {
     pub fn merge(&self, other: &Stats) -> Stats {
         Stats {
             mid: self.mid + other.mid,
+            generated_children: self.generated_children + other.generated_children,
             jobs: self.jobs + other.jobs,
             try_calls: self.try_calls + other.try_calls,
             solved: self.solved + other.solved,
@@ -676,8 +679,12 @@ where
 
         let mut children = Vec::new();
         for m in pos.all_moves() {
-            let g = pos.make_move(m).expect("all_moves returned illegal move");
             let eval = analysis.evaluate_move(m);
+            if eval.is_won(pos.player().other()) && children.len() > 0 {
+                self.stats.endgame_move += 1;
+                continue;
+            }
+            let g = pos.make_move(m).expect("all_moves returned illegal move");
             let data = self.ttlookup_or_default(&g, eval);
             let bounds = data.bounds;
             children.push(Child {
@@ -689,6 +696,7 @@ where
                 break;
             }
         }
+        self.stats.generated_children += children.len();
         self.stats.branch.record(children.len() as u64).unwrap();
 
         loop {
