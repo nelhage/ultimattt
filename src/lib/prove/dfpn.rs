@@ -262,7 +262,7 @@ impl DFPN {
                 stats: Default::default(),
                 stack: Vec::new(),
                 minimax: minimax::Minimax::with_config(&mmcfg),
-                probe: |stats: &Stats, pos: &game::Game, data: &Entry, children: &Vec<Child>| {
+                probe: |stats: &Stats, pos: &game::Game, data: &Entry, children: &[Child]| {
                     if let Some(ref mut p) = probe {
                         if data.hash != p.hash {
                             return;
@@ -355,7 +355,7 @@ impl Probe {
         mid: usize,
         pos: &game::Game,
         data: &Entry,
-        children: &Vec<Child>,
+        children: &[Child],
     ) {
         self.tick = tick;
 
@@ -397,7 +397,7 @@ impl Probe {
     }
 }
 
-pub(in crate::prove) fn compute_bounds(children: &Vec<Child>) -> Bounds {
+pub(in crate::prove) fn compute_bounds(children: &[Child]) -> Bounds {
     let mut out = Bounds {
         phi: INFINITY,
         delta: 0,
@@ -412,7 +412,7 @@ pub(in crate::prove) fn compute_bounds(children: &Vec<Child>) -> Bounds {
 
 // returns (child index, Bounds)
 pub(in crate::prove) fn select_child(
-    children: &Vec<Child>,
+    children: &[Child],
     bounds: Bounds,
     data: &mut Entry,
     epsilon: f64,
@@ -462,7 +462,7 @@ pub fn thresholds(epsilon: f64, bounds: Bounds, nd: Bounds, phi_1: u32, delta_2:
     }
 }
 
-pub(in crate::prove) fn populate_pv(data: &mut Entry, children: &Vec<Child>) {
+pub(in crate::prove) fn populate_pv(data: &mut Entry, children: &[Child]) {
     // If the position is solved, store the PV. For winning moves,
     // find the shortest path to victory; for losing, the
     // most-delaying
@@ -572,7 +572,7 @@ pub(in crate::prove) fn extract_pv<T: table::Table<Entry>>(
     pv
 }
 
-pub(in crate::prove) trait ProbeFn = FnMut(&Stats, &game::Game, &Entry, &Vec<Child>);
+pub(in crate::prove) trait ProbeFn = FnMut(&Stats, &game::Game, &Entry, &[Child]);
 
 pub(in crate::prove) struct MID<'a, Table, Probe>
 where

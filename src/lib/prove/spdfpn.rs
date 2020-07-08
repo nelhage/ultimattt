@@ -449,34 +449,33 @@ pub(in crate::prove) fn run(
                                 stack: Vec::new(),
                                 minimax: minimax::Minimax::with_config(mcref),
                                 stats: Default::default(),
-                                probe:
-                                    |stats: &Stats,
-                                     pos: &game::Game,
-                                     data: &Entry,
-                                     children: &Vec<Child>| {
-                                        if let Some(ref p) = probe {
-                                            let now: Instant;
-                                            {
-                                                let r = p.read();
-                                                if data.hash != r.hash {
-                                                    return;
-                                                }
-                                                now = Instant::now();
-                                                if now < r.tick && !data.bounds.solved() {
-                                                    return;
-                                                }
+                                probe: |stats: &Stats,
+                                        pos: &game::Game,
+                                        data: &Entry,
+                                        children: &[Child]| {
+                                    if let Some(ref p) = probe {
+                                        let now: Instant;
+                                        {
+                                            let r = p.read();
+                                            if data.hash != r.hash {
+                                                return;
                                             }
-
-                                            let mut w = p.write();
-                                            w.do_probe(
-                                                now + Duration::from_millis(10),
-                                                stats.mid,
-                                                pos,
-                                                data,
-                                                children,
-                                            );
+                                            now = Instant::now();
+                                            if now < r.tick && !data.bounds.solved() {
+                                                return;
+                                            }
                                         }
-                                    },
+
+                                        let mut w = p.write();
+                                        w.do_probe(
+                                            now + Duration::from_millis(10),
+                                            stats.mid,
+                                            pos,
+                                            data,
+                                            children,
+                                        );
+                                    }
+                                },
                             },
                             guard: YieldableGuard::new(sref),
                             wait: cref,

@@ -350,24 +350,23 @@ impl Prover {
                             table: table.handle(),
                             player: pos.player(),
                             stack: Vec::new(),
-                            probe:
-                                |stats: &dfpn::Stats,
-                                 pos: &game::Game,
-                                 data: &dfpn::Entry,
-                                 children: &Vec<dfpn::Child>| {
-                                    if let Some(ref p) = probe {
-                                        {
-                                            let r = p.read();
-                                            if data.hash != r.hash {
-                                                return;
-                                            }
+                            probe: |stats: &dfpn::Stats,
+                                    pos: &game::Game,
+                                    data: &dfpn::Entry,
+                                    children: &[dfpn::Child]| {
+                                if let Some(ref p) = probe {
+                                    {
+                                        let r = p.read();
+                                        if data.hash != r.hash {
+                                            return;
                                         }
-
-                                        let mut w = p.write();
-                                        let tick = w.tick;
-                                        w.do_probe(tick, stats.mid, pos, data, children);
                                     }
-                                },
+
+                                    let mut w = p.write();
+                                    let tick = w.tick;
+                                    w.do_probe(tick, stats.mid, pos, data, children);
+                                }
+                            },
                             minimax: minimax::Minimax::with_config(&mmcfg),
                             stats: Default::default(),
                         },
