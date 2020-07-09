@@ -57,7 +57,7 @@ impl<'a> Worker<'a> {
                 };
                 let config = minimax::Config {
                     max_depth: *max_depth,
-                    timeout: *limit,
+                    limit: *limit,
                     ..Default::default()
                 };
                 let ai = self.get_ai(&config);

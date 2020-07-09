@@ -147,7 +147,7 @@ impl Default for Entry {
 pub struct Config {
     pub threads: usize,
     pub table_size: usize,
-    pub timeout: Option<Duration>,
+    pub limit: Option<Duration>,
     pub debug: usize,
     pub epsilon: f64,
     pub max_work_per_job: u64,
@@ -163,7 +163,7 @@ impl Default for Config {
         Config {
             threads: 0,
             table_size: table::DEFAULT_TABLE_SIZE,
-            timeout: None,
+            limit: None,
             debug: 0,
             epsilon: 1.0 / 8.0,
             max_work_per_job: 500,

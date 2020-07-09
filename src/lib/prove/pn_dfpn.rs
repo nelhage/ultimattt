@@ -23,8 +23,8 @@ use std::time::{Duration, Instant};
 #[derive(Clone)]
 pub struct Config {
     pub debug: usize,
-    pub max_nodes: Option<usize>,
-    pub timeout: Option<Duration>,
+    pub max_memory: Option<usize>,
+    pub limit: Option<Duration>,
     pub split_threshold: u64,
     pub dfpn: dfpn::Config,
     pub queue_depth: usize,
@@ -34,8 +34,8 @@ impl Default for Config {
     fn default() -> Self {
         Config {
             debug: 0,
-            max_nodes: None,
-            timeout: None,
+            max_memory: None,
+            limit: None,
             dfpn: Default::default(),
             split_threshold: 1_000,
             queue_depth: 0,
@@ -174,7 +174,7 @@ pub struct Prover {
 
     start: Instant,
     tick: Ticker,
-    limit: Option<Instant>,
+    deadline: Option<Instant>,
 
     position: game::Game,
     root: NodeID,
@@ -300,7 +300,7 @@ impl Prover {
             nodes: Pool::new(),
             start: start,
             tick: Ticker::new(TICK_INTERVAL),
-            limit: cfg.timeout.map(|t| Instant::now() + t),
+            deadline: cfg.limit.map(|t| Instant::now() + t),
             position: pos.clone(),
             root: NodeID::none(),
         };
@@ -377,7 +377,7 @@ impl Prover {
                 res_recv,
                 &table.handle(),
                 prover.root,
-                prover.cfg.max_nodes,
+                prover.cfg.max_memory.map(|b| b / mem::size_of::<Node>()),
             );
 
             let (mid_stats, worker_stats) = handles.into_iter().map(|h| h.join().unwrap()).fold(
@@ -542,7 +542,7 @@ impl Prover {
                     );
                 }
             }
-            if let Some(limit) = self.limit {
+            if let Some(limit) = self.deadline {
                 if now > limit {
                     break;
                 }

@@ -209,31 +209,22 @@ fn serialize_bytesize<S: Serializer>(bs: &ByteSize, serializer: S) -> Result<S::
     serializer.serialize_u64(bs.as_u64())
 }
 
+fn serialize_opt_bytesize<S: Serializer>(
+    bs: &Option<ByteSize>,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    match bs {
+        Some(b) => serializer.serialize_u64(b.as_u64()),
+        None => serializer.serialize_none(),
+    }
+}
+
 #[derive(Debug, StructOpt, Serialize)]
 struct GlobalOptions {
-    #[structopt(long, default_value = "1s", parse(try_from_str=parse_duration))]
-    timeout: Duration,
-    #[structopt(long)]
-    depth: Option<i64>,
-    #[structopt(long, default_value = "1G", parse(try_from_str=parse_bytesize))]
-    #[serde(serialize_with = "serialize_bytesize")]
-    table_mem: bytesize::ByteSize,
-    #[structopt(long, default_value = "1")]
-    threads: usize,
     #[structopt(long, default_value = "1")]
     debug: usize,
     #[structopt(long, help = "Override git sha", default_value = "")]
     git_sha: String,
-}
-
-impl GlobalOptions {
-    fn optional_timeout(&self) -> Option<Duration> {
-        if self.timeout == Duration::from_secs(0) {
-            None
-        } else {
-            Some(self.timeout)
-        }
-    }
 }
 
 #[derive(Debug, StructOpt)]
@@ -255,6 +246,9 @@ struct SelfplayParameters {
     games: usize,
     #[structopt(long, default_value = "0.05")]
     epsilon: f64,
+
+    #[structopt(flatten)]
+    minimax: MinimaxParameters,
 }
 
 #[derive(Debug, StructOpt, Serialize)]
@@ -287,10 +281,9 @@ impl FromStr for Engine {
 struct AnalyzeParameters {
     #[structopt(long, default_value = "minimax")]
     engine: Engine,
-    #[structopt(long)]
-    max_nodes: Option<usize>,
-    #[structopt(long)]
-    max_work_per_job: Option<u64>,
+    #[structopt(long, parse(try_from_str=parse_bytesize))]
+    #[serde(serialize_with = "serialize_opt_bytesize")]
+    max_mem: Option<bytesize::ByteSize>,
     #[structopt(long, default_value = "0.125")]
     epsilon: f64,
     #[structopt(long)]
@@ -311,6 +304,11 @@ struct AnalyzeParameters {
     split_threshold: u64,
     #[structopt(long)]
     queue_depth: Option<usize>,
+    #[structopt(long, default_value = "1")]
+    threads: usize,
+
+    #[structopt(flatten)]
+    minimax: MinimaxParameters,
 
     #[structopt(long)]
     variation: Option<String>,
@@ -325,11 +323,35 @@ struct PPParameters {
 }
 
 #[derive(Debug, StructOpt, Serialize)]
+struct MinimaxParameters {
+    #[structopt(long, default_value="1G", parse(try_from_str=parse_bytesize))]
+    #[serde(serialize_with = "serialize_bytesize")]
+    table_mem: bytesize::ByteSize,
+    #[structopt(long, default_value = "1s", parse(try_from_str=parse_duration))]
+    limit: Duration,
+    #[structopt(long)]
+    depth: Option<i64>,
+}
+
+impl MinimaxParameters {
+    fn optional_limit(&self) -> Option<Duration> {
+        if self.limit == Duration::from_secs(0) {
+            None
+        } else {
+            Some(self.limit)
+        }
+    }
+}
+
+#[derive(Debug, StructOpt, Serialize)]
 struct PlayParameters {
     #[structopt(short = "x", long, default_value = "human")]
     playerx: String,
     #[structopt(short = "o", long, default_value = "minimax")]
     playero: String,
+
+    #[structopt(flatten)]
+    minimax: MinimaxParameters,
 
     #[structopt(long)]
     position: Option<String>,
@@ -345,11 +367,11 @@ enum Command {
     Worker {},
 }
 
-fn ai_config(opt: &GlobalOptions) -> minimax::Config {
+fn ai_config(debug: usize, opt: &MinimaxParameters) -> minimax::Config {
     minimax::Config {
-        timeout: opt.optional_timeout(),
+        limit: opt.optional_limit(),
         max_depth: opt.depth,
-        debug: opt.debug,
+        debug: debug,
         table_bytes: Some(opt.table_mem.as_u64() as usize),
         ..Default::default()
     }
@@ -377,10 +399,10 @@ fn dfpn_config(
         }),
         (Some(_), Some(_)) => panic!("--probe-hash and --probe are incompatible"),
     };
-    let mut cfg = prove::dfpn::Config {
-        threads: opt.threads,
-        table_size: opt.table_mem.as_u64() as usize,
-        timeout: opt.optional_timeout(),
+    prove::dfpn::Config {
+        threads: analyze.threads,
+        table_size: analyze.minimax.table_mem.as_u64() as usize,
+        limit: analyze.minimax.optional_limit(),
         debug: opt.debug,
         epsilon: analyze.epsilon,
         dump_table: analyze.dump_table.clone(),
@@ -388,16 +410,13 @@ fn dfpn_config(
         dump_interval: analyze.dump_interval.clone(),
         probe_log: analyze.probe_log.clone(),
         probe_hash: probe_hash,
+        max_work_per_job: analyze.split_threshold,
         ..Default::default()
-    };
-    if let Some(m) = analyze.max_work_per_job {
-        cfg.max_work_per_job = m;
     }
-    cfg
 }
 
-fn make_ai(opt: &GlobalOptions) -> minimax::Minimax {
-    minimax::Minimax::with_config(&ai_config(opt))
+fn make_ai(debug: usize, opt: &MinimaxParameters) -> minimax::Minimax {
+    minimax::Minimax::with_config(&ai_config(debug, opt))
 }
 
 fn format_histogram<T: fmt::Display + hdrhistogram::Counter>(h: &Histogram<T>) -> String {
@@ -413,6 +432,7 @@ fn format_histogram<T: fmt::Display + hdrhistogram::Counter>(h: &Histogram<T>) -
 
 fn parse_player<'a>(
     opt: &GlobalOptions,
+    mm: &MinimaxParameters,
     player: game::Player,
     spec: &str,
 ) -> Result<Box<dyn minimax::AI + 'a>, std::io::Error> {
@@ -422,7 +442,7 @@ fn parse_player<'a>(
             stdout: Box::new(io::stdout()),
         }))
     } else if spec.starts_with("minimax") {
-        Ok(Box::new(make_ai(&opt)))
+        Ok(Box::new(make_ai(opt.debug, mm)))
     } else if spec.starts_with("subprocess@") {
         let tail = spec.splitn(2, '@').nth(1).unwrap();
         let args = tail
@@ -432,7 +452,7 @@ fn parse_player<'a>(
         Ok(Box::new(subprocess::Player::new(
             args,
             player,
-            &ai_config(opt),
+            &ai_config(opt.debug, mm),
         )?))
     } else if spec == "random" {
         Ok(Box::new(minimax::Random::new()))
@@ -540,8 +560,10 @@ fn main() -> Result<(), std::io::Error> {
                 .as_ref()
                 .map(|b| game::notation::parse(b).expect("Illegal position"))
                 .unwrap_or_else(|| game::Game::new());
-            let mut player_x = parse_player(&opt.global, game::Player::X, &play.playerx)?;
-            let mut player_o = parse_player(&opt.global, game::Player::O, &play.playero)?;
+            let mut player_x =
+                parse_player(&opt.global, &play.minimax, game::Player::X, &play.playerx)?;
+            let mut player_o =
+                parse_player(&opt.global, &play.minimax, game::Player::O, &play.playero)?;
             loop {
                 render(&mut stdout, &g)?;
                 let m = match g.player() {
@@ -587,8 +609,8 @@ fn main() -> Result<(), std::io::Error> {
                     let result = prove::pn::Prover::prove(
                         &prove::pn::Config {
                             debug: opt.global.debug,
-                            timeout: opt.global.optional_timeout(),
-                            max_nodes: analyze.max_nodes,
+                            limit: analyze.minimax.optional_limit(),
+                            max_memory: analyze.max_mem.map(|b| b.as_u64() as usize),
                             ..Default::default()
                         },
                         &game,
@@ -642,8 +664,8 @@ fn main() -> Result<(), std::io::Error> {
                         };
                         let mut cfg = prove::pn_dfpn::Config {
                             debug: opt.global.debug,
-                            timeout: opt.global.optional_timeout(),
-                            max_nodes: analyze.max_nodes,
+                            limit: analyze.minimax.optional_limit(),
+                            max_memory: analyze.max_mem.map(|b| b.as_u64() as usize),
                             dfpn: dfpn_cfg,
                             split_threshold: analyze.split_threshold,
                             ..Default::default()
@@ -667,8 +689,7 @@ fn main() -> Result<(), std::io::Error> {
                     );
                     print_mid_common(&result.stats.mid);
                     if cfg.debug > 0 {
-                        let thread_ms =
-                            result.duration.as_millis() as f64 * opt.global.threads as f64;
+                        let thread_ms = result.duration.as_millis() as f64 * analyze.threads as f64;
                         println!(
                             " job/ms/thread={:.1} mid/ms/thread={:.1}",
                             (result.stats.jobs as f64) / thread_ms,
@@ -708,7 +729,7 @@ fn main() -> Result<(), std::io::Error> {
                     endgame.dump(&mut io::stdout())?;
                 }
                 Engine::Minimax => {
-                    let mut ai = make_ai(&opt.global);
+                    let mut ai = make_ai(opt.global.debug, &analyze.minimax);
                     let m = ai.select_move(&game).map_err(|e| {
                         io::Error::new(io::ErrorKind::Other, format!("analyzing: {:?}", e))
                     })?;
@@ -724,7 +745,7 @@ fn main() -> Result<(), std::io::Error> {
             worker.run()?;
         }
         Command::Selfplay(ref params) => {
-            let config = ai_config(&opt.global);
+            let config = ai_config(opt.global.debug, &params.minimax);
             let builder1 = |p| build_selfplay_player(p, &config, &params.player1, params.epsilon);
             let builder2 = |p| build_selfplay_player(p, &config, &params.player2, params.epsilon);
             let mut engine = selfplay::Executor::new(builder1, builder2);

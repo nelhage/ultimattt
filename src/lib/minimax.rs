@@ -66,7 +66,7 @@ impl Stats {
 #[derive(Clone, PartialEq, Eq)]
 pub struct Config {
     pub max_depth: Option<i64>,
-    pub timeout: Option<Duration>,
+    pub limit: Option<Duration>,
     pub debug: usize,
     pub table_bytes: Option<usize>,
     pub draw_winner: Option<game::Player>,
@@ -76,7 +76,7 @@ impl Default for Config {
     fn default() -> Self {
         Config {
             max_depth: None,
-            timeout: None,
+            limit: None,
             debug: 0,
             table_bytes: Some(table::DEFAULT_TABLE_SIZE),
             draw_winner: None,
@@ -203,9 +203,9 @@ impl Minimax {
         }
     }
 
-    pub fn with_timeout(timeout: Duration) -> Self {
+    pub fn with_limit(limit: Duration) -> Self {
         Self::with_config(&Config {
-            timeout: Some(timeout),
+            limit: Some(limit),
             ..Default::default()
         })
     }
@@ -438,7 +438,7 @@ impl Minimax {
         let mut pv = Vec::new();
 
         let t_start = Instant::now();
-        let deadline: Option<Instant> = self.config.timeout.map(|t| t_start + t);
+        let deadline: Option<Instant> = self.config.limit.map(|t| t_start + t);
         let mut depth: i64 = 0;
         loop {
             depth += 1;

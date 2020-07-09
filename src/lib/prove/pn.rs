@@ -15,8 +15,8 @@ use serde::Serialize;
 #[derive(Clone, Debug)]
 pub struct Config {
     pub debug: usize,
-    pub max_nodes: Option<usize>,
-    pub timeout: Option<Duration>,
+    pub max_memory: Option<usize>,
+    pub limit: Option<Duration>,
     pub pn2: bool,
 }
 
@@ -24,8 +24,8 @@ impl Default for Config {
     fn default() -> Self {
         Config {
             debug: 0,
-            max_nodes: None,
-            timeout: None,
+            max_memory: None,
+            limit: None,
             pn2: false,
         }
     }
@@ -128,7 +128,8 @@ pub struct Prover {
     start: Instant,
     tick: Ticker,
     progress: Counter<PROGRESS_INTERVAL>,
-    limit: Option<Instant>,
+    deadline: Option<Instant>,
+    max_nodes: Option<usize>,
 
     cursor: Cursor,
     position: game::Game,
@@ -193,13 +194,14 @@ impl Prover {
             start: start,
             tick: Ticker::new(TICK_INTERVAL),
             progress: Counter::new(),
-            limit: cfg.timeout.map(|t| Instant::now() + t),
+            deadline: cfg.limit.map(|t| Instant::now() + t),
+            max_nodes: cfg.max_memory.map(|m| m / mem::size_of::<Node>()),
             position: pos.clone(),
             root: NodeID::none(),
             cursor: Cursor { stack: Vec::new() },
         };
         if prover.config.pn2 {
-            prover.config.max_nodes = prover.config.max_nodes.map(|n| n / 2);
+            prover.max_nodes = prover.max_nodes.map(|n| n / 2);
         }
 
         {
@@ -210,7 +212,7 @@ impl Prover {
             prover.evaluate(&mut root);
             prover.set_proof_numbers(root.id, &mut *root);
         }
-        prover.search(prover.root, prover.config.max_nodes);
+        prover.search(prover.root, prover.max_nodes);
 
         let ref root = prover.nodes.get(prover.root);
         ProofResult {
@@ -314,7 +316,7 @@ impl Prover {
                         util::read_rss(),
                     );
                 }
-                if let Some(limit) = self.limit {
+                if let Some(limit) = self.deadline {
                     if Instant::now() > limit {
                         break;
                     }

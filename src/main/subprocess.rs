@@ -71,7 +71,7 @@ impl minimax::AI for Player {
             .send_command(&protocol::Command::GetMove {
                 id: "game0".to_owned(),
                 board: game::notation::render(g),
-                limit: self.config.timeout,
+                limit: self.config.limit,
                 max_depth: self.config.max_depth,
             })
             .unwrap()

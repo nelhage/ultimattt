@@ -367,7 +367,7 @@ mod tests {
         ];
         let mut mm = minimax::Minimax::with_config(&minimax::Config {
             max_depth: Some(10),
-            timeout: None,
+            limit: None,
             debug: 0,
             table_bytes: None,
             draw_winner: None,
@@ -432,7 +432,7 @@ mod tests {
         ];
         let mut mm = minimax::Minimax::with_config(&minimax::Config {
             max_depth: Some(10),
-            timeout: None,
+            limit: None,
             debug: 0,
             table_bytes: None,
             draw_winner: None,
