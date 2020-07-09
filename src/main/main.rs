@@ -298,8 +298,6 @@ struct AnalyzeParameters {
     #[structopt(long)]
     load_table: Option<String>,
     #[structopt(long)]
-    minimax_cutoff: Option<usize>,
-    #[structopt(long)]
     write_metrics: Option<String>,
     #[structopt(long, default_value = "60s", parse(try_from_str=parse_duration))]
     dump_interval: Duration,
@@ -309,8 +307,8 @@ struct AnalyzeParameters {
     probe: Option<String>,
     #[structopt(long, default_value = "probe.csv")]
     probe_log: String,
-    #[structopt(long)]
-    split_threshold: Option<u64>,
+    #[structopt(long, default_value = "1000")]
+    split_threshold: u64,
     #[structopt(long)]
     queue_depth: Option<usize>,
 
@@ -395,9 +393,6 @@ fn dfpn_config(
     if let Some(m) = analyze.max_work_per_job {
         cfg.max_work_per_job = m;
     }
-    if let Some(c) = analyze.minimax_cutoff {
-        cfg.minimax_cutoff = c;
-    };
     cfg
 }
 
@@ -481,7 +476,7 @@ struct Metrics<'a, T: Serialize> {
 
 fn print_mid_common(mid: &prove::dfpn::Stats) {
     println!(
-        "  mid={} children={} tthit={}/{} ({:.1}%) ttstore={} solved={} minimax={}/{} endgame={}",
+        "  mid={} children={} tthit={}/{} ({:.1}%) ttstore={} solved={} endgame={}",
         mid.mid,
         mid.generated_children,
         mid.tt.hits,
@@ -489,8 +484,6 @@ fn print_mid_common(mid: &prove::dfpn::Stats) {
         100.0 * (mid.tt.hits as f64 / mid.tt.lookups as f64),
         mid.tt.stores,
         mid.solved,
-        mid.minimax_solve,
-        mid.minimax,
         mid.endgame_solve,
     );
     println!("  endgame att_crit={} def_crit={} both_crit={} attacker={} defender={} unwinnable={} skip_moves={}",
@@ -652,11 +645,9 @@ fn main() -> Result<(), std::io::Error> {
                             timeout: opt.global.optional_timeout(),
                             max_nodes: analyze.max_nodes,
                             dfpn: dfpn_cfg,
+                            split_threshold: analyze.split_threshold,
                             ..Default::default()
                         };
-                        if let Some(st) = analyze.split_threshold {
-                            cfg.split_threshold = st;
-                        }
                         if let Some(q) = analyze.queue_depth {
                             cfg.queue_depth = q;
                         }

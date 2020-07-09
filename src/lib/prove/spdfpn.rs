@@ -1,5 +1,4 @@
 use crate::game;
-use crate::minimax;
 use crate::progress::Ticker;
 use crate::prove;
 use crate::prove::dfpn;
@@ -399,13 +398,6 @@ pub(in crate::prove) fn run(
     root: &game::Game,
     probe: Option<Probe>,
 ) -> (Stats, Entry, Vec<game::Move>, u64) {
-    let mmcfg = minimax::Config {
-        max_depth: Some(cfg.minimax_cutoff as i64 + 1),
-        timeout: Some(Duration::from_secs(1)),
-        debug: if cfg.debug > 6 { 1 } else { 0 },
-        table_bytes: None,
-        draw_winner: Some(root.player().other()),
-    };
     let table = if let Some(ref path) = cfg.load_table {
         table::ConcurrentTranspositionTable::from_file(path).expect("invalid table file")
     } else {
@@ -435,7 +427,6 @@ pub(in crate::prove) fn run(
             let cref = &cv;
             let sref = &shared;
             let probe = probe.clone();
-            let mcref = &mmcfg;
             guards.push(
                 s.builder()
                     .name(format!("worker-{}", i))
@@ -447,7 +438,6 @@ pub(in crate::prove) fn run(
                                 player: player,
                                 table: table,
                                 stack: Vec::new(),
-                                minimax: minimax::Minimax::with_config(mcref),
                                 stats: Default::default(),
                                 probe: |stats: &Stats,
                                         pos: &game::Game,

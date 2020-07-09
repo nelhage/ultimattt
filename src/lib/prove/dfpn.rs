@@ -1,6 +1,5 @@
 use crate::endgame;
 use crate::game;
-use crate::minimax;
 use crate::progress::Ticker;
 use crate::prove;
 use crate::prove::spdfpn;
@@ -24,8 +23,6 @@ pub struct Stats {
     pub try_calls: usize,
     pub jobs: usize,
     pub solved: usize,
-    pub minimax: usize,
-    pub minimax_solve: usize,
     pub endgame_solve: usize,
     pub endgame_move: usize,
     #[serde(serialize_with = "util::serialize_histogram")]
@@ -45,8 +42,6 @@ impl Default for Stats {
             try_calls: 0,
             jobs: 0,
             solved: 0,
-            minimax: 0,
-            minimax_solve: 0,
             endgame_solve: 0,
             endgame_move: 0,
             branch: Histogram::new_with_max(81, 3).unwrap(),
@@ -65,8 +60,6 @@ impl Stats {
             jobs: self.jobs + other.jobs,
             try_calls: self.try_calls + other.try_calls,
             solved: self.solved + other.solved,
-            minimax: self.minimax + other.minimax,
-            minimax_solve: self.minimax_solve + other.minimax_solve,
             endgame_solve: self.endgame_solve + other.endgame_solve,
             endgame_move: self.endgame_move + other.endgame_move,
             branch: util::merge_histogram(&self.branch, &other.branch),
@@ -161,7 +154,6 @@ pub struct Config {
     pub dump_table: Option<String>,
     pub load_table: Option<String>,
     pub dump_interval: Duration,
-    pub minimax_cutoff: usize,
     pub probe_hash: Option<u64>,
     pub probe_log: String,
 }
@@ -178,7 +170,6 @@ impl Default for Config {
             dump_table: None,
             load_table: None,
             dump_interval: Duration::from_secs(30),
-            minimax_cutoff: 0,
             probe_hash: None,
             probe_log: "probe.csv".to_owned(),
         }
@@ -240,14 +231,6 @@ impl DFPN {
     fn run(&mut self) -> (Entry, Vec<game::Move>, u64) {
         let mut probe = Probe::from_config(&self.cfg);
 
-        let mmcfg = minimax::Config {
-            max_depth: Some(self.cfg.minimax_cutoff as i64 + 1),
-            timeout: Some(Duration::from_secs(1)),
-            debug: if self.cfg.debug > 6 { 1 } else { 0 },
-            table_bytes: None,
-            draw_winner: Some(self.root.player().other()),
-        };
-
         if self.cfg.threads == 0 {
             let table = if let Some(ref path) = self.cfg.load_table {
                 table::TranspositionTable::<_, 4>::from_file(path).expect("invalid table file")
@@ -261,7 +244,6 @@ impl DFPN {
                 table: table,
                 stats: Default::default(),
                 stack: Vec::new(),
-                minimax: minimax::Minimax::with_config(&mmcfg),
                 probe: |stats: &Stats, pos: &game::Game, data: &Entry, children: &[Child]| {
                     if let Some(ref mut p) = probe {
                         if data.hash != p.hash {
@@ -585,7 +567,6 @@ where
     pub(in crate::prove) player: game::Player,
     pub(in crate::prove) stack: Vec<game::Move>,
     pub(in crate::prove) probe: Probe,
-    pub(in crate::prove) minimax: minimax::Minimax,
     pub(in crate::prove) stats: Stats,
 }
 
@@ -594,21 +575,6 @@ where
     Table: table::Table<Entry>,
     Probe: ProbeFn,
 {
-    fn try_minimax(&mut self, pos: &game::Game) -> Option<bool> {
-        self.stats.minimax += 1;
-        let (_aipv, aistats) = self.minimax.analyze(pos);
-        if let Some(st) = aistats.last() {
-            if st.score >= minimax::EVAL_WON {
-                self.stats.minimax_solve += 1;
-                return Some(true);
-            } else if st.score <= minimax::EVAL_LOST {
-                self.stats.minimax_solve += 1;
-                return Some(false);
-            }
-        }
-        return None;
-    }
-
     pub(in crate::prove) fn mid(
         &mut self,
         bounds: Bounds,
@@ -655,8 +621,6 @@ where
                 } else if proof.is_won(self.player) {
                     self.stats.endgame_solve += 1;
                     Some(pos.player() == self.player)
-                } else if pos.bound_depth() <= self.cfg.minimax_cutoff {
-                    self.try_minimax(pos)
                 } else {
                     None
                 }

@@ -1,5 +1,4 @@
 use crate::game;
-use crate::minimax;
 use crate::progress::Ticker;
 use crate::prove::dfpn;
 use crate::prove::node_pool;
@@ -330,13 +329,6 @@ impl Prover {
         crossbeam::scope(|s| {
             let (job_send, job_recv) = channel::bounded(prover.queue_depth());
             let (res_send, res_recv) = channel::bounded(prover.queue_depth());
-            let mmcfg = minimax::Config {
-                max_depth: Some(cfg.dfpn.minimax_cutoff as i64 + 1),
-                timeout: Some(Duration::from_secs(1)),
-                debug: if cfg.debug > 6 { 1 } else { 0 },
-                table_bytes: None,
-                draw_winner: Some(pos.player().other()),
-            };
 
             let handles = (0..cfg.dfpn.threads)
                 .map(|i| {
@@ -367,7 +359,6 @@ impl Prover {
                                     w.do_probe(tick, stats.mid, pos, data, children);
                                 }
                             },
-                            minimax: minimax::Minimax::with_config(&mmcfg),
                             stats: Default::default(),
                         },
                         stats: Default::default(),
