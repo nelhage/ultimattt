@@ -126,7 +126,6 @@ impl<'a> EntryMutex<'a> {
 pub struct LockGuard<'a>(&'a AtomicU32);
 
 impl<'a> LockGuard<'a> {
-    #[allow(dead_code)]
     pub fn abort(self) {
         self.unlock();
         mem::forget(self);
