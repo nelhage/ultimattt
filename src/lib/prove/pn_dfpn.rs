@@ -426,6 +426,7 @@ impl Prover {
             self.cfg.dfpn.threads + 1
         }
     }
+
     fn evaluate(&self, node: &mut node_pool::AllocedNode<Node>, pos: &game::Game) {
         let player = self.player();
         let res = pos.game_state();
@@ -463,15 +464,6 @@ impl Prover {
         node.bounds = bounds;
         node.vbounds = bounds;
     }
-
-    /*
-    fn set_proof_numbers(&self, nid: NodeID, node: &mut Node) {
-        let (bounds, vbounds, work) = self.calc_proof_numbers(nid, node);
-        node.bounds = bounds;
-        node.vbounds = vbounds;
-        node.work = work;
-    }
-    */
 
     fn set_proof_numbers<'a>(&'a mut self, nid: NodeID) -> &'a mut Node {
         let node = self.nodes.get(nid);
@@ -747,15 +739,7 @@ impl Prover {
 
         let mut last_child = NodeID::none();
         let ref node = self.nodes.get(nid);
-        /*
-        match cursor.pos.game_state() {
-            game::BoardState::InPlay => (),
-            _ => debug_assert!(
-                false,
-                format!("expanding a terminal node! {:?}", node.bounds)
-            ),
-        };
-        */
+
         debug_assert!(!node.flag(FLAG_EXPANDED));
         for ch in children.iter() {
             let mut alloc = self.nodes.alloc();
@@ -767,8 +751,6 @@ impl Prover {
             alloc.pv = ch.entry.pv;
             alloc.bounds = ch.entry.bounds;
             alloc.vbounds = ch.entry.bounds;
-
-            // self.evaluate(&mut alloc, &child_pos);
 
             alloc.sibling = last_child;
             last_child = alloc.id;
