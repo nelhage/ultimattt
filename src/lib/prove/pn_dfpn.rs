@@ -211,6 +211,7 @@ pub struct WorkerStats {
     pub work_per_job: Histogram<u64>,
     #[serde(serialize_with = "util::serialize_histogram")]
     pub us_per_job: Histogram<u64>,
+    pub recv_us: usize,
 }
 
 impl Default for WorkerStats {
@@ -218,6 +219,7 @@ impl Default for WorkerStats {
         WorkerStats {
             work_per_job: Histogram::new(3).unwrap(),
             us_per_job: Histogram::new(3).unwrap(),
+            recv_us: 0,
         }
     }
 }
@@ -227,6 +229,7 @@ impl WorkerStats {
         WorkerStats {
             work_per_job: util::merge_histogram(&self.work_per_job, &rhs.work_per_job),
             us_per_job: util::merge_histogram(&self.us_per_job, &rhs.us_per_job),
+            recv_us: self.recv_us + rhs.recv_us,
         }
     }
 }
@@ -249,9 +252,16 @@ where
     Probe: dfpn::ProbeFn,
 {
     fn run(&mut self) {
-        for job in self.jobs.iter() {
+        loop {
+            // for job in self.jobs.iter() {
+            let t_a = Instant::now();
+            let job = match self.jobs.recv() {
+                Ok(j) => j,
+                Err(_) => break,
+            };
             probe!(pndfpn, enter_run_job);
             let start = Instant::now();
+            self.stats.recv_us += (start - t_a).as_micros() as usize;
             let (entry, work, children) = self.mid.mid(
                 job.bounds,
                 self.cfg.split_threshold,
