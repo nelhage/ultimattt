@@ -102,20 +102,22 @@ impl<'a> EntryMutex<'a> {
         LockGuard(self.0)
     }
 
-    pub fn read<T, F: Fn() -> T>(&self, f: F) -> T {
+    pub fn read<T, Read: Fn() -> T, Retry: FnMut()>(&self, read: Read, mut spin: Retry) -> T {
         loop {
             let seq1 = self.0.load(Ordering::Acquire);
             if seq1 & LOCKED_BIT == LOCKED_BIT {
                 // Currently writing, bail
+                spin();
                 thread::yield_now();
                 continue;
             }
 
-            let e = f();
+            let e = read();
 
             fence(Ordering::Acquire);
             let seq2 = self.0.load(Ordering::Relaxed);
             if seq1 != seq2 {
+                spin();
                 continue;
             }
             return e;

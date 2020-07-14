@@ -12,6 +12,7 @@ use entry_mutex::EntryMutex;
 #[derive(Default, Clone, Debug, Serialize)]
 pub struct Stats {
     pub lookups: usize,
+    pub seq_retry: usize,
     pub hits: usize,
     pub stores: usize,
 }
@@ -20,6 +21,7 @@ impl Stats {
     pub fn merge(&self, other: &Stats) -> Stats {
         Stats {
             lookups: self.lookups + other.lookups,
+            seq_retry: self.seq_retry + other.seq_retry,
             hits: self.hits + other.hits,
             stores: self.stores + other.stores,
         }
@@ -282,7 +284,7 @@ where
             if unsafe { ptr::read(self.index[i].get()) } != (h & 0xff) as u8 {
                 continue;
             }
-            let entry = self.entry(i);
+            let entry = self.entry(stats, i);
             if entry.valid() && entry.hash() == h {
                 stats.hits += 1;
                 return Some(entry);
@@ -295,9 +297,12 @@ where
         unsafe { EntryMutex(E::lock(self.entries[i].get()).as_ref().unwrap()) }
     }
 
-    fn entry(&self, i: usize) -> E {
+    fn entry(&self, stats: &mut Stats, i: usize) -> E {
         let lk = self.mutex(i);
-        lk.read(|| unsafe { ptr::read_volatile(self.entries[i].get()) })
+        lk.read(
+            || unsafe { ptr::read_volatile(self.entries[i].get()) },
+            || stats.seq_retry += 1,
+        )
     }
 
     pub fn store(&self, stats: &mut Stats, ent: &E) -> bool {
@@ -307,7 +312,7 @@ where
         let base = ent.hash() as usize;
         for j in 0..N {
             let i = (base + j) % self.entries.len();
-            let ei = self.entry(i);
+            let ei = self.entry(stats, i);
             if !ei.valid() || ei.hash() == ent.hash() {
                 worst = Some((i, ei));
                 break;

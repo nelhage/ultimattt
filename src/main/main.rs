@@ -496,13 +496,14 @@ struct Metrics<'a, T: Serialize> {
 
 fn print_mid_common(mid: &prove::dfpn::Stats) {
     println!(
-        "  mid={} children={} tthit={}/{} ({:.1}%) ttstore={} solved={} endgame={}",
+        "  mid={} children={} tthit={}/{} ({:.1}%) ttstore={} ttrace={} solved={} endgame={}",
         mid.mid,
         mid.generated_children,
         mid.tt.hits,
         mid.tt.lookups,
         100.0 * (mid.tt.hits as f64 / mid.tt.lookups as f64),
         mid.tt.stores,
+        mid.tt.seq_retry,
         mid.solved,
         mid.endgame_solve,
     );
