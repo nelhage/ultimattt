@@ -688,16 +688,16 @@ fn main() -> Result<(), std::io::Error> {
                         result.stats.epsilon_resume,
                     );
                     print_mid_common(&result.stats.mid);
+                    let thread_ms = result.duration.as_millis() as f64 * analyze.threads as f64;
+                    let recv_ms = (result.stats.worker.recv_us as f64) / 1000.0;
+                    println!(
+                        " job/ms/thread={:.1} mid/ms/thread={:.1} recv_ms={:.1} ({:.1}%)",
+                        (result.stats.jobs as f64) / thread_ms,
+                        (result.stats.mid.mid as f64) / thread_ms,
+                        recv_ms,
+                        100.0 * recv_ms / thread_ms,
+                    );
                     if cfg.debug > 0 {
-                        let thread_ms = result.duration.as_millis() as f64 * analyze.threads as f64;
-                        let recv_ms = (result.stats.worker.recv_us as f64) / 1000.0;
-                        println!(
-                            " job/ms/thread={:.1} mid/ms/thread={:.1} recv_ms={:.1} ({:.1}%)",
-                            (result.stats.jobs as f64) / thread_ms,
-                            (result.stats.mid.mid as f64) / thread_ms,
-                            recv_ms,
-                            100.0 * recv_ms / thread_ms,
-                        );
                         println!(
                             " us/job   {}",
                             format_histogram(&result.stats.worker.us_per_job)
