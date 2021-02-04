@@ -3,7 +3,13 @@ use hdrhistogram::Histogram;
 use serde;
 use serde::ser::SerializeStruct;
 
+#[cfg(target_os = "linux")]
 use std::path::Path;
+
+/*
+#[cfg(target_os = "macos")]
+use mach;
+*/
 
 pub fn serialize_histogram<S: serde::Serializer, T: hdrhistogram::Counter>(
     hist: &Histogram<T>,
@@ -42,6 +48,7 @@ pub fn merge_histogram<T: hdrhistogram::Counter>(
     out
 }
 
+#[cfg(target_os = "linux")]
 pub fn read_rss() -> ByteSize {
     let path = Path::new("/proc/")
         .join(std::process::id().to_string())
@@ -49,4 +56,10 @@ pub fn read_rss() -> ByteSize {
     let stat = std::fs::read_to_string(path).unwrap();
     let mut bits = stat.split(' ');
     ByteSize::kib(4 * bits.nth(23).unwrap().parse::<u64>().unwrap())
+}
+
+#[cfg(target_os = "macos")]
+pub fn read_rss() -> ByteSize {
+    // TODO: use mach
+    ByteSize::bytes(0)
 }

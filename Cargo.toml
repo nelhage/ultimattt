@@ -41,6 +41,9 @@ packed_simd = { version = "0.3.4", package = "packed_simd_2" }
 [dependencies.probe]
 git = "https://github.com/cuviper/rust-libprobe.git"
 
+[target.'cfg(any(target_os = "macos"))'.dependencies.mach]
+version = "0.3"
+
 [dev-dependencies]
 criterion = "0.3"
 

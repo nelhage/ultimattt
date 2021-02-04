@@ -229,7 +229,7 @@ impl Minimax {
             // (x, o)
             n1: (i64, i64),
             n2: (i64, i64),
-        };
+        }
         let xbits = g.local_boards.xbits(board);
         let obits = g.local_boards.obits(board);
         let mut potentials = WinPotentials {
