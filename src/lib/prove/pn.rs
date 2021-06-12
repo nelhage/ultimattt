@@ -333,11 +333,9 @@ impl Prover {
             let ref node = self.nodes.get(nid);
             debug_assert!(
                 node.bounds.phi != 0,
-                format!(
-                    "expand phi=0, root=({}, {})",
-                    self.nodes.get(self.root).proof(),
-                    self.nodes.get(self.root).disproof(),
-                )
+                "expand phi=0, root=({}, {})",
+                self.nodes.get(self.root).proof(),
+                self.nodes.get(self.root).disproof(),
             );
             let mut child = NodeID::none();
             let mut c = node.first_child;
@@ -368,10 +366,7 @@ impl Prover {
         let ref node = self.nodes.get(nid);
         match self.cursor.position(nid).game_state() {
             game::GameState::InPlay => (),
-            _ => debug_assert!(
-                false,
-                format!("expanding a terminal node! {:?}", node.bounds)
-            ),
+            _ => debug_assert!(false, "expanding a terminal node! {:?}", node.bounds,),
         };
         debug_assert!(!node.flag(FLAG_EXPANDED));
         let pos = self.cursor.position(nid).clone();

@@ -150,9 +150,7 @@ where
     pub fn get(&self, nd: NodeID) -> &T {
         debug_assert!(nd.exists());
         if self.allocating.get() == nd {
-            panic!(format!(
-                "get(): Can't get a node while it is being allocated"
-            ));
+            panic!("get(): Can't get a node while it is being allocated");
         }
         unsafe {
             &*(*self.slabs.get())[(nd.0 as usize) / PAGE_SIZE][(nd.0 as usize) & PAGE_MASK].get()
@@ -166,18 +164,14 @@ where
 
     pub fn get_mut(&mut self, nd: NodeID) -> &mut T {
         if self.allocating.get().exists() {
-            panic!(format!(
-                "get_mut(): Can't mutate a node while allocating a node"
-            ));
+            panic!("get_mut(): Can't mutate a node while allocating a node");
         }
         unsafe { self.get_mut_unchecked(nd) }
     }
 
     pub fn alloc(&self) -> AllocedNode<T> {
         if self.allocating.get().exists() {
-            panic!(format!(
-                "alloc(): Can't allocate a node while another is still allocating"
-            ));
+            panic!("alloc(): Can't allocate a node while another is still allocating");
         }
         if !self.free.get().exists() {
             self.new_slab();
