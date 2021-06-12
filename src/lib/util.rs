@@ -61,5 +61,11 @@ pub fn read_rss() -> ByteSize {
 #[cfg(target_os = "macos")]
 pub fn read_rss() -> ByteSize {
     // TODO: use mach
-    ByteSize::bytes(0)
+    ByteSize::b(0)
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+pub fn read_rss() -> ByteSize {
+    // TODO
+    ByteSize::b(0)
 }
