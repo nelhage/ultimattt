@@ -573,7 +573,7 @@ fn main() -> Result<(), std::io::Error> {
                 };
                 if let Err(e) = m {
                     match e {
-                        minimax::Error::Other(msg) => panic!(msg),
+                        minimax::Error::Other(msg) => panic!("{}", msg),
                         minimax::Error::Quit => break,
                     }
                 }
