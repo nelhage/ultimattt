@@ -1,8 +1,8 @@
 use crate::game;
 use crate::prove;
 
-use packed_simd::u16x8;
 use serde::Serialize;
+use std::simd::u16x8;
 
 use std::io;
 
@@ -166,7 +166,7 @@ impl<'a> Analysis<'a> {
 fn is_winnable(pos: &game::Game, by: game::Player) -> bool {
     let potential = pos.global_states.playerbits(by) | !pos.global_states.donebits();
     return (u16x8::splat(potential as u16) & game::WIN_MASKS_SIMD)
-        .eq(game::WIN_MASKS_SIMD)
+        .lanes_eq(game::WIN_MASKS_SIMD)
         .any();
 }
 

@@ -51,6 +51,7 @@ pub enum ErrorKind {
 }
 
 #[derive(Clone, Debug)]
+#[allow(dead_code)]
 pub struct ParseError<'a> {
     loc: &'a str,
     why: ErrorKind,
