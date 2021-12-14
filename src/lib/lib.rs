@@ -1,6 +1,7 @@
 #![feature(new_uninit)]
 #![feature(asm)]
 #![feature(trait_alias)]
+#![feature(portable_simd)]
 #![allow(incomplete_features)]
 #![feature(adt_const_params)]
 
