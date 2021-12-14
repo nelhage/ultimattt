@@ -36,7 +36,7 @@ crossbeam = "0.7.3"
 parking_lot = "0.10.2"
 parking_lot_core = "0.7.2"
 hdrhistogram = "7.1.0"
-packed_simd = { version = "0.3.4", package = "packed_simd_2" }
+packed_simd = { version = "0.3.6", package = "packed_simd_2" }
 
 [dependencies.probe]
 git = "https://github.com/cuviper/rust-libprobe.git"

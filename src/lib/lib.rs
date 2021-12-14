@@ -2,7 +2,7 @@
 #![feature(asm)]
 #![feature(trait_alias)]
 #![allow(incomplete_features)]
-#![feature(const_generics)]
+#![feature(adt_const_params)]
 
 pub mod endgame;
 pub mod game;
