@@ -669,7 +669,8 @@ checksum = "ac74c624d6b2d21f425f752262f42188365d7b8ff1aff74c82e45136510a4857"
 [[package]]
 name = "probe"
 version = "0.2.1"
-source = "git+https://github.com/cuviper/rust-libprobe.git#ae1286b26693cc29775d71be40f09245031c8a2e"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7a5afcbb4ebdf63dc1b99ec0b2f924fa6f2bd9a1417ef9a93c5cfa2a9615fcb7"
 
 [[package]]
 name = "proc-macro-error"
