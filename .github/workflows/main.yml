@@ -11,8 +11,8 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
-      - name: Install latest nightly
-        uses: actions-rs/toolchain@v1
+      - name: Install Rust
+        uses: oxidecomputer/actions-rs_toolchain@master
         with:
             override: true
 
