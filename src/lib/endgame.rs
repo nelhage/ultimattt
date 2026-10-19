@@ -175,7 +175,7 @@ fn prove_attacker(pos: &game::Game, attacker_critical: u16, defender_critical: u
         return false;
     }
 
-    // If the attacker has a critial square, and is permitted
+    // If the attacker has a critical square, and is permitted
     // to play there, she wins.
     let board = match pos.board_to_play() {
         None => return true,
@@ -183,12 +183,12 @@ fn prove_attacker(pos: &game::Game, attacker_critical: u16, defender_critical: u
         Some(b) => b,
     };
 
-    // Can we force the defender into letting us play in a critical
-    // cell? We can send them anywhere our move lets us, but ignore
-    // cells that are closed, or where the defender would win.
+    // Can we make the defender send us somewhere we can win?
+    // Skip closed boards and boards where the defender could win. Also skip
+    // our winning boards: the defender could block or take them.
     let dests = pos.local_boards.free_squares(board)
         & !pos.global_states.donebits()
-        & !(defender_critical as u32);
+        & !((attacker_critical | defender_critical) as u32);
     // We want them to send us to one of these
     let want = pos.global_states.donebits() | (attacker_critical as u32);
     for i in 0..9 {
@@ -277,6 +277,61 @@ mod tests {
     use crate::game;
     use crate::game::notation::parse;
     use crate::minimax;
+
+    // Replay full games so the tests also check that these positions are reachable.
+    const CAPTURED_THREAT_HISTORY: &str = concat!(
+        "gd db bc cc ci ic ca ae ec ch hh hc cg gb bh ha af fb bg gf fa ab bb bf ff ",
+        "fd da ag gc cd dd dh hd de ei ig gh hi ii ie ef fi ah hb ba aa ai cb ce gg",
+    );
+    fn replay(history: &str) -> game::Game {
+        history
+            .split_whitespace()
+            .fold(game::Game::new(), |pos, m| {
+                pos.make_move(game::notation::parse_move(m).unwrap())
+                    .unwrap()
+            })
+    }
+
+    fn exact_score(pos: &game::Game) -> i64 {
+        // Searching all remaining playable squares establishes draws too;
+        // a bounded heuristic score of zero would not establish a draw.
+        let mut mm = minimax::Minimax::with_config(&minimax::Config {
+            max_depth: Some(pos.bound_depth() as i64),
+            limit: None,
+            debug: 0,
+            table_bytes: None,
+            draw_winner: None,
+        });
+        let (_, stats) = mm.analyze(pos);
+        stats.last().unwrap().score
+    }
+
+    #[test]
+    fn test_attacker_threat_can_be_captured() {
+        let pos = replay(CAPTURED_THREAT_HISTORY);
+        assert_eq!(50, CAPTURED_THREAT_HISTORY.split_whitespace().count());
+        // X plays ga, but O can reply ac and take X's winning board.
+        let sent = pos.make_move(game::Move::from_coords(6, 0)).unwrap();
+        let captured = sent.make_move(game::Move::from_coords(0, 2)).unwrap();
+        assert_eq!(
+            game::GameState::Won(game::Player::O),
+            captured.board_state(0)
+        );
+        assert_eq!(0, critical_boards(&captured, game::Player::X));
+        assert_eq!(0, exact_score(&pos));
+
+        let analysis = Analysis::new(&pos, &mut Stats::default());
+        assert_eq!(prove::Status::unproven(), analysis.status());
+    }
+
+    #[test]
+    fn test_attacker_can_force_unchanged_threat() {
+        // From data/random2-positions.txt, position 52.
+        let pos = parse("O;@..OOXO.X;...X.X.XO/OO.XXOXXO/.OOXX.X../.O.XOO.OO/O.OO..O../.X.XX.XX./X.OXXOOOO/OO.OXOX../XX.XX.X..").unwrap();
+        let analysis = Analysis::new(&pos, &mut Stats::default());
+        assert_eq!(prove::Status::o(), analysis.status());
+        assert_eq!(minimax::EVAL_WON, exact_score(&pos));
+    }
 
     #[test]
     fn test_is_winnable() {
