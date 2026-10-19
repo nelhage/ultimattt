@@ -185,22 +185,20 @@ fn prove_attacker(pos: &game::Game, attacker_critical: u16, defender_critical: u
 
     // Can we make the defender send us somewhere we can win?
     // Skip closed boards and boards where the defender could win. Also skip
-    // our winning boards: the defender could block or take them.
+    // our winning boards: the defender could block or take them. Sending them
+    // back to this board is unsafe too: our move could close it, leaving
+    // them free to play anywhere.
     let dests = pos.local_boards.free_squares(board)
         & !pos.global_states.donebits()
-        & !((attacker_critical | defender_critical) as u32);
+        & !((attacker_critical | defender_critical) as u32)
+        & !(1 << board);
     // We want them to send us to one of these
     let want = pos.global_states.donebits() | (attacker_critical as u32);
     for i in 0..9 {
         if dests & (1 << i) == 0 {
             continue;
         }
-        let mut send = pos.local_boards.free_squares(i);
-        if i == board {
-            // If we send them to the curren local board, remove that
-            // square from the analysis
-            send &= !(1 << i);
-        }
+        let send = pos.local_boards.free_squares(i);
         if send & !want == 0 {
             return true;
         }
@@ -283,6 +281,12 @@ mod tests {
         "gd db bc cc ci ic ca ae ec ch hh hc cg gb bh ha af fb bg gf fa ab bb bf ff ",
         "fd da ag gc cd dd dh hd de ei ig gh hi ii ie ef fi ah hb ba aa ai cb ce gg",
     );
+    const SELF_ROUTING_HISTORY: &str = concat!(
+        "hd dc cc cb bi id db bg ga af fb bb bh hf fg gi ic ce eg gc ch hc cg gg gf ",
+        "fi if ff fe ef fh he ec cf ib bc ci ie eh hh hg gd di ig gb bd de ei ih hb ",
+        "bf ag gh eb ba ae ea ab be ed dd da ac ge",
+    );
+
     fn replay(history: &str) -> game::Game {
         history
             .split_whitespace()
@@ -319,6 +323,22 @@ mod tests {
         );
         assert_eq!(0, critical_boards(&captured, game::Player::X));
         assert_eq!(0, exact_score(&pos));
+
+        let analysis = Analysis::new(&pos, &mut Stats::default());
+        assert_eq!(prove::Status::unproven(), analysis.status());
+    }
+
+    #[test]
+    fn test_self_routing_can_close_destination() {
+        let pos = replay(SELF_ROUTING_HISTORY);
+        assert_eq!(64, SELF_ROUTING_HISTORY.split_whitespace().count());
+        // After ee closes board 4, O is free to play ia and win.
+        let closed = pos.make_move(game::Move::from_coords(4, 4)).unwrap();
+        assert_eq!(game::GameState::Won(game::Player::X), closed.board_state(4));
+        assert_eq!(None, closed.board_to_play());
+        let won = closed.make_move(game::Move::from_coords(8, 0)).unwrap();
+        assert_eq!(game::GameState::Won(game::Player::O), won.game_state());
+        assert_eq!(minimax::EVAL_LOST, exact_score(&pos));
 
         let analysis = Analysis::new(&pos, &mut Stats::default());
         assert_eq!(prove::Status::unproven(), analysis.status());
@@ -417,7 +437,7 @@ mod tests {
              prove::Status::o(),
             ),
             ("O;X....@OO.;X...O.XXX/......X.X/O...XXXX./.....XO../O.O.XX.O./.OOXX..X./O.X.OO..O/OOO..O.X./..O..OX..",
-             prove::Status::o(),
+             prove::Status::unproven(),
              )
         ];
         let mut mm = minimax::Minimax::with_config(&minimax::Config {
