@@ -105,6 +105,11 @@ impl<'a> Analysis<'a> {
         if self.defender_critical == 0 {
             return prove::Status::unproven();
         }
+        // Playing here could block or take the board, removing the opponent's
+        // winning move. Keep this move for the search to check.
+        if self.defender_critical & (1 << m.global()) != 0 {
+            return prove::Status::unproven();
+        }
         let bad = self.pos.global_states.donebits() | (self.defender_critical as u32);
         if bad & (1 << m.local()) != 0 {
             return prove::Status::for_player(self.pos.player().other());
@@ -342,6 +347,39 @@ mod tests {
 
         let analysis = Analysis::new(&pos, &mut Stats::default());
         assert_eq!(prove::Status::unproven(), analysis.status());
+    }
+
+    #[test]
+    fn test_evaluate_move_can_destroy_threat() {
+        let pos = replay(CAPTURED_THREAT_HISTORY)
+            .make_move(game::Move::from_coords(6, 0))
+            .unwrap();
+        let analysis = Analysis::new(&pos, &mut Stats::default());
+        for local in &[2, 3] {
+            let m = game::Move::from_coords(0, *local);
+            let captured = pos.make_move(m).unwrap();
+            assert_eq!(
+                game::GameState::Won(game::Player::O),
+                captured.board_state(0)
+            );
+            assert_eq!(0, exact_score(&captured));
+            assert_eq!(prove::Status::unproven(), analysis.evaluate_move(m));
+        }
+    }
+
+    #[test]
+    fn test_exact_search_rejects_false_wins() {
+        let cfg = prove::dfpn::Config {
+            table_size: 1 << 20,
+            ..Default::default()
+        };
+        for history in &[CAPTURED_THREAT_HISTORY, SELF_ROUTING_HISTORY] {
+            let pos = replay(history);
+            let result = prove::dfpn::DFPN::prove(&cfg, &pos);
+            // DFPN asks whether the player to move can force a win;
+            // both a draw and an opponent win disprove that claim.
+            assert_eq!(prove::Evaluation::False, result.value, "{}", history);
+        }
     }
 
     #[test]
