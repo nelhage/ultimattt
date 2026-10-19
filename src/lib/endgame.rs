@@ -105,6 +105,11 @@ impl<'a> Analysis<'a> {
         if self.defender_critical == 0 {
             return prove::Status::unproven();
         }
+        // Playing here could block or take the board, removing the opponent's
+        // winning move. Keep this move for the search to check.
+        if self.defender_critical & (1 << m.global()) != 0 {
+            return prove::Status::unproven();
+        }
         let bad = self.pos.global_states.donebits() | (self.defender_critical as u32);
         if bad & (1 << m.local()) != 0 {
             return prove::Status::for_player(self.pos.player().other());
@@ -175,7 +180,7 @@ fn prove_attacker(pos: &game::Game, attacker_critical: u16, defender_critical: u
         return false;
     }
 
-    // If the attacker has a critial square, and is permitted
+    // If the attacker has a critical square, and is permitted
     // to play there, she wins.
     let board = match pos.board_to_play() {
         None => return true,
@@ -183,24 +188,22 @@ fn prove_attacker(pos: &game::Game, attacker_critical: u16, defender_critical: u
         Some(b) => b,
     };
 
-    // Can we force the defender into letting us play in a critical
-    // cell? We can send them anywhere our move lets us, but ignore
-    // cells that are closed, or where the defender would win.
+    // Can we make the defender send us somewhere we can win?
+    // Skip closed boards and boards where the defender could win. Also skip
+    // our winning boards: the defender could block or take them. Sending them
+    // back to this board is unsafe too: our move could close it, leaving
+    // them free to play anywhere.
     let dests = pos.local_boards.free_squares(board)
         & !pos.global_states.donebits()
-        & !(defender_critical as u32);
+        & !((attacker_critical | defender_critical) as u32)
+        & !(1 << board);
     // We want them to send us to one of these
     let want = pos.global_states.donebits() | (attacker_critical as u32);
     for i in 0..9 {
         if dests & (1 << i) == 0 {
             continue;
         }
-        let mut send = pos.local_boards.free_squares(i);
-        if i == board {
-            // If we send them to the curren local board, remove that
-            // square from the analysis
-            send &= !(1 << i);
-        }
+        let send = pos.local_boards.free_squares(i);
         if send & !want == 0 {
             return true;
         }
@@ -277,6 +280,116 @@ mod tests {
     use crate::game;
     use crate::game::notation::parse;
     use crate::minimax;
+
+    // Replay full games so the tests also check that these positions are reachable.
+    const CAPTURED_THREAT_HISTORY: &str = concat!(
+        "gd db bc cc ci ic ca ae ec ch hh hc cg gb bh ha af fb bg gf fa ab bb bf ff ",
+        "fd da ag gc cd dd dh hd de ei ig gh hi ii ie ef fi ah hb ba aa ai cb ce gg",
+    );
+    const SELF_ROUTING_HISTORY: &str = concat!(
+        "hd dc cc cb bi id db bg ga af fb bb bh hf fg gi ic ce eg gc ch hc cg gg gf ",
+        "fi if ff fe ef fh he ec cf ib bc ci ie eh hh hg gd di ig gb bd de ei ih hb ",
+        "bf ag gh eb ba ae ea ab be ed dd da ac ge",
+    );
+
+    fn replay(history: &str) -> game::Game {
+        history
+            .split_whitespace()
+            .fold(game::Game::new(), |pos, m| {
+                pos.make_move(game::notation::parse_move(m).unwrap())
+                    .unwrap()
+            })
+    }
+
+    fn exact_score(pos: &game::Game) -> i64 {
+        // Searching all remaining playable squares establishes draws too;
+        // a bounded heuristic score of zero would not establish a draw.
+        let mut mm = minimax::Minimax::with_config(&minimax::Config {
+            max_depth: Some(pos.bound_depth() as i64),
+            limit: None,
+            debug: 0,
+            table_bytes: None,
+            draw_winner: None,
+        });
+        let (_, stats) = mm.analyze(pos);
+        stats.last().unwrap().score
+    }
+
+    #[test]
+    fn test_attacker_threat_can_be_captured() {
+        let pos = replay(CAPTURED_THREAT_HISTORY);
+        assert_eq!(50, CAPTURED_THREAT_HISTORY.split_whitespace().count());
+        // X plays ga, but O can reply ac and take X's winning board.
+        let sent = pos.make_move(game::Move::from_coords(6, 0)).unwrap();
+        let captured = sent.make_move(game::Move::from_coords(0, 2)).unwrap();
+        assert_eq!(
+            game::GameState::Won(game::Player::O),
+            captured.board_state(0)
+        );
+        assert_eq!(0, critical_boards(&captured, game::Player::X));
+        assert_eq!(0, exact_score(&pos));
+
+        let analysis = Analysis::new(&pos, &mut Stats::default());
+        assert_eq!(prove::Status::unproven(), analysis.status());
+    }
+
+    #[test]
+    fn test_self_routing_can_close_destination() {
+        let pos = replay(SELF_ROUTING_HISTORY);
+        assert_eq!(64, SELF_ROUTING_HISTORY.split_whitespace().count());
+        // After ee closes board 4, O is free to play ia and win.
+        let closed = pos.make_move(game::Move::from_coords(4, 4)).unwrap();
+        assert_eq!(game::GameState::Won(game::Player::X), closed.board_state(4));
+        assert_eq!(None, closed.board_to_play());
+        let won = closed.make_move(game::Move::from_coords(8, 0)).unwrap();
+        assert_eq!(game::GameState::Won(game::Player::O), won.game_state());
+        assert_eq!(minimax::EVAL_LOST, exact_score(&pos));
+
+        let analysis = Analysis::new(&pos, &mut Stats::default());
+        assert_eq!(prove::Status::unproven(), analysis.status());
+    }
+
+    #[test]
+    fn test_evaluate_move_can_destroy_threat() {
+        let pos = replay(CAPTURED_THREAT_HISTORY)
+            .make_move(game::Move::from_coords(6, 0))
+            .unwrap();
+        let analysis = Analysis::new(&pos, &mut Stats::default());
+        for local in &[2, 3] {
+            let m = game::Move::from_coords(0, *local);
+            let captured = pos.make_move(m).unwrap();
+            assert_eq!(
+                game::GameState::Won(game::Player::O),
+                captured.board_state(0)
+            );
+            assert_eq!(0, exact_score(&captured));
+            assert_eq!(prove::Status::unproven(), analysis.evaluate_move(m));
+        }
+    }
+
+    #[test]
+    fn test_exact_search_rejects_false_wins() {
+        let cfg = prove::dfpn::Config {
+            table_size: 1 << 20,
+            ..Default::default()
+        };
+        for history in &[CAPTURED_THREAT_HISTORY, SELF_ROUTING_HISTORY] {
+            let pos = replay(history);
+            let result = prove::dfpn::DFPN::prove(&cfg, &pos);
+            // DFPN asks whether the player to move can force a win;
+            // both a draw and an opponent win disprove that claim.
+            assert_eq!(prove::Evaluation::False, result.value, "{}", history);
+        }
+    }
+
+    #[test]
+    fn test_attacker_can_force_unchanged_threat() {
+        // From data/random2-positions.txt, position 52.
+        let pos = parse("O;@..OOXO.X;...X.X.XO/OO.XXOXXO/.OOXX.X../.O.XOO.OO/O.OO..O../.X.XX.XX./X.OXXOOOO/OO.OXOX../XX.XX.X..").unwrap();
+        let analysis = Analysis::new(&pos, &mut Stats::default());
+        assert_eq!(prove::Status::o(), analysis.status());
+        assert_eq!(minimax::EVAL_WON, exact_score(&pos));
+    }
 
     #[test]
     fn test_is_winnable() {
@@ -362,7 +475,7 @@ mod tests {
              prove::Status::o(),
             ),
             ("O;X....@OO.;X...O.XXX/......X.X/O...XXXX./.....XO../O.O.XX.O./.OOXX..X./O.X.OO..O/OOO..O.X./..O..OX..",
-             prove::Status::o(),
+             prove::Status::unproven(),
              )
         ];
         let mut mm = minimax::Minimax::with_config(&minimax::Config {

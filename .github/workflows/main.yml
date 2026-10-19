@@ -11,7 +11,7 @@ jobs:
     strategy:
       matrix:
         rust:
-          - nightly
+          - nightly-2021-12-14
 
     steps:
       - uses: actions/checkout@v1
